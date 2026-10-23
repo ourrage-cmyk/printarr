@@ -40,7 +40,13 @@ logging.basicConfig(level=os.environ.get("PRINTARR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("printarr")
 
 Status = Literal["held", "pending", "printing", "sent", "failed", "cancelled"]
-SETTING_KEYS = {"enabled": "llm_enabled", "base_url": "llm_base_url", "model": "llm_model", "timeout": "llm_timeout"}
+SETTING_KEYS = {
+    "enabled": "llm_enabled",
+    "base_url": "llm_base_url",
+    "model": "llm_model",
+    "text_model": "llm_text_model",
+    "timeout": "llm_timeout",
+}
 T = TypeVar("T")
 
 # Printer faults read from the real-time status bytes. (request, bit mask, alert text).
@@ -106,8 +112,9 @@ class TicketCreate(BaseModel):
 
 class ModelSettings(BaseModel):
     enabled: bool
-    base_url: str = Field(description="OpenAI-compatible base URL, for example http://ollama:11434/v1. Empty means rules only.")
-    model: str
+    base_url: str = Field(description="OpenAI-compatible base URL, for example http://192.168.1.231:11434/v1. Empty means rules only.")
+    model: str = Field(description="Decision model: picks templates and decorations. For example d1:latest.")
+    text_model: str = Field(description="Text model for paragraphs, used later. For example granite4.2:3b.")
     timeout: float = Field(ge=1, le=30)
 
 
@@ -117,6 +124,7 @@ class ModelSettingsPatch(BaseModel):
     enabled: bool | None = None
     base_url: str | None = Field(default=None, max_length=300)
     model: str | None = Field(default=None, min_length=1, max_length=120)
+    text_model: str | None = Field(default=None, min_length=1, max_length=120)
     timeout: float | None = Field(default=None, ge=1, le=30)
 
 
@@ -220,6 +228,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             enabled=(store.get_setting("llm_enabled") or "").lower() == "true",
             base_url=store.get_setting("llm_base_url") or "",
             model=store.get_setting("llm_model") or settings.llm_model,
+            text_model=store.get_setting("llm_text_model") or settings.llm_text_model,
             timeout=float(store.get_setting("llm_timeout") or settings.llm_timeout),
         )
 
@@ -234,6 +243,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             "llm_enabled": "true" if settings.llm_enabled else "false",
             "llm_base_url": settings.llm_base_url,
             "llm_model": settings.llm_model,
+            "llm_text_model": settings.llm_text_model,
             "llm_timeout": str(settings.llm_timeout),
         }
         for key, value in defaults.items():

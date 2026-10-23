@@ -77,6 +77,6 @@ def test_openai_compatible_client_parses_json_reply(monkeypatch):
         return io.BytesIO(json.dumps(reply).encode())
 
     monkeypatch.setattr(templates.urllib.request, "urlopen", fake_urlopen)
-    model = templates.OpenAICompatibleModel("http://ollama:11434/v1", "llama3.2:3b", 5)
+    model = templates.OpenAICompatibleModel("http://ollama:11434/v1", "d1:latest", 5)
     choice = resolve_choice("wife", None, "hi", model=model)
     assert choice.selection == "model" and choice.template.id == 6

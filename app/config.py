@@ -26,7 +26,8 @@ class Settings:
     scheduler_enabled: bool = True
     llm_enabled: bool = True
     llm_base_url: str = ""
-    llm_model: str = "llama3.2:3b"
+    llm_model: str = "d1:latest"  # decision model: template and decoration choice only
+    llm_text_model: str = "granite4.2:3b"  # text model: for paragraphs, later
     llm_timeout: float = 5.0
 
     @property
@@ -54,7 +55,8 @@ def load_settings() -> Settings:
         scheduler_enabled=_env("SCHEDULER", "on").lower() in _TRUE_VALUES,
         llm_enabled=_env("LLM_ENABLED", "on").lower() in _TRUE_VALUES,
         llm_base_url=_env("LLM_BASE_URL", ""),
-        llm_model=_env("LLM_MODEL", "llama3.2:3b"),
+        llm_model=_env("LLM_MODEL", "d1:latest"),
+        llm_text_model=_env("LLM_TEXT_MODEL", "granite4.2:3b"),
         llm_timeout=float(_env("LLM_TIMEOUT", "5")),
     )
     if settings.printer_mode not in PRINTER_MODES:

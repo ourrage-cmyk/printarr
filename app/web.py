@@ -42,7 +42,10 @@ WEB_UI = """<!doctype html>
       <label>Timeout (seconds)<input id="m-timeout" type="number" min="1" max="30" step="1"></label>
     </div>
     <label>Base URL<input id="m-url" placeholder="http://ollama:11434/v1"></label>
-    <label>Model name<input id="m-model" placeholder="llama3.2:3b"></label>
+    <div class="row">
+      <label>Decision model (templates)<input id="m-model" placeholder="d1:latest"></label>
+      <label>Text model (paragraphs)<input id="m-text" placeholder="granite4.2:3b"></label>
+    </div>
     <button id="m-save">Save model settings</button>
     <span id="m-status" class="muted"></span>
   </section>
@@ -113,13 +116,14 @@ const show = (el, text, bad) => { el.textContent = text; el.classList.toggle('er
 async function loadModel() {
   const m = await api('/settings/model');
   $('m-enabled').checked = m.enabled; $('m-url').value = m.base_url;
-  $('m-model').value = m.model; $('m-timeout').value = m.timeout;
+  $('m-model').value = m.model; $('m-text').value = m.text_model; $('m-timeout').value = m.timeout;
 }
 async function saveModel() {
   try {
     await api('/settings/model', { method: 'PUT', body: JSON.stringify({
       enabled: $('m-enabled').checked, base_url: $('m-url').value.trim(),
-      model: $('m-model').value.trim(), timeout: Number($('m-timeout').value),
+      model: $('m-model').value.trim(), text_model: $('m-text').value.trim(),
+      timeout: Number($('m-timeout').value),
     }) });
     show($('m-status'), 'Saved.');
   } catch (e) { show($('m-status'), e.message, true); }
