@@ -83,13 +83,12 @@ def test_health_is_ok_with_file_printer(settings):
 def test_alert_settings_persist_and_hide_token(settings):
     with TestClient(create_app(settings)) as client:
         configure_telegram(client)
-        client.put("/api/v1/settings/alerts", json={"kuma_push_url": "http://kuma:3001/api/push/abc"})
     with TestClient(create_app(settings)) as client:
         body = client.get("/api/v1/settings/alerts").json()
         assert body["telegram_configured"] is True
         assert body["telegram_token_hint"] == "...abcd"
         assert "SECRET" not in str(body)
-        assert body["kuma_push_url"] == "http://kuma:3001/api/push/abc"
+        assert "kuma_push_url" not in body
 
 
 def test_test_alert_requires_configuration(settings, monkeypatch):
@@ -98,3 +97,45 @@ def test_test_alert_requires_configuration(settings, monkeypatch):
         assert client.post("/api/v1/alerts/test").status_code == 400
         configure_telegram(client)
         assert client.post("/api/v1/alerts/test").json() == {"sent": True}
+
+
+
+class StatusTransport:
+    """A printer that reports the status bytes we give it."""
+    target = "fake"
+
+    def __init__(self, answers):
+        self.answers = answers
+
+    def send(self, data):
+        pass
+
+    def check(self):
+        pass
+
+    def read_status(self):
+        return self.answers
+
+
+def test_paper_cover_and_cutter_faults_alert_once_each(settings, monkeypatch):
+    sent = capture_telegram(monkeypatch)
+    transport = StatusTransport({2: 0x04, 3: 0x04, 4: 0x60})  # cover open, cutter error, paper end
+    app = create_app(settings, transport=transport)
+    with TestClient(app) as client:
+        configure_telegram(client)
+        app.state.watch_printer()
+        app.state.watch_printer()
+        assert sum("printer cover open" in text for text in sent) == 1
+        assert sum("autocutter error" in text for text in sent) == 1
+        assert sum("paper out" in text for text in sent) == 1
+        health = client.get("/api/v1/health").json()
+        assert health["checks"]["paper"] == "fault"
+
+
+def test_missing_status_answer_raises_no_alert(settings, monkeypatch):
+    sent = capture_telegram(monkeypatch)
+    app = create_app(settings, transport=StatusTransport({2: None, 3: None, 4: None}))
+    with TestClient(app) as client:
+        configure_telegram(client)
+        app.state.watch_printer()
+        assert not any("paper" in text or "cover" in text for text in sent)

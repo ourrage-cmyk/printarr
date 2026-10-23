@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -15,12 +16,20 @@ class PrinterError(Exception):
     """The printer could not be reached or did not accept the job."""
 
 
+# Real-time status requests (DLE EOT n). Answers are one byte each.
+# UNVERIFIED: bit positions below are the standard ESC/POS status layout. The TRG does not
+# list them; confirm against the ESC/POS Application Programming Guide and on the real printer.
+STATUS_REQUESTS = (2, 3, 4)  # offline/cover, error/cutter, paper sensor
+
+
 class Transport(Protocol):
     target: str
 
     def send(self, data: bytes) -> None: ...
 
     def check(self) -> None: ...
+
+    def read_status(self) -> dict[int, int | None]: ...
 
 
 class TcpTransport:
@@ -31,9 +40,10 @@ class TcpTransport:
         self.port = port
         self.timeout = timeout
         self.target = f"{host}:{port}"
+        self._lock = threading.Lock()  # one job or status exchange at a time
 
     def send(self, data: bytes) -> None:
-        with self._connect() as sock:
+        with self._lock, self._connect() as sock:
             try:
                 sock.sendall(data)
             except OSError as exc:
@@ -42,6 +52,21 @@ class TcpTransport:
     def check(self) -> None:
         with self._connect():
             pass
+
+    def read_status(self) -> dict[int, int | None]:
+        """Ask the printer for its status. None means no answer for that request."""
+        answers: dict[int, int | None] = {}
+        with self._lock, self._connect() as sock:
+            for n in STATUS_REQUESTS:
+                answers[n] = None
+                try:
+                    sock.sendall(b"\x10\x04" + bytes([n]))
+                    byte = sock.recv(1)
+                    if byte:
+                        answers[n] = byte[0]
+                except OSError:
+                    pass
+        return answers
 
     def _connect(self) -> socket.socket:
         if not self.host:
@@ -72,6 +97,9 @@ class FileTransport:
             self.output_dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             raise PrinterError(f"cannot use {self.target}: {exc}") from exc
+
+    def read_status(self) -> dict[int, int | None]:
+        return {n: 0 for n in STATUS_REQUESTS}  # a file has no paper, cover or cutter
 
 
 def build_transport(settings: Settings) -> Transport:

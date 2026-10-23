@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
 
-from app.alerts import AlertSettings, HeartbeatThread, Notifier, push_heartbeat, send_telegram
+from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.printer import PrinterError, Transport, build_transport
@@ -42,6 +42,15 @@ logger = logging.getLogger("printarr")
 Status = Literal["held", "pending", "printing", "sent", "failed", "cancelled"]
 SETTING_KEYS = {"enabled": "llm_enabled", "base_url": "llm_base_url", "model": "llm_model", "timeout": "llm_timeout"}
 T = TypeVar("T")
+
+# Printer faults read from the real-time status bytes. (request, bit mask, alert text).
+# UNVERIFIED bit masks: standard ESC/POS layout, to confirm against the Programming Guide.
+PRINTER_FAULTS_BITS = {
+    "cover": (2, 0x04, "printer cover open"),
+    "cutter": (3, 0x04, "autocutter error"),
+    "paper": (4, 0x60, "paper out"),
+}
+PRINTER_FAULTS = {key: text for key, (_, _, text) in PRINTER_FAULTS_BITS.items()}
 
 API_DESCRIPTION = """
 Queue receipt tickets for the Epson TM-T88V. Clients send plain text. The API picks a
@@ -157,7 +166,6 @@ class AlertSettingsOut(BaseModel):
     telegram_configured: bool
     telegram_token_hint: str = Field(description="Last four characters of the bot token, never the full token.")
     telegram_chat_id: str
-    kuma_push_url: str
 
 
 class AlertSettingsPatch(BaseModel):
@@ -165,7 +173,6 @@ class AlertSettingsPatch(BaseModel):
 
     telegram_token: str | None = Field(default=None, max_length=200)
     telegram_chat_id: str | None = Field(default=None, max_length=50)
-    kuma_push_url: str | None = Field(default=None, max_length=300)
 
 
 class PrinterStatus(BaseModel):
@@ -202,7 +209,6 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return AlertSettings(
             telegram_token=store.get_setting("alert_telegram_token") or "",
             telegram_chat_id=store.get_setting("alert_telegram_chat_id") or "",
-            kuma_push_url=store.get_setting("alert_kuma_push_url") or "",
         )
 
     notifier = Notifier(read_alert_settings)
@@ -252,19 +258,27 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         else:
             checks["decision_model"] = "down" if notifier.is_active("model") else "ok"
         checks["scheduler"] = "running" if runtime["scheduler"] else "disabled"
+        for key, label in PRINTER_FAULTS.items():
+            checks[key] = "fault" if notifier.is_active(key) else "ok"
         up = checks["database"] == "ok" and checks["printer"] == "ok"
         return {"status": "ok" if up else "down", "checks": checks}, up
 
-    def heartbeat_tick() -> None:
-        snapshot, up = health_snapshot()
-        printer = snapshot["checks"]["printer"]
-        if printer == "ok":
-            notifier.recovered("printer", "printer is reachable again")
-        else:
-            notifier.problem("printer", f"printer {printer}")
-        url = read_alert_settings().kuma_push_url
-        if url:
-            push_heartbeat(url, up, "ok" if up else printer)
+    def watch_printer() -> None:
+        """Every minute: reachability, then the printer's own status (paper, cover, cutter)."""
+        try:
+            answers = transport.read_status()
+        except PrinterError as exc:
+            notifier.problem("printer", f"printer unreachable: {exc}")
+            return
+        notifier.recovered("printer", "printer is reachable again")
+        for key, (request, bit, text) in PRINTER_FAULTS_BITS.items():
+            value = answers.get(request)
+            if value is None:
+                continue  # no answer for this request, so say nothing rather than guess
+            if value & bit:
+                notifier.problem(key, text)
+            else:
+                notifier.recovered(key, f"{text.split(':')[0]} cleared")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -281,7 +295,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if worker:
             worker.start()
         runtime["scheduler"] = worker is not None
-        heartbeat = HeartbeatThread(heartbeat_tick)
+        heartbeat = HeartbeatThread(watch_printer)
         heartbeat.start()
         try:
             yield
@@ -439,16 +453,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             telegram_configured=bool(token and current.telegram_chat_id),
             telegram_token_hint=f"...{token[-4:]}" if token else "",
             telegram_chat_id=current.telegram_chat_id,
-            kuma_push_url=current.kuma_push_url,
         )
 
     @api.put("/settings/alerts", response_model=AlertSettingsOut, tags=["settings"])
     def update_alert_settings(patch: AlertSettingsPatch) -> AlertSettingsOut:
-        """Set Telegram and Uptime Kuma. Send an empty string to clear a value."""
+        """Set the Telegram bot token and chat ID. Send an empty string to clear a value."""
         keys = {
             "telegram_token": "alert_telegram_token",
             "telegram_chat_id": "alert_telegram_chat_id",
-            "kuma_push_url": "alert_kuma_push_url",
         }
         for field, key in keys.items():
             value = getattr(patch, field)
@@ -548,6 +560,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return PrinterStatus(mode=settings.printer_mode, target=transport.target, reachable=True)
 
     app.include_router(api)
+    app.state.watch_printer = watch_printer  # tests and the heartbeat share this check
     return app
 
 

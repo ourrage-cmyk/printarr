@@ -49,12 +49,11 @@ WEB_UI = """<!doctype html>
 
   <section>
     <h2>Alerts and monitoring</h2>
-    <p class="muted">Telegram messages when the printer is unreachable, a ticket fails, or the decision model is down. Uptime Kuma: health is at <code>/api/v1/health</code> (503 when the printer is down). Optional push monitor URL below.</p>
+    <p class="muted">Telegram messages for: printer unreachable, paper out, cover open, cutter error, rendering failures, ticket failures, and decision model down. Uptime Kuma polls <code>/api/v1/health</code> (503 when the printer is down). Nothing is pushed out.</p>
     <div class="row">
       <label>Telegram bot token<input id="a-token" autocomplete="off" placeholder="leave blank to keep current"></label>
       <label>Telegram chat ID<input id="a-chat"></label>
     </div>
-    <label>Uptime Kuma push URL (optional)<input id="a-kuma" placeholder="http://kuma:3001/api/push/..."></label>
     <button id="a-save">Save alert settings</button>
     <button id="a-test" class="ghost">Send test message</button>
     <span id="a-status" class="muted"></span>
@@ -127,11 +126,11 @@ async function saveModel() {
 }
 async function loadAlerts() {
   const a = await api('/settings/alerts');
-  $('a-chat').value = a.telegram_chat_id; $('a-kuma').value = a.kuma_push_url;
+  $('a-chat').value = a.telegram_chat_id;
   $('a-token').placeholder = a.telegram_configured ? 'saved, ends ' + a.telegram_token_hint : 'not set';
 }
 async function saveAlerts() {
-  const body = { telegram_chat_id: $('a-chat').value.trim(), kuma_push_url: $('a-kuma').value.trim() };
+  const body = { telegram_chat_id: $('a-chat').value.trim() };
   if ($('a-token').value.trim()) body.telegram_token = $('a-token').value.trim();
   try {
     await api('/settings/alerts', { method: 'PUT', body: JSON.stringify(body) });

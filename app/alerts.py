@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,7 +20,6 @@ logger = logging.getLogger("printarr.alerts")
 class AlertSettings:
     telegram_token: str = ""
     telegram_chat_id: str = ""
-    kuma_push_url: str = ""
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -31,14 +29,6 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
     with urllib.request.urlopen(request, timeout=10) as response:
         if response.status != 200:
             raise RuntimeError(f"Telegram returned HTTP {response.status}")
-
-
-def push_heartbeat(url: str, up: bool, message: str) -> None:
-    """Send an Uptime Kuma push-monitor heartbeat."""
-    query = urllib.parse.urlencode({"status": "up" if up else "down", "msg": message[:200]})
-    separator = "&" if "?" in url else "?"
-    with urllib.request.urlopen(f"{url}{separator}{query}", timeout=10):
-        pass
 
 
 class Notifier:
@@ -94,7 +84,7 @@ class Notifier:
 
 
 class HeartbeatThread:
-    """Pushes status to Uptime Kuma every `interval` seconds, if a push URL is set."""
+    """Runs the printer and health checks every `interval` seconds. Nothing is pushed out."""
 
     def __init__(self, tick: Callable[[], None], interval: float = 60.0) -> None:
         self._tick = tick

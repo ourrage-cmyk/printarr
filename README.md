@@ -30,12 +30,16 @@ Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](do
 
 - **Health for Uptime Kuma:** `GET /api/v1/health`. It returns 200 when the database and
   printer are fine, and 503 when the printer is unreachable. Add an HTTP monitor on that URL.
-- **Push monitor (optional):** set an Uptime Kuma push URL in the web page. The service
-  sends a heartbeat every minute, with status and message.
+  Nothing is pushed out. Kuma polls the service.
 - **Telegram alerts:** set the bot token and chat ID in the web page, then press Send test
-  message. Alerts are sent when the printer becomes unreachable, a ticket fails after its
-  retries, or the decision model is down. Each problem alerts once, and a recovery
-  message follows when it clears.
+  message. Alerts are sent for: printer unreachable, paper out, cover open, autocutter
+  error, rendering failure, ticket failed after retries, and decision model down. Each
+  problem alerts once, and a recovery message follows when it clears. The printer's own
+  status (paper, cover, cutter) is read every minute with DLE EOT.
+- **Printer status bits are unverified:** the TRG lists the error categories but not the
+  status byte layout. The bit masks in `app/main.py` (`PRINTER_FAULTS_BITS`) follow the
+  standard ESC/POS layout. Check them against the ESC/POS Application Programming Guide
+  and against the real printer before trusting the paper, cover and cutter alerts.
 - **Model outage:** the request still succeeds with the rule-based template, and the
   ticket records `selection: rule`.
 - **Rendering failure:** the API rejects the request with HTTP 500 and queues nothing,
@@ -92,7 +96,7 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `GET` | `/api/v1/templates` | Templates and the recipient group each belongs to. |
 | `GET` / `PUT` | `/api/v1/settings/model` | Decision model URL, model name, on/off and timeout. Saved in the database. |
 | `GET` | `/api/v1/health` | Health for Uptime Kuma. 503 when the printer or database is down. |
-| `GET` / `PUT` | `/api/v1/settings/alerts` | Telegram bot token and chat ID, and Uptime Kuma push URL. The token is never returned in full. |
+| `GET` / `PUT` | `/api/v1/settings/alerts` | Telegram bot token and chat ID. The token is never returned in full. |
 | `POST` | `/api/v1/alerts/test` | Send a test Telegram message. |
 | `GET` | `/` | Web page for writing tickets and changing the settings. |
 | `GET` | `/api/v1/printer` | Whether the printer is reachable. |

@@ -399,7 +399,7 @@
           "settings"
         ],
         "summary": "Update Alert Settings",
-        "description": "Set Telegram and Uptime Kuma. Send an empty string to clear a value.",
+        "description": "Set the Telegram bot token and chat ID. Send an empty string to clear a value.",
         "operationId": "update_alert_settings_api_v1_settings_alerts_put",
         "requestBody": {
           "content": {
@@ -771,18 +771,13 @@
           "telegram_chat_id": {
             "type": "string",
             "title": "Telegram Chat Id"
-          },
-          "kuma_push_url": {
-            "type": "string",
-            "title": "Kuma Push Url"
           }
         },
         "type": "object",
         "required": [
           "telegram_configured",
           "telegram_token_hint",
-          "telegram_chat_id",
-          "kuma_push_url"
+          "telegram_chat_id"
         ],
         "title": "AlertSettingsOut"
       },
@@ -811,18 +806,6 @@
               }
             ],
             "title": "Telegram Chat Id"
-          },
-          "kuma_push_url": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kuma Push Url"
           }
         },
         "additionalProperties": false,
