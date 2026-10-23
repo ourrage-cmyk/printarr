@@ -87,7 +87,7 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
 | `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. Epson TRG: 512 dots, Font A 12 dots wide, so 42 columns. |
 | `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. Used on first start only; then change it in the web page. |
-| `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model: picks templates and decorations only. |
+| `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model. It is sent to `/v1/systemone` (without the `/v1` in the base URL) to score questions about the message. A template is picked from the highest score, at least 0.5, else the rules choose. Decorations come from the template. |
 | `PRINTARR_LLM_TEXT_MODEL` | `granite4.2:3b` | Text model for paragraphs (used later). |
 | `PRINTARR_LLM_ENABLED` | `on` | The decision model is used when a base URL is set. Set to `off` to disable it. |
 | `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
@@ -144,8 +144,8 @@ Template choice happens when the ticket is queued:
 1. If `template` is a number, it must belong to the recipient's group. Otherwise the request
    fails with 422.
    `template` defaults to `auto`.
-2. If the decision model is configured and answers with a valid template, it is used.
-   It may only add decorations the template allows.
+2. If the decision model is configured and scores a template at least 0.5, it is used.
+   The template's default decorations apply.
 3. Otherwise a fixed rule picks the template. The rule is deterministic and works without
    the model. If the model is slow, unreachable, or returns something invalid, the rule
    is used and the ticket records `selection: rule`.
