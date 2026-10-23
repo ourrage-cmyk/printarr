@@ -29,6 +29,7 @@ from app.blocks import Block, resolve_blocks
 from app.ha import HAClient, HAError
 from app.scheduler import Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
+from app.text import printed_as_question
 from app.templates import (
     RECIPIENTS,
     TEMPLATES,
@@ -176,6 +177,7 @@ class ChoiceOut(BaseModel):
 class PreviewOut(ChoiceOut):
     text: str = Field(description="The receipt as it would be printed, as plain text.")
     width: int
+    warnings: list[str] = Field(default_factory=list, description="Things to check before printing.")
 
 
 class TemplateOut(BaseModel):
@@ -236,6 +238,24 @@ def _choice_out(choice: Choice) -> ChoiceOut:
         decorations=list(choice.decorations),
         selection=choice.selection,
     )
+
+
+PAPER_WARN_LINES = 20  # a receipt longer than this uses a lot of paper; warn, do not block
+
+
+def preview_warnings(text: str) -> list[str]:
+    """Checks for a rendered receipt: length, and characters that print as "?"."""
+    warnings: list[str] = []
+    rows = text.splitlines()
+    if len(rows) > PAPER_WARN_LINES:
+        warnings.append(
+            f"This ticket is {len(rows)} lines long. Receipts over {PAPER_WARN_LINES} lines "
+            "use a lot of paper, so check it is what you meant."
+        )
+    question = sorted({ch for row in rows for ch in printed_as_question(row)})
+    if question:
+        warnings.append("These characters will print as '?': " + " ".join(question))
+    return warnings
 
 
 def create_app(settings: Settings | None = None, transport: Transport | None = None) -> FastAPI:
@@ -611,11 +631,13 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         choice = choose(body)
         message = prepare_text(body)
         extra = prepare_blocks(body)
+        text = render_preview(body, choice, message, extra)
         return {
             **_choice_out(choice).model_dump(),
             "text_state": body.text_state,
-            "text": render_preview(body, choice, message, extra),
+            "text": text,
             "width": width,
+            "warnings": preview_warnings(text),
         }
 
     @api.get("/tickets/{ticket_id}", response_model=TicketOut, tags=["tickets"])
