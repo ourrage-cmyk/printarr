@@ -6,9 +6,10 @@ consume these lines, so what the preview shows matches what the printer prints.
 
 from __future__ import annotations
 
+import base64
 import re
 import textwrap
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from typing import Literal
@@ -30,6 +31,30 @@ class Line:
     align: Align = "left"
     bold: bool = False
     tall: bool = False
+    # (bytes per row, rows, 1-bit data) for a graphic line. The text is its caption.
+    raster: tuple[int, int, bytes] | None = None
+
+
+def line_to_dict(line: Line) -> dict[str, object]:
+    raster = None
+    if line.raster is not None:
+        width_bytes, height, data = line.raster
+        raster = {"width_bytes": width_bytes, "height": height, "data": base64.b64encode(data).decode()}
+    return {"text": line.text, "align": line.align, "bold": line.bold, "tall": line.tall, "raster": raster}
+
+
+def line_from_dict(data: Mapping[str, object]) -> Line:
+    raster = None
+    if data.get("raster"):
+        image = data["raster"]
+        raster = (int(image["width_bytes"]), int(image["height"]), base64.b64decode(image["data"]))  # type: ignore[index]
+    return Line(
+        text=str(data["text"]),
+        align=data.get("align", "left"),  # type: ignore[arg-type]
+        bold=bool(data.get("bold")),
+        tall=bool(data.get("tall")),
+        raster=raster,  # type: ignore[arg-type]
+    )
 
 
 @dataclass(frozen=True)
@@ -52,11 +77,19 @@ def receipt_for_ticket(ticket: Mapping[str, object], tz: tzinfo) -> Receipt:
     )
 
 
-def render_ticket_lines(ticket: Mapping[str, object], tz: tzinfo, width: int = PAPER_WIDTH) -> list[Line]:
-    """Lay out a stored ticket using the template and decorations chosen for it."""
+def render_ticket_lines(
+    ticket: Mapping[str, object],
+    tz: tzinfo,
+    width: int = PAPER_WIDTH,
+    extra: Sequence[Line] = (),
+) -> list[Line]:
+    """Lay out a stored ticket using the template and decorations chosen for it.
+
+    `extra` is the live data (Home Assistant values and graphs), fetched just before printing.
+    """
     template = template_by_id(int(ticket["template_id"]))  # type: ignore[arg-type]
     decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
-    return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations)
+    return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
 
 
 def wrap(text: str, width: int) -> list[str]:
@@ -76,8 +109,12 @@ def render_lines(
     width: int = PAPER_WIDTH,
     template: Template = TEMPLATES[0],
     decorations: tuple[str, ...] = (),
+    extra: Sequence[Line] = (),
 ) -> list[Line]:
-    """Lay out a receipt for paper `width` columns wide, in the given template."""
+    """Lay out a receipt for paper `width` columns wide, in the given template.
+
+    `extra` lines (data and graphs) go after the message and before the closing rule.
+    """
     rule = Line(template.rule * width)
     body_width = width - 4 if "frame" in decorations else width
     lines = [
@@ -110,6 +147,7 @@ def render_lines(
     else:
         lines += [Line(row) for row in message]
 
+    lines += extra
     if "footer" in decorations:
         lines.append(Line("- end -", align="center"))
     else:

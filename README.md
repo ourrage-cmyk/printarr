@@ -45,6 +45,19 @@ Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](do
 - **Rendering failure:** the API rejects the request with HTTP 500 and queues nothing,
   so the caller knows straight away.
 
+## Live data from Home Assistant
+
+Tickets can include `blocks`:
+- `value`: an entity's current state, with a label and unit.
+- `sparkline`: a 512-dot graph of an entity's history (`hours`, default 24), printed as a raster image.
+
+Set the Home Assistant URL and a long-lived access token in the web page. The data is
+fetched when the ticket prints, not when it is queued. A held or scheduled ticket
+therefore prints current values. If Home Assistant can't be reached at print time, the
+ticket still prints with "data unavailable" in place of the live data, and a Telegram
+alert fires. Requests that include blocks are rejected with 422 if Home Assistant is not
+configured, and the preview returns 502 if Home Assistant is unreachable.
+
 ## Holds and Home Assistant
 
 A ticket with `"hold": true` is queued but does not print. The template is still chosen

@@ -63,6 +63,18 @@ WEB_UI = """<!doctype html>
   </section>
 
   <section>
+    <h2>Home Assistant</h2>
+    <p class="muted">Live values and graphs are fetched from Home Assistant when a ticket prints. Use a long-lived access token.</p>
+    <div class="row">
+      <label>URL<input id="h-url" placeholder="http://192.168.1.10:8123"></label>
+      <label>Access token<input id="h-token" autocomplete="off" placeholder="leave blank to keep current"></label>
+    </div>
+    <button id="h-save">Save Home Assistant</button>
+    <button id="h-test" class="ghost">Test connection</button>
+    <span id="h-status" class="muted"></span>
+  </section>
+
+  <section>
     <h2>New ticket</h2>
     <div class="row">
       <label>Recipient
@@ -147,6 +159,25 @@ async function testAlert() {
   try { await api('/alerts/test', { method: 'POST' }); show($('a-status'), 'Test message sent.'); }
   catch (e) { show($('a-status'), e.message, true); }
 }
+async function loadHA() {
+  const h = await api('/settings/ha');
+  $('h-url').value = h.url;
+  $('h-token').placeholder = h.token_configured ? 'saved, ends ' + h.token_hint : 'not set';
+}
+async function saveHA() {
+  const body = { url: $('h-url').value.trim() };
+  if ($('h-token').value.trim()) body.token = $('h-token').value.trim();
+  try {
+    await api('/settings/ha', { method: 'PUT', body: JSON.stringify(body) });
+    $('h-token').value = '';
+    await loadHA();
+    show($('h-status'), 'Saved.');
+  } catch (e) { show($('h-status'), e.message, true); }
+}
+async function testHA() {
+  try { await api('/settings/ha/test', { method: 'POST' }); show($('h-status'), 'Home Assistant reachable.'); }
+  catch (e) { show($('h-status'), e.message, true); }
+}
 async function loadTemplates() {
   const templates = await api('/templates');
   const select = $('t-template');
@@ -220,6 +251,8 @@ async function loadTickets() {
 
 $('m-save').onclick = saveModel;
 $('a-save').onclick = saveAlerts;
+$('h-save').onclick = saveHA;
+$('h-test').onclick = testHA;
 $('a-test').onclick = testAlert;
 $('t-recipient').onchange = filterTemplates;
 $('t-preview').onclick = preview;
@@ -230,6 +263,7 @@ $('tickets').onclick = (e) => { const path = e.target.dataset.act; if (path) act
 
 loadModel().catch((e) => show($('m-status'), e.message, true));
 loadAlerts().catch((e) => show($('a-status'), e.message, true));
+loadHA().catch((e) => show($('h-status'), e.message, true));
 loadTemplates().catch((e) => show($('t-status'), e.message, true));
 loadTickets().catch(() => {});
 setInterval(loadTickets, 10000);

@@ -460,6 +460,92 @@
         }
       }
     },
+    "/api/v1/settings/ha": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Ha Settings",
+        "operationId": "get_ha_settings_api_v1_settings_ha_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HASettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Ha Settings",
+        "description": "Home Assistant base URL and long-lived access token. Empty string clears a value.",
+        "operationId": "update_ha_settings_api_v1_settings_ha_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HASettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HASettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/ha/test": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Test Ha",
+        "operationId": "test_ha_api_v1_settings_ha_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Test Ha Api V1 Settings Ha Test Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tickets/preview": {
       "post": {
         "tags": [
@@ -812,6 +898,64 @@
         "type": "object",
         "title": "AlertSettingsPatch"
       },
+      "HASettingsOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "token_configured": {
+            "type": "boolean",
+            "title": "Token Configured"
+          },
+          "token_hint": {
+            "type": "string",
+            "title": "Token Hint",
+            "description": "Last four characters of the access token, never the full token."
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "token_configured",
+          "token_hint"
+        ],
+        "title": "HASettingsOut"
+      },
+      "HASettingsPatch": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "examples": [
+              "http://192.168.1.10:8123"
+            ]
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HASettingsPatch"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1008,6 +1152,41 @@
         ],
         "title": "PrinterStatus"
       },
+      "SparklineBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "sparkline",
+            "title": "Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "pattern": "^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "default": 24
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "entity_id",
+          "label"
+        ],
+        "title": "SparklineBlock"
+      },
       "TemplateOut": {
         "properties": {
           "id": {
@@ -1137,6 +1316,29 @@
             "title": "Template",
             "description": "A template id from GET /api/v1/templates, which must belong to the recipient's group, or 'auto' to let the decision model or the rules choose. Chosen when the request arrives, not when it prints.",
             "default": "auto"
+          },
+          "blocks": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ValueBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/SparklineBlock"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "sparkline": "#/components/schemas/SparklineBlock",
+                  "value": "#/components/schemas/ValueBlock"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Blocks",
+            "description": "Live data from Home Assistant, fetched when the request arrives. 'value' prints a label and state. 'sparkline' prints a labelled graph of recent history."
           },
           "send_at": {
             "anyOf": [
@@ -1382,6 +1584,49 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValueBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "value",
+            "title": "Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "pattern": "^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity Id",
+            "examples": [
+              "sensor.living_room_temperature"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "entity_id",
+          "label"
+        ],
+        "title": "ValueBlock"
       }
     }
   }

@@ -24,6 +24,12 @@ def encode(lines: list[Line], feed: int = 4) -> bytes:
     out = bytearray(INITIALIZE + CODE_PAGE_CP437)
     for line in lines:
         out += ALIGN[line.align]
+        if line.raster is not None:
+            # GS v 0 m xL xH yL yH: print a 1-bit raster image, m=0 normal density.
+            width_bytes, height, data = line.raster
+            out += GS + b"v0\x00" + bytes([width_bytes & 0xFF, width_bytes >> 8, height & 0xFF, height >> 8])
+            out += data
+            continue
         out += BOLD_ON if line.bold else BOLD_OFF
         out += TALL_ON if line.tall else TALL_OFF
         # cp437 is what the printer's default code page understands. Anything else
@@ -36,8 +42,9 @@ def encode(lines: list[Line], feed: int = 4) -> bytes:
 
 def to_text(lines: list[Line], width: int = 48) -> str:
     """Plain-text rendering for previews. Bold and size are not shown."""
-    rows = [
-        line.text.center(width).rstrip() if line.align == "center" else line.text
-        for line in lines
-    ]
+    rows: list[str] = []
+    for line in lines:
+        rows.append(line.text.center(width).rstrip() if line.align == "center" else line.text)
+        if line.raster is not None:
+            rows.append("[graph]".center(width).rstrip())
     return "\n".join(rows) + "\n"

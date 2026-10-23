@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     last_error      TEXT,
     template_id     INTEGER NOT NULL,
     text_state      TEXT NOT NULL DEFAULT 'formatted',
+    blocks_json     TEXT NOT NULL DEFAULT '[]',
     decorations     TEXT NOT NULL DEFAULT '',
     selection       TEXT NOT NULL CHECK (selection IN ('explicit', 'model', 'rule')),
     created_at_ms   INTEGER NOT NULL,
@@ -111,6 +112,7 @@ class TicketStore:
         held: bool = False,
         hold_key: str | None = None,
         text_state: str = "formatted",
+        blocks_json: str = "[]",
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once."""
         ticket_id = uuid.uuid4().hex
@@ -121,12 +123,12 @@ class TicketStore:
                 """
                 INSERT INTO tickets (id, recipient, sender, title, message, status, hold_key,
                                      send_at_ms, next_attempt_ms, template_id, text_state,
-                                     decorations, selection, created_at_ms, updated_at_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     blocks_json, decorations, selection, created_at_ms, updated_at_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
-                    send_at_ms, send_at_ms, template_id, text_state, ",".join(decorations),
+                    send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now,
                 ),
             )

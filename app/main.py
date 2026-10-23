@@ -24,7 +24,9 @@ from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.printer import PrinterError, Transport, build_transport
-from app.receipt import Receipt, render_lines, render_ticket_lines
+from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines
+from app.blocks import Block, resolve_blocks
+from app.ha import HAClient, HAError
 from app.scheduler import Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.templates import (
@@ -95,6 +97,14 @@ class TicketCreate(BaseModel):
             "A template id from GET /api/v1/templates, which must belong to the recipient's "
             "group, or 'auto' to let the decision model or the rules choose. Chosen when the "
             "request arrives, not when it prints."
+        ),
+    )
+    blocks: list[Block] = Field(
+        default_factory=list,
+        max_length=8,
+        description=(
+            "Live data from Home Assistant, fetched when the request arrives. 'value' prints a "
+            "label and state. 'sparkline' prints a labelled graph of recent history."
         ),
     )
     send_at: datetime | None = Field(
@@ -189,6 +199,19 @@ class AlertSettingsPatch(BaseModel):
 
     telegram_token: str | None = Field(default=None, max_length=200)
     telegram_chat_id: str | None = Field(default=None, max_length=50)
+
+
+class HASettingsOut(BaseModel):
+    url: str
+    token_configured: bool
+    token_hint: str = Field(description="Last four characters of the access token, never the full token.")
+
+
+class HASettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str | None = Field(default=None, max_length=300, examples=["http://192.168.1.10:8123"])
+    token: str | None = Field(default=None, max_length=500)
 
 
 class PrinterStatus(BaseModel):
@@ -388,7 +411,22 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
 
-    def render_preview(body: TicketCreate, choice: Choice, message: str) -> str:
+    def home_assistant() -> HAClient | None:
+        url = store.get_setting("ha_url") or ""
+        token = store.get_setting("ha_token") or ""
+        return HAClient(url, token) if url and token else None
+
+    def prepare_blocks(body: TicketCreate) -> list[Line]:
+        """Fetch Home Assistant data now. An unreachable Home Assistant rejects the request."""
+        if not body.blocks:
+            return []
+        try:
+            return resolve_blocks(body.blocks, home_assistant())
+        except HAError as exc:
+            logger.warning("home assistant data unavailable: %s", exc)
+            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
+
+    def render_preview(body: TicketCreate, choice: Choice, message: str, extra: list[Line]) -> str:
         receipt = Receipt(
             recipient=RECIPIENTS[body.recipient],
             sender=body.sender,
@@ -396,7 +434,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             message=message,
             sent_at=datetime.fromtimestamp(_resolve_send_at(body.send_at, settings.tzinfo) / 1000, tz=settings.tzinfo),
         )
-        lines = render_lines(receipt, width, choice.template, choice.decorations)
+        lines = render_lines(receipt, width, choice.template, choice.decorations, extra)
         return to_text(lines, width)
 
     @app.get("/healthz", tags=["meta"])
@@ -428,6 +466,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=422, detail="hold_key needs hold: true")
         choice = choose(body)
         message = prepare_text(body)
+        if body.blocks and home_assistant() is None:
+            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
         try:  # reject now rather than queue a ticket that cannot print
             receipt = Receipt(
                 recipient=RECIPIENTS[body.recipient],
@@ -444,6 +484,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             recipient=body.recipient,
             message=message,
             text_state=body.text_state,
+            blocks_json=json.dumps([block.model_dump() for block in body.blocks]),
             sender=body.sender,
             title=body.title,
             send_at_ms=_resolve_send_at(body.send_at, settings.tzinfo),
@@ -521,6 +562,35 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=502, detail=f"Telegram send failed: {exc}") from None
         return {"sent": True}
 
+    @api.get("/settings/ha", response_model=HASettingsOut, tags=["settings"])
+    def get_ha_settings() -> HASettingsOut:
+        token = store.get_setting("ha_token") or ""
+        return HASettingsOut(
+            url=store.get_setting("ha_url") or "",
+            token_configured=bool(token),
+            token_hint=f"...{token[-4:]}" if token else "",
+        )
+
+    @api.put("/settings/ha", response_model=HASettingsOut, tags=["settings"])
+    def update_ha_settings(patch: HASettingsPatch) -> HASettingsOut:
+        """Home Assistant base URL and long-lived access token. Empty string clears a value."""
+        if patch.url is not None:
+            store.set_setting("ha_url", patch.url)
+        if patch.token is not None:
+            store.set_setting("ha_token", patch.token)
+        return get_ha_settings()
+
+    @api.post("/settings/ha/test", tags=["settings"])
+    def test_ha() -> dict[str, bool]:
+        client = home_assistant()
+        if client is None:
+            raise HTTPException(status_code=400, detail="Home Assistant URL and token are not set")
+        try:
+            client.ping()
+        except HAError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+        return {"reachable": True}
+
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def web_ui() -> str:
         return WEB_UI
@@ -539,10 +609,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Choose a template and render a receipt without queueing it."""
         choice = choose(body)
         message = prepare_text(body)
+        extra = prepare_blocks(body)
         return {
             **_choice_out(choice).model_dump(),
             "text_state": body.text_state,
-            "text": render_preview(body, choice, message),
+            "text": render_preview(body, choice, message, extra),
             "width": width,
         }
 
@@ -563,7 +634,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.get("/tickets/{ticket_id}/preview", response_class=PlainTextResponse, tags=["tickets"])
     def ticket_preview(ticket_id: str) -> str:
         ticket = ticket_or_404(ticket_id)
-        return to_text(render_ticket_lines(ticket, settings.tzinfo, width), width)
+        live = scheduler.live_lines(ticket)
+        return to_text(render_ticket_lines(ticket, settings.tzinfo, width, live), width)
 
     @api.get(
         "/tickets/{ticket_id}/escpos",
@@ -574,7 +646,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def ticket_escpos(ticket_id: str) -> Response:
         """The exact ESC/POS byte stream for this ticket. The simulator reads this."""
         ticket = ticket_or_404(ticket_id)
-        data = encode(render_ticket_lines(ticket, settings.tzinfo, width))
+        data = encode(render_ticket_lines(ticket, settings.tzinfo, width, scheduler.live_lines(ticket)))
         return Response(content=data, media_type="application/octet-stream")
 
     @api.get("/printer", response_model=PrinterStatus, tags=["printer"])

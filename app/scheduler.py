@@ -7,10 +7,13 @@ import threading
 from collections.abc import Callable
 
 from app.alerts import Notifier
+from app.blocks import parse_blocks, unavailable_lines
 from app.config import Settings
 from app.escpos import encode
+from app.ha import HAError, client_from_store
 from app.printer import PrinterError, Transport
-from app.receipt import render_ticket_lines
+from app.receipt import Line, render_ticket_lines
+from app.blocks import resolve_blocks
 from app.store import TicketStore, now_ms
 
 logger = logging.getLogger("printarr.scheduler")
@@ -41,9 +44,28 @@ class Scheduler:
             self._print(ticket)
         return len(jobs)
 
+    def live_lines(self, ticket: dict) -> list[Line]:
+        """Fetch Home Assistant data now, so a held or scheduled ticket prints current values."""
+        blocks = parse_blocks(ticket.get("blocks_json"))
+        if not blocks:
+            return []
+        try:
+            lines = resolve_blocks(blocks, client_from_store(self.store))
+        except HAError as exc:
+            # Print what we can, with a clear placeholder, rather than drop the ticket.
+            logger.warning("ticket %s: Home Assistant unavailable at print time: %s", ticket["id"], exc)
+            if self.notifier:
+                self.notifier.problem("home_assistant", f"Home Assistant unavailable at print time: {exc}")
+            return unavailable_lines(blocks)
+        if self.notifier:
+            self.notifier.recovered("home_assistant", "Home Assistant answers again")
+        return lines
+
     def _print(self, ticket: dict) -> None:
         try:
-            lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width)
+            lines = render_ticket_lines(
+                ticket, self.settings.tzinfo, self.settings.paper_width, self.live_lines(ticket)
+            )
             self.transport.send(encode(lines))
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
