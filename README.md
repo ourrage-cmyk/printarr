@@ -164,6 +164,26 @@ Programming Guide, or on the real printer, before relying on them.
 
 ## Simulator bridge
 
+Point the service at the simulator over TCP, the same way as the real printer:
+
+```bash
+PRINTARR_PRINTER_MODE=tcp PRINTARR_PRINTER_HOST=<simulator-host> PRINTARR_PRINTER_PORT=9100
+```
+
+To send the sample jobs (text, raster, full receipt) to any target and check the output:
+
+```bash
+python -m app.send_sample <host> 9100
+```
+
+Golden-byte tests in `tests/test_golden.py` pin the exact bytes for these jobs. They are
+regression tests against this encoder, not checks against Epson's Programming Guide.
+
+The earlier `file` mode still works too: it writes each job as a `.bin` file in
+`PRINTARR_OUTPUT_DIR`.
+
+### Older note
+
 Run with `PRINTARR_PRINTER_MODE=file`. Each job lands in `PRINTARR_OUTPUT_DIR` as a
 `.bin` file, and `GET /api/v1/tickets/{id}/escpos` returns the same bytes. The printer
 simulator can use either source.
