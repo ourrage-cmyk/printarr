@@ -16,6 +16,7 @@ class Settings:
     output_dir: str = "/data/output"
     timezone: str = "Europe/London"
     printer_mode: str = "tcp"
+    raster_mode: str = "gs_l"  # gs_l (GS ( L fn 112) or gs_v0 (obsolete GS v 0 fallback)
     printer_host: str = ""
     printer_port: int = 9100
     printer_timeout: float = 5.0
@@ -45,6 +46,7 @@ def load_settings() -> Settings:
         output_dir=_env("OUTPUT_DIR", "/data/output"),
         timezone=_env("TIMEZONE", "Europe/London"),
         printer_mode=_env("PRINTER_MODE", "tcp").lower(),
+        raster_mode=_env("RASTER_MODE", "gs_l").lower(),
         printer_host=_env("PRINTER_HOST", ""),
         printer_port=int(_env("PRINTER_PORT", "9100")),
         printer_timeout=float(_env("PRINTER_TIMEOUT", "5")),
@@ -61,5 +63,7 @@ def load_settings() -> Settings:
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")
+    if settings.raster_mode not in ("gs_l", "gs_v0"):
+        raise ValueError("PRINTARR_RASTER_MODE must be gs_l or gs_v0")
     settings.tzinfo  # fails fast on an unknown timezone name
     return settings

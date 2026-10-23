@@ -119,7 +119,7 @@ class StatusTransport:
 
 def test_paper_cover_and_cutter_faults_alert_once_each(settings, monkeypatch):
     sent = capture_telegram(monkeypatch)
-    transport = StatusTransport({2: 0x04, 3: 0x04, 4: 0x60})  # cover open, cutter error, paper end
+    transport = StatusTransport({2: 0x04, 3: 0x08, 4: 0x60})  # cover open, cutter error, paper end
     app = create_app(settings, transport=transport)
     with TestClient(app) as client:
         configure_telegram(client)

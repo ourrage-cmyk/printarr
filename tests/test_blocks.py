@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 import app.ha as ha
 from app.blocks import GRAPH_HEIGHT, GRAPH_WIDTH, ValueBlock, sparkline_bitmap
-from app.escpos import GS, encode
+from app.escpos import GS, PRINT_BUFFER, encode
 from app.ha import HAError
 from app.main import create_app
 from app.receipt import Line
@@ -41,9 +41,17 @@ def test_sparkline_needs_two_points():
         sparkline_bitmap([1.0])
 
 
-def test_raster_line_encodes_gs_v0_header():
+def test_raster_line_encodes_gs_l_header():
     line = Line("", raster=(64, 2, b"\xff" * 128))
     payload = encode([line])
+    # pL pH = 10 + 128 data bytes; 512 dots across, 2 rows down; then GS ( L print.
+    assert GS + b"(L" + bytes([138, 0, 48, 112, 48, 1, 1, 49, 0, 2, 2, 0]) + b"\xff" * 128 in payload
+    assert PRINT_BUFFER in payload
+
+
+def test_raster_line_gs_v0_fallback():
+    line = Line("", raster=(64, 2, b"\xff" * 128))
+    payload = encode([line], raster_mode="gs_v0")
     assert GS + b"v0\x00" + bytes([64, 0, 2, 0]) in payload
 
 
@@ -69,7 +77,7 @@ def test_value_and_sparkline_blocks_are_stored_and_printed(settings, monkeypatch
         assert "[graph]" in preview
         assert app.state.scheduler.run_once() == 1
         payload = client.get(f"/api/v1/tickets/{ticket.json()['id']}/escpos").content
-        assert GS + b"v0" in payload
+        assert GS + b"(L" in payload
 
 
 def test_home_assistant_down_at_print_time_prints_a_placeholder_and_alerts(settings, monkeypatch):
