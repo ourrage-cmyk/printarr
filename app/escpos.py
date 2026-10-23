@@ -12,26 +12,45 @@ INITIALIZE = ESC + b"@"
 CODE_PAGE_CP437 = ESC + b"t\x00"
 BOLD_ON = ESC + b"E\x01"
 BOLD_OFF = ESC + b"E\x00"
-# GS ! n: bits 0-2 = height multiplier minus 1, bits 4-6 = width multiplier minus 1.
-# The TRG confirms double size exists but not these bits. UNVERIFIED against the
-# Command Reference (Epson download4.epson.biz, ESC/POS reference).
+# GS ! n: bits 0-2 = height multiplier minus 1, bits 4-6 = width multiplier minus 1
+# (Command Reference, gs_exclamation). 0x01 is double height.
 TALL_ON = GS + b"!\x01"  # double height, normal width
 TALL_OFF = GS + b"!\x00"
 ALIGN = {"left": ESC + b"a\x00", "center": ESC + b"a\x01"}
 FEED_LINES = ESC + b"d"  # ESC d n: print and feed n lines
-PARTIAL_CUT = GS + b"V\x01"  # GS V 1: partial cut
+PARTIAL_CUT = GS + b"V\x01"  # GS V 1: partial cut, Function A (Command Reference, gs_cv)
+PRINT_BUFFER = GS + b"(L\x02\x00\x30\x32"  # GS ( L, m=48, fn=50: print graphics in buffer
+
+# Raster images. "gs_l" is GS ( L function 112, the current form. "gs_v0" is the
+# obsolete GS v 0 form, kept behind PRINTARR_RASTER_MODE in case a unit rejects fn 112.
+RASTER_GS_L = "gs_l"
+RASTER_GS_V0 = "gs_v0"
+RASTER_MODES = (RASTER_GS_L, RASTER_GS_V0)
 
 
-def encode(lines: list[Line], feed: int = 4) -> bytes:
+def _u16(value: int) -> bytes:
+    return bytes([value & 0xFF, value >> 8])
+
+
+def _raster(width_bytes: int, height: int, data: bytes, mode: str) -> bytes:
+    if mode == RASTER_GS_V0:
+        return GS + b"v0\x00" + _u16(width_bytes) + _u16(height) + data
+    # GS ( L pL pH 48 112 a bx by c xL xH yL yH d...: monochrome, 1x scale, colour 49.
+    # xL/xH count dots across (8 per byte), yL/yH count rows. pL/pH count the bytes after them.
+    body = bytes([48, 112, 48, 1, 1, 49]) + _u16(width_bytes * 8) + _u16(height)
+    return GS + b"(L" + _u16(len(body) + len(data)) + body + data + PRINT_BUFFER
+
+
+def encode(lines: list[Line], feed: int = 4, raster_mode: str = RASTER_GS_L) -> bytes:
     """Return the byte stream for one receipt, ending with a feed and a partial cut."""
+    if raster_mode not in RASTER_MODES:
+        raise ValueError(f"raster mode must be one of {RASTER_MODES}")
     out = bytearray(INITIALIZE + CODE_PAGE_CP437)
     for line in lines:
         out += ALIGN[line.align]
         if line.raster is not None:
-            # GS v 0 m xL xH yL yH: print a 1-bit raster image, m=0 normal density.
             width_bytes, height, data = line.raster
-            out += GS + b"v0\x00" + bytes([width_bytes & 0xFF, width_bytes >> 8, height & 0xFF, height >> 8])
-            out += data
+            out += _raster(width_bytes, height, data, raster_mode)
             continue
         out += BOLD_ON if line.bold else BOLD_OFF
         out += TALL_ON if line.tall else TALL_OFF

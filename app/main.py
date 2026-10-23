@@ -52,10 +52,11 @@ SETTING_KEYS = {
 T = TypeVar("T")
 
 # Printer faults read from the real-time status bytes. (request, bit mask, alert text).
-# UNVERIFIED bit masks: standard ESC/POS layout, to confirm against the Programming Guide.
+# Bit masks from the Command Reference, dle_eot: n=2 bit 2 cover open, n=3 bit 3 autocutter error,
+# n=4 bits 5-6 paper end sensor.
 PRINTER_FAULTS_BITS = {
     "cover": (2, 0x04, "printer cover open"),
-    "cutter": (3, 0x04, "autocutter error"),
+    "cutter": (3, 0x08, "autocutter error"),
     "paper": (4, 0x60, "paper out"),
 }
 PRINTER_FAULTS = {key: text for key, (_, _, text) in PRINTER_FAULTS_BITS.items()}
@@ -476,7 +477,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 message=message,
                 sent_at=datetime.now(settings.tzinfo),
             )
-            encode(render_lines(receipt, width, choice.template, choice.decorations))
+            encode(render_lines(receipt, width, choice.template, choice.decorations), raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
@@ -646,7 +647,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def ticket_escpos(ticket_id: str) -> Response:
         """The exact ESC/POS byte stream for this ticket. The simulator reads this."""
         ticket = ticket_or_404(ticket_id)
-        data = encode(render_ticket_lines(ticket, settings.tzinfo, width, scheduler.live_lines(ticket)))
+        data = encode(
+            render_ticket_lines(ticket, settings.tzinfo, width, scheduler.live_lines(ticket)),
+            raster_mode=settings.raster_mode,
+        )
         return Response(content=data, media_type="application/octet-stream")
 
     @api.get("/printer", response_model=PrinterStatus, tags=["printer"])
@@ -670,7 +674,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             sent_at=datetime.now(settings.tzinfo),
         )
         try:
-            transport.send(encode(render_lines(receipt, width)))
+            transport.send(encode(render_lines(receipt, width), raster_mode=settings.raster_mode))
         except PrinterError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from None
         return PrinterStatus(mode=settings.printer_mode, target=transport.target, reachable=True)

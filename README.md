@@ -36,10 +36,9 @@ Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](do
   error, rendering failure, ticket failed after retries, and decision model down. Each
   problem alerts once, and a recovery message follows when it clears. The printer's own
   status (paper, cover, cutter) is read every minute with DLE EOT.
-- **Printer status bits are unverified:** the TRG lists the error categories but not the
-  status byte layout. The bit masks in `app/main.py` (`PRINTER_FAULTS_BITS`) follow the
-  standard ESC/POS layout. Check them against the ESC/POS Application Programming Guide
-  and against the real printer before trusting the paper, cover and cutter alerts.
+- **Printer status bits:** taken from the ESC/POS Command Reference (`dle_eot`). Cover is
+  bit 2 of status 2, autocutter error is bit 3 of status 3, and paper end is bits 5-6 of
+  status 4. Check them on the real printer before trusting the alerts.
 - **Model outage:** the request still succeeds with the rule-based template, and the
   ticket records `selection: rule`.
 - **Rendering failure:** the API rejects the request with HTTP 500 and queues nothing,
@@ -78,6 +77,7 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_PRINTER_MODE` | `tcp` | `tcp` sends to the printer. `file` writes `.bin` files to `PRINTARR_OUTPUT_DIR` (used for the simulator and tests). |
 | `PRINTARR_PRINTER_HOST` | _(empty)_ | Printer IP or hostname in `tcp` mode. |
 | `PRINTARR_PRINTER_PORT` | `9100` | Raw TCP port. |
+| `PRINTARR_RASTER_MODE` | `gs_l` | Image command. `gs_l` is GS ( L function 112. `gs_v0` is the obsolete GS v 0, for a unit that rejects fn 112. |
 | `PRINTARR_PRINTER_TIMEOUT` | `5` | Seconds to wait for connect and send. |
 | `PRINTARR_TIMEZONE` | `Europe/London` | Used for naive `send_at` values and for the date on the receipt. |
 | `PRINTARR_DB_PATH` | `/data/printarr.db` | SQLite database file. |
@@ -155,12 +155,20 @@ path chose it.
 
 ## Printer facts and verification
 
-Layout constants come from the Epson TM-T88V Technical Reference Guide
-(`tmt88v_trg_reve.pdf`): 80 mm paper, 72 mm printable width, 512 dots, Font A 42
-columns, Font B 56 columns. The TRG does not contain the byte-level command tables.
-Those are in the separate ESC/POS Application Programming Guide. So the command bytes
-in `app/escpos.py` are still unconfirmed against Epson. Confirm them against the
-Programming Guide, or on the real printer, before relying on them.
+Layout constants come from the Epson TM-T88V Technical Reference Guide: 80 mm paper,
+512 dots, Font A 42 columns, Font B 56 columns.
+
+Command bytes are checked against the ESC/POS Command Reference (revision 3.40, TM printers):
+
+- Verified: `GS !` (double size), `GS V 1` (partial cut), `GS ( L` function 112 (raster)
+  and function 50 (print), and `DLE EOT` status 1 to 4.
+- Not yet read: `ESC @`, `ESC E`, `ESC a`, `ESC d`, `ESC t`. These are in the command index
+  and are standard, but their pages still need checking.
+- Obsolete and not used by default: `GS v 0` (see `PRINTARR_RASTER_MODE`), and `ESC i` and
+  `ESC m` for partial cuts.
+
+Still to check on the real unit: the USB ID, the number of tone levels for multi-tone
+images, and a status round trip.
 
 ## Simulator bridge
 

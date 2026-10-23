@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from app.blocks import sparkline_bitmap
 from app.escpos import (
     ALIGN,
+    PRINT_BUFFER,
     BOLD_OFF,
     BOLD_ON,
     CODE_PAGE_CP437,
@@ -63,12 +64,13 @@ def test_text_sequence_is_exact():
 
 def test_raster_sequence_is_exact():
     payload = raster_job()
-    header = GS + b"v0\x00" + bytes([64, 0, 64, 0])  # GS v 0 m=0, 64 bytes per row, 64 rows
+    # GS ( L: pL pH = 10 + 4096 data bytes = 4106; 512 dots across, 64 rows down
+    header = GS + b"(L" + bytes([0x0A, 0x10, 48, 112, 48, 1, 1, 49, 0x00, 0x02, 0x40, 0x00])
     assert header in payload
     data_start = payload.index(header) + len(header)
     image = sparkline_bitmap([1.0, 4.0, 2.0, 6.0, 3.0])
     assert payload[data_start : data_start + 64 * 64] == image
-    assert payload[data_start + 64 * 64 :].startswith(TALL_OFF + BOLD_OFF + ALIGN["left"])
+    assert payload[data_start + 64 * 64 :].startswith(PRINT_BUFFER + TALL_OFF + BOLD_OFF + ALIGN["left"])
 
 
 def test_cut_sequence_is_partial_feed_then_cut():
