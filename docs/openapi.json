@@ -351,6 +351,115 @@
         }
       }
     },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Health",
+        "description": "For Uptime Kuma. Returns 503 when the printer or database is down.",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "503": {
+            "description": "Printer or database down"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/alerts": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Alert Settings",
+        "operationId": "get_alert_settings_api_v1_settings_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Alert Settings",
+        "description": "Set Telegram and Uptime Kuma. Send an empty string to clear a value.",
+        "operationId": "update_alert_settings_api_v1_settings_alerts_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/test": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Test Alert",
+        "operationId": "test_alert_api_v1_alerts_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Test Alert Api V1 Alerts Test Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tickets/preview": {
       "post": {
         "tags": [
@@ -648,6 +757,78 @@
   },
   "components": {
     "schemas": {
+      "AlertSettingsOut": {
+        "properties": {
+          "telegram_configured": {
+            "type": "boolean",
+            "title": "Telegram Configured"
+          },
+          "telegram_token_hint": {
+            "type": "string",
+            "title": "Telegram Token Hint",
+            "description": "Last four characters of the bot token, never the full token."
+          },
+          "telegram_chat_id": {
+            "type": "string",
+            "title": "Telegram Chat Id"
+          },
+          "kuma_push_url": {
+            "type": "string",
+            "title": "Kuma Push Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "telegram_configured",
+          "telegram_token_hint",
+          "telegram_chat_id",
+          "kuma_push_url"
+        ],
+        "title": "AlertSettingsOut"
+      },
+      "AlertSettingsPatch": {
+        "properties": {
+          "telegram_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Token"
+          },
+          "telegram_chat_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Chat Id"
+          },
+          "kuma_push_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kuma Push Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AlertSettingsPatch"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {

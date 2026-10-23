@@ -6,13 +6,15 @@ import logging
 import threading
 from collections.abc import Callable
 
+from app.alerts import Notifier
 from app.config import Settings
 from app.escpos import encode
-from app.printer import Transport
+from app.printer import PrinterError, Transport
 from app.receipt import render_ticket_lines
 from app.store import TicketStore, now_ms
 
 logger = logging.getLogger("printarr.scheduler")
+
 
 BATCH_SIZE = 10
 
@@ -24,11 +26,13 @@ class Scheduler:
         transport: Transport,
         settings: Settings,
         clock: Callable[[], int] = now_ms,
+        notifier: Notifier | None = None,
     ) -> None:
         self.store = store
         self.transport = transport
         self.settings = settings
         self.clock = clock
+        self.notifier = notifier
 
     def run_once(self) -> int:
         """Print every ticket that is due right now. Returns how many were attempted."""
@@ -44,14 +48,24 @@ class Scheduler:
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
             logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)
+            if isinstance(exc, PrinterError) and self.notifier:
+                self.notifier.problem("printer", f"printer unreachable: {error}")
             self._record_failure(ticket, error)
             return
+        if self.notifier:
+            self.notifier.recovered("printer", "printer is reachable again")
         self.store.mark_sent(ticket["id"])
         logger.info("ticket %s printed", ticket["id"])
 
     def _record_failure(self, ticket: dict, error: str) -> None:
         if ticket["attempts"] >= self.settings.max_attempts:
             self.store.record_failure(ticket["id"], error, retry_at_ms=None)
+            if self.notifier:
+                self.notifier.problem(
+                    f"ticket:{ticket['id']}",
+                    f"ticket {ticket['id']} for {ticket['recipient']} failed after "
+                    f"{ticket['attempts']} attempts: {error}",
+                )
             return
         # Exponential backoff: base, 2x base, 4x base, ...
         delay_s = self.settings.retry_base_seconds * 2 ** (ticket["attempts"] - 1)

@@ -6,6 +6,7 @@ the API renders it into the printer's byte stream.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
 
+from app.alerts import AlertSettings, HeartbeatThread, Notifier, push_heartbeat, send_telegram
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.printer import PrinterError, Transport, build_transport
@@ -151,6 +153,21 @@ class TemplateOut(BaseModel):
     default_decorations: list[str]
 
 
+class AlertSettingsOut(BaseModel):
+    telegram_configured: bool
+    telegram_token_hint: str = Field(description="Last four characters of the bot token, never the full token.")
+    telegram_chat_id: str
+    kuma_push_url: str
+
+
+class AlertSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    telegram_token: str | None = Field(default=None, max_length=200)
+    telegram_chat_id: str | None = Field(default=None, max_length=50)
+    kuma_push_url: str | None = Field(default=None, max_length=300)
+
+
 class PrinterStatus(BaseModel):
     mode: str
     target: str
@@ -178,8 +195,18 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     settings = settings or load_settings()
     transport = transport or build_transport(settings)
     store = TicketStore(settings.db_path)
-    scheduler = Scheduler(store, transport, settings)
     width = settings.paper_width
+    runtime = {"scheduler": False}
+
+    def read_alert_settings() -> AlertSettings:
+        return AlertSettings(
+            telegram_token=store.get_setting("alert_telegram_token") or "",
+            telegram_chat_id=store.get_setting("alert_telegram_chat_id") or "",
+            kuma_push_url=store.get_setting("alert_kuma_push_url") or "",
+        )
+
+    notifier = Notifier(read_alert_settings)
+    scheduler = Scheduler(store, transport, settings, notifier=notifier)
 
     def read_model_settings() -> ModelSettings:
         """Stored settings win. Environment values only seed the first start."""
@@ -207,6 +234,38 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             if store.get_setting(key) is None:
                 store.set_setting(key, value)
 
+    def health_snapshot() -> tuple[dict[str, Any], bool]:
+        checks: dict[str, str] = {}
+        try:
+            store.get_setting("llm_enabled")
+            checks["database"] = "ok"
+        except Exception as exc:
+            checks["database"] = f"error: {exc}"
+        try:
+            transport.check()
+            checks["printer"] = "ok"
+        except PrinterError as exc:
+            checks["printer"] = f"unreachable: {exc}"
+        current = read_model_settings()
+        if not (current.enabled and current.base_url):
+            checks["decision_model"] = "not in use"
+        else:
+            checks["decision_model"] = "down" if notifier.is_active("model") else "ok"
+        checks["scheduler"] = "running" if runtime["scheduler"] else "disabled"
+        up = checks["database"] == "ok" and checks["printer"] == "ok"
+        return {"status": "ok" if up else "down", "checks": checks}, up
+
+    def heartbeat_tick() -> None:
+        snapshot, up = health_snapshot()
+        printer = snapshot["checks"]["printer"]
+        if printer == "ok":
+            notifier.recovered("printer", "printer is reachable again")
+        else:
+            notifier.problem("printer", f"printer {printer}")
+        url = read_alert_settings().kuma_push_url
+        if url:
+            push_heartbeat(url, up, "ok" if up else printer)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         store.init()
@@ -221,9 +280,13 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         )
         if worker:
             worker.start()
+        runtime["scheduler"] = worker is not None
+        heartbeat = HeartbeatThread(heartbeat_tick)
+        heartbeat.start()
         try:
             yield
         finally:
+            heartbeat.stop()
             if worker:
                 worker.stop()
 
@@ -251,11 +314,22 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except TicketStateError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from None
 
+    def on_model_result(error: Exception | None) -> None:
+        if error is None:
+            notifier.recovered("model", "decision model answers again")
+        else:
+            notifier.problem("model", f"decision model down, using rules: {error}")
+
     def choose(body: TicketCreate) -> Choice:
         template_id = None if body.template == "auto" else body.template
         try:
             return resolve_choice(
-                body.recipient, body.title, body.message, template_id, current_model()
+                body.recipient,
+                body.title,
+                body.message,
+                template_id,
+                current_model(),
+                on_model_result,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
@@ -299,6 +373,18 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if body.hold_key and not body.hold:
             raise HTTPException(status_code=422, detail="hold_key needs hold: true")
         choice = choose(body)
+        try:  # reject now rather than queue a ticket that cannot print
+            receipt = Receipt(
+                recipient=RECIPIENTS[body.recipient],
+                sender=body.sender,
+                title=body.title,
+                message=body.message,
+                sent_at=datetime.now(settings.tzinfo),
+            )
+            encode(render_lines(receipt, width, choice.template, choice.decorations))
+        except Exception as exc:
+            logger.exception("rendering failed; ticket not queued")
+            raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         return store.create(
             recipient=body.recipient,
             message=body.message,
@@ -334,6 +420,52 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             if value is not None:
                 store.set_setting(key, str(value).lower() if isinstance(value, bool) else str(value))
         return read_model_settings()
+
+    @api.get("/health", tags=["monitoring"], responses={503: {"description": "Printer or database down"}})
+    def health() -> Response:
+        """For Uptime Kuma. Returns 503 when the printer or database is down."""
+        snapshot, up = health_snapshot()
+        return Response(
+            content=json.dumps(snapshot),
+            media_type="application/json",
+            status_code=200 if up else 503,
+        )
+
+    @api.get("/settings/alerts", response_model=AlertSettingsOut, tags=["settings"])
+    def get_alert_settings() -> AlertSettingsOut:
+        current = read_alert_settings()
+        token = current.telegram_token
+        return AlertSettingsOut(
+            telegram_configured=bool(token and current.telegram_chat_id),
+            telegram_token_hint=f"...{token[-4:]}" if token else "",
+            telegram_chat_id=current.telegram_chat_id,
+            kuma_push_url=current.kuma_push_url,
+        )
+
+    @api.put("/settings/alerts", response_model=AlertSettingsOut, tags=["settings"])
+    def update_alert_settings(patch: AlertSettingsPatch) -> AlertSettingsOut:
+        """Set Telegram and Uptime Kuma. Send an empty string to clear a value."""
+        keys = {
+            "telegram_token": "alert_telegram_token",
+            "telegram_chat_id": "alert_telegram_chat_id",
+            "kuma_push_url": "alert_kuma_push_url",
+        }
+        for field, key in keys.items():
+            value = getattr(patch, field)
+            if value is not None:
+                store.set_setting(key, value)
+        return get_alert_settings()
+
+    @api.post("/alerts/test", tags=["settings"])
+    def test_alert() -> dict[str, bool]:
+        current = read_alert_settings()
+        if not (current.telegram_token and current.telegram_chat_id):
+            raise HTTPException(status_code=400, detail="Telegram is not configured")
+        try:
+            send_telegram(current.telegram_token, current.telegram_chat_id, "Printarr test alert: all good.")
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Telegram send failed: {exc}") from None
+        return {"sent": True}
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def web_ui() -> str:

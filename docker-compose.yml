@@ -1,6 +1,6 @@
 # Printarr, one file. In TrueNAS: Apps > Install Custom App > paste this whole file.
 # The only line you must change is PRINTARR_PRINTER_HOST (the printer's IP address).
-# Settings you change in the web page are kept in the printarr-data volume.
+# Everything it saves (tickets, model and alert settings) is kept in the /data folder below.
 services:
   printarr:
     image: ghcr.io/ourrage-cmyk/printarr:latest
@@ -20,7 +20,5 @@ services:
       PRINTARR_LLM_BASE_URL: ""
       PRINTARR_LLM_MODEL: llama3.2:3b
     volumes:
-      - printarr-data:/data
-
-volumes:
-  printarr-data:
+      # One line for all data: database, settings, alert config. Point it at a folder on your SSD dataset.
+      - /mnt/ssd/apps/printarr:/data

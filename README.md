@@ -16,14 +16,30 @@ built on.
 2. In TrueNAS, go to Apps > Install Custom App and paste the whole file.
 3. Open `http://<nas-ip>:8000/` to write tickets and change the decision model.
 
-Everything the service saves (tickets, the model settings) lives in the `printarr-data`
-volume, so it survives restarts and rebuilds.
+Everything the service saves (tickets, model and alert settings) lives in one folder,
+`/data`. The YAML maps it to a folder on your SSD dataset, for example
+`/mnt/ssd/apps/printarr`. Create that folder before you install.
 
 The image is built and pushed to `ghcr.io/ourrage-cmyk/printarr` by
 `.github/workflows/image.yml` on every push to `main`. The package must be public for
 TrueNAS to pull it without a login.
 
 Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](docs/openapi.json).
+
+## Monitoring and alerts
+
+- **Health for Uptime Kuma:** `GET /api/v1/health`. It returns 200 when the database and
+  printer are fine, and 503 when the printer is unreachable. Add an HTTP monitor on that URL.
+- **Push monitor (optional):** set an Uptime Kuma push URL in the web page. The service
+  sends a heartbeat every minute, with status and message.
+- **Telegram alerts:** set the bot token and chat ID in the web page, then press Send test
+  message. Alerts are sent when the printer becomes unreachable, a ticket fails after its
+  retries, or the decision model is down. Each problem alerts once, and a recovery
+  message follows when it clears.
+- **Model outage:** the request still succeeds with the rule-based template, and the
+  ticket records `selection: rule`.
+- **Rendering failure:** the API rejects the request with HTTP 500 and queues nothing,
+  so the caller knows straight away.
 
 ## Holds and Home Assistant
 
@@ -75,7 +91,10 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `POST` | `/api/v1/holds/{hold_key}/release` | Release every held ticket with that name. |
 | `GET` | `/api/v1/templates` | Templates and the recipient group each belongs to. |
 | `GET` / `PUT` | `/api/v1/settings/model` | Decision model URL, model name, on/off and timeout. Saved in the database. |
-| `GET` | `/` | Web page for writing tickets and changing the model. |
+| `GET` | `/api/v1/health` | Health for Uptime Kuma. 503 when the printer or database is down. |
+| `GET` / `PUT` | `/api/v1/settings/alerts` | Telegram bot token and chat ID, and Uptime Kuma push URL. The token is never returned in full. |
+| `POST` | `/api/v1/alerts/test` | Send a test Telegram message. |
+| `GET` | `/` | Web page for writing tickets and changing the settings. |
 | `GET` | `/api/v1/printer` | Whether the printer is reachable. |
 | `POST` | `/api/v1/printer/test` | Print a test receipt now. Returns 502 if the printer is down. |
 | `GET` | `/healthz` | Liveness check. |

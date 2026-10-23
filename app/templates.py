@@ -12,7 +12,7 @@ import json
 import logging
 import re
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -93,8 +93,14 @@ def resolve_choice(
     message: str,
     template_id: int | None = None,
     model: DecisionModel | None = None,
+    on_model_result: Callable[[Exception | None], None] | None = None,
 ) -> Choice:
-    """Pick a template. Raises ValueError only for an explicit template outside the group."""
+    """Pick a template. Raises ValueError only for an explicit template outside the group.
+
+    on_model_result is called with None after a usable model answer, or with the error when
+    the model is down or answers badly. A model problem never fails the request. It falls
+    back to the rules and is logged.
+    """
     if template_id is not None:
         return explicit_choice(recipient, template_id)
     if model is not None:
@@ -102,9 +108,13 @@ def resolve_choice(
             chosen_id, decorations = model.choose(templates_for(recipient), recipient, title, message)
             template = next(t for t in templates_for(recipient) if t.id == chosen_id)
             picked = tuple(d for d in DECORATIONS if d in decorations and d in template.allowed)
+            if on_model_result:
+                on_model_result(None)
             return Choice(template, picked, "model")
         except Exception as exc:  # any model problem falls back to the rules
             logger.warning("decision model unusable, using rules: %s", exc)
+            if on_model_result:
+                on_model_result(exc)
     return rule_choice(recipient, title)
 
 

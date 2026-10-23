@@ -48,6 +48,19 @@ WEB_UI = """<!doctype html>
   </section>
 
   <section>
+    <h2>Alerts and monitoring</h2>
+    <p class="muted">Telegram messages when the printer is unreachable, a ticket fails, or the decision model is down. Uptime Kuma: health is at <code>/api/v1/health</code> (503 when the printer is down). Optional push monitor URL below.</p>
+    <div class="row">
+      <label>Telegram bot token<input id="a-token" autocomplete="off" placeholder="leave blank to keep current"></label>
+      <label>Telegram chat ID<input id="a-chat"></label>
+    </div>
+    <label>Uptime Kuma push URL (optional)<input id="a-kuma" placeholder="http://kuma:3001/api/push/..."></label>
+    <button id="a-save">Save alert settings</button>
+    <button id="a-test" class="ghost">Send test message</button>
+    <span id="a-status" class="muted"></span>
+  </section>
+
+  <section>
     <h2>New ticket</h2>
     <div class="row">
       <label>Recipient
@@ -111,6 +124,25 @@ async function saveModel() {
     }) });
     show($('m-status'), 'Saved.');
   } catch (e) { show($('m-status'), e.message, true); }
+}
+async function loadAlerts() {
+  const a = await api('/settings/alerts');
+  $('a-chat').value = a.telegram_chat_id; $('a-kuma').value = a.kuma_push_url;
+  $('a-token').placeholder = a.telegram_configured ? 'saved, ends ' + a.telegram_token_hint : 'not set';
+}
+async function saveAlerts() {
+  const body = { telegram_chat_id: $('a-chat').value.trim(), kuma_push_url: $('a-kuma').value.trim() };
+  if ($('a-token').value.trim()) body.telegram_token = $('a-token').value.trim();
+  try {
+    await api('/settings/alerts', { method: 'PUT', body: JSON.stringify(body) });
+    $('a-token').value = '';
+    await loadAlerts();
+    show($('a-status'), 'Saved.');
+  } catch (e) { show($('a-status'), e.message, true); }
+}
+async function testAlert() {
+  try { await api('/alerts/test', { method: 'POST' }); show($('a-status'), 'Test message sent.'); }
+  catch (e) { show($('a-status'), e.message, true); }
 }
 async function loadTemplates() {
   const templates = await api('/templates');
@@ -184,6 +216,8 @@ async function loadTickets() {
 }
 
 $('m-save').onclick = saveModel;
+$('a-save').onclick = saveAlerts;
+$('a-test').onclick = testAlert;
 $('t-recipient').onchange = filterTemplates;
 $('t-preview').onclick = preview;
 $('t-send').onclick = send;
@@ -192,6 +226,7 @@ $('refresh').onclick = loadTickets;
 $('tickets').onclick = (e) => { const path = e.target.dataset.act; if (path) act(path); };
 
 loadModel().catch((e) => show($('m-status'), e.message, true));
+loadAlerts().catch((e) => show($('a-status'), e.message, true));
 loadTemplates().catch((e) => show($('t-status'), e.message, true));
 loadTickets().catch(() => {});
 setInterval(loadTickets, 10000);
