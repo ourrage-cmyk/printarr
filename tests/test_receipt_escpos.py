@@ -18,7 +18,7 @@ def test_wrap_breaks_long_words():
 
 
 def test_wrap_keeps_line_breaks():
-    assert wrap("a\n\nb", 48) == ["a", "", "b"]
+    assert wrap("a\n\nb", 42) == ["a", "", "b"]
 
 
 def test_render_places_title_and_names():

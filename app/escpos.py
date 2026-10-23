@@ -1,4 +1,4 @@
-"""ESC/POS encoding for the Epson TM-T88V on 80 mm paper (Font A, 48 columns)."""
+"""ESC/POS encoding for the Epson TM-T88V on 80 mm paper (Font A, 42 columns)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ INITIALIZE = ESC + b"@"
 CODE_PAGE_CP437 = ESC + b"t\x00"
 BOLD_ON = ESC + b"E\x01"
 BOLD_OFF = ESC + b"E\x00"
+# GS ! n: bits 0-2 = height multiplier minus 1, bits 4-6 = width multiplier minus 1.
+# The TRG confirms double size exists but not these bits. UNVERIFIED against the
+# Command Reference (Epson download4.epson.biz, ESC/POS reference).
 TALL_ON = GS + b"!\x01"  # double height, normal width
 TALL_OFF = GS + b"!\x00"
 ALIGN = {"left": ESC + b"a\x00", "center": ESC + b"a\x01"}
@@ -40,7 +43,7 @@ def encode(lines: list[Line], feed: int = 4) -> bytes:
     return bytes(out)
 
 
-def to_text(lines: list[Line], width: int = 48) -> str:
+def to_text(lines: list[Line], width: int = 42) -> str:
     """Plain-text rendering for previews. Bold and size are not shown."""
     rows: list[str] = []
     for line in lines:
