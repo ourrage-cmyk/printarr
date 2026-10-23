@@ -17,8 +17,7 @@ class PrinterError(Exception):
 
 
 # Real-time status requests (DLE EOT n). Answers are one byte each.
-# UNVERIFIED: bit positions below are the standard ESC/POS status layout. The TRG does not
-# list them; confirm against the ESC/POS Application Programming Guide and on the real printer.
+# Bit layouts for these requests are in the Command Reference (dle_eot). Checked on the real unit still pending.
 STATUS_REQUESTS = (2, 3, 4)  # offline/cover, error/cutter, paper sensor
 
 

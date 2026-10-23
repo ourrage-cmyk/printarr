@@ -69,7 +69,7 @@ class Scheduler:
             live = self.live_lines(ticket)
             fetched = time.perf_counter()
             lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
-            payload = encode(lines)
+            payload = encode(lines, raster_mode=self.settings.raster_mode)
             rendered = time.perf_counter()
             self.transport.send(payload)
             sent = time.perf_counter()
