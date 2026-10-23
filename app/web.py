@@ -7,112 +7,246 @@ WEB_UI = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Printarr</title>
 <style>
-  :root { color-scheme: light dark; --bg: #f5f5f3; --fg: #1d1d1b; --card: #fff; --line: #d7d7d2; --accent: #2f6fdb; --bad: #b3261e; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ecece8; --card: #22221f; --line: #3a3a36; --accent: #7ba7ff; --bad: #f2877f; } }
-  :root[data-theme="light"] { --bg: #f5f5f3; --fg: #1d1d1b; --card: #fff; --line: #d7d7d2; --accent: #2f6fdb; --bad: #b3261e; }
-  :root[data-theme="dark"] { --bg: #161615; --fg: #ecece8; --card: #22221f; --line: #3a3a36; --accent: #7ba7ff; --bad: #f2877f; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.4 system-ui, sans-serif; }
-  main { max-width: 900px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
-  h1 { font-size: 22px; margin: 8px 0; } h2 { font-size: 17px; margin: 0 0 12px; }
-  label { display: grid; gap: 4px; margin-bottom: 10px; font-size: 14px; }
-  input, select, textarea { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); width: 100%; box-sizing: border-box; }
-  textarea { min-height: 96px; }
-  .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; } @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
-  .check { display: flex; gap: 8px; align-items: center; }
-  .check input { width: auto; }
-  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; margin: 0 8px 8px 0; }
-  button.ghost { background: transparent; color: var(--accent); }
-  pre { background: var(--bg); border: 1px dashed var(--line); padding: 12px; border-radius: 6px; overflow-x: auto; font: 13px/1.3 ui-monospace, monospace; white-space: pre; }
+  /* Monochrome, dot-matrix labels, one red signal colour. Tiles in a grid. */
+  :root {
+    color-scheme: light dark;
+    --bg: #f2f2f0; --tile: #ffffff; --ink: #111111; --mute: #6d6d69; --line: #d4d4cf;
+    --field: #f7f7f5; --signal: #d71921; --ok: #1d7a3e; --bad: #d71921;
+    --paper: #fbfaf6; --paper-ink: #111111;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #000000; --tile: #0c0c0c; --ink: #f2f2f0; --mute: #8e8e8a; --line: #2a2a28;
+      --field: #141414; --signal: #ff3b30; --ok: #4cd27a; --bad: #ff3b30;
+      --paper: #f2f2ee; --paper-ink: #111111;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #000000; --tile: #0c0c0c; --ink: #f2f2f0; --mute: #8e8e8a; --line: #2a2a28;
+    --field: #141414; --signal: #ff3b30; --ok: #4cd27a; --bad: #ff3b30;
+    --paper: #f2f2ee; --paper-ink: #111111;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 var(--sans);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 56px; display: grid; gap: 14px; }
+
+  /* Header: dot-matrix wordmark, status as a ring with a dot */
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 4px 2px 10px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .ring { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); position: relative; flex: none; }
+  .ring::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--signal); }
+  h1 { font: 600 20px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+  .link-state { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .link-state b { color: var(--ok); font-weight: 600; }
+  .link-state.off b { color: var(--bad); }
+
+  /* Tiles */
+  .tile { background: var(--tile); border: 1px solid var(--line); border-radius: 18px; padding: 18px; min-width: 0; }
+  .label { font: 600 11px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 0 0 12px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .label .aside { letter-spacing: .04em; text-transform: none; font-weight: 500; }
+  h2 { font: 600 11px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 0 0 12px; }
+  .sub { color: var(--mute); font-size: 13px; margin: -4px 0 14px; }
+
+  .compose { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 14px; align-items: start; }
+  @media (max-width: 880px) { .compose { grid-template-columns: 1fr; } }
+
+  /* Fields */
+  label.f { display: grid; gap: 8px; font: 600 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  label.f .muted { letter-spacing: .04em; text-transform: none; font-weight: 500; }
+  input, select, textarea {
+    font: 15px/1.45 var(--sans); color: var(--ink); background: var(--field);
+    border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; width: 100%; min-width: 0;
+  }
+  input:focus, select:focus, textarea:focus, button:focus-visible, summary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  textarea { min-height: 200px; resize: vertical; font-size: 17px; line-height: 1.5; }
+  .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+  .stack { display: grid; gap: 14px; }
+  .check { display: flex; gap: 10px; align-items: center; font: 400 14px/1.3 var(--sans); color: var(--ink); cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 0; accent-color: var(--signal); flex: none; }
+  .count { font: 500 11px/1 var(--mono); letter-spacing: .06em; color: var(--mute); }
+  .count.near { color: var(--signal); }
+
+  /* Recipient as a segmented control */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--field); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 3px; }
+  .seg button { font: 600 13px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; background: transparent; color: var(--mute); border: 0; border-radius: 999px; padding: 10px 8px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+  /* Buttons */
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+  button.btn { font: 600 14px/1 var(--sans); padding: 13px 22px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); cursor: pointer; }
+  button.btn:disabled { opacity: .35; cursor: default; }
+  button.btn.ghost { background: transparent; color: var(--ink); }
+  button.btn.small { font-size: 12px; padding: 7px 12px; }
+  .status { font: 500 12px/1.4 var(--mono); letter-spacing: .02em; color: var(--mute); }
+  .status.err { color: var(--bad); }
+  .status.ok { color: var(--ok); }
+
+  details.opts { border-top: 1px dashed var(--line); margin-top: 16px; padding-top: 14px; }
+  details summary { cursor: pointer; font: 600 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: "+ "; color: var(--signal); }
+  details[open] summary::before { content: "- "; }
+  details[open] summary { margin-bottom: 14px; }
+
+  /* Preview: a receipt on a dark tile */
+  .preview-tile { display: flex; flex-direction: column; }
+  .preview-info { font: 500 11px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); text-align: right; }
+  .stage { background: var(--field); border-radius: 14px; padding: 18px 12px; flex: 1; display: flex; justify-content: center; align-items: flex-start; }
+  .paper { width: 100%; max-width: 360px; background: var(--paper); color: var(--paper-ink); padding: 18px 14px 20px; border-radius: 4px; box-shadow: 0 10px 24px rgba(0,0,0,.22); transition: opacity .15s; }
+  .paper.stale { opacity: .5; }
+  .paper pre { margin: 0; font: 12px/1.45 var(--mono); white-space: pre; overflow: hidden; }
+  .paper-empty { font: 500 12px/1.6 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: #7a7a74; text-align: center; padding: 56px 8px; }
+  .paper-error { font: 13px/1.5 var(--mono); color: #a4161c; padding: 28px 6px; }
+  .hint { font: 500 11px/1.5 var(--mono); letter-spacing: .04em; color: var(--mute); margin: 12px 2px 0; }
+
+  /* Tickets list */
+  .table-wrap { overflow-x: auto; margin: 0 -4px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  td, th { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  .status { font-weight: 600; } .err { color: var(--bad); }
-  .muted { color: #888; font-size: 13px; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font: 600 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--mute); }
+  .pill.pending::before, .pill.printing::before, .pill.sent::before { background: var(--ok); }
+  .pill.failed::before, .pill.cancelled::before { background: var(--bad); }
+  .pill.held::before { background: var(--ink); }
+  .msg { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .muted { color: var(--mute); }
+  .empty-row { color: var(--mute); padding: 26px 8px; text-align: center; font: 500 12px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+  /* Settings */
+  details.settings { background: var(--tile); border: 1px solid var(--line); border-radius: 18px; padding: 0 18px; }
+  details.settings > summary { cursor: pointer; padding: 18px 0; font: 600 13px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; list-style: none; }
+  details.settings > summary::-webkit-details-marker { display: none; }
+  details.settings > summary::after { content: "+"; float: right; color: var(--signal); }
+  details.settings[open] > summary::after { content: "–"; }
+  details.settings[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  .set { padding: 0 0 20px; margin: 0 0 20px; border-bottom: 1px solid var(--line); }
+  .set:last-child { border-bottom: 0; margin-bottom: 0; padding-bottom: 6px; }
+  .set h2 { margin-bottom: 8px; }
+
+  @media (max-width: 560px) { .tile { padding: 14px; border-radius: 16px; } .wrap { gap: 12px; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Printarr</h1>
+<main class="wrap">
+  <header>
+    <div class="brand">
+      <span id="ring" class="ring" aria-hidden="true"></span>
+      <h1>Printarr</h1>
+    </div>
+    <div id="link" class="link-state">Connecting</div>
+  </header>
 
-  <section>
-    <h2>Decision model</h2>
-    <p class="muted">Picks a template when a ticket arrives and template is set to auto. Leave the URL empty to use the fixed rules only. Settings are saved in the database.</p>
-    <div class="row">
-      <label class="check"><input id="m-enabled" type="checkbox"> Use the decision model</label>
-      <label>Timeout (seconds)<input id="m-timeout" type="number" min="1" max="30" step="1"></label>
-    </div>
-    <label>Base URL<input id="m-url" placeholder="http://ollama:11434/v1"></label>
-    <div class="row">
-      <label>Decision model (templates)<input id="m-model" placeholder="d1:latest"></label>
-      <label>Text model (paragraphs)<input id="m-text" placeholder="granite4.2:3b"></label>
-    </div>
-    <button id="m-save">Save model settings</button>
-    <span id="m-status" class="muted"></span>
-  </section>
-
-  <section>
-    <h2>Alerts and monitoring</h2>
-    <p class="muted">Telegram messages for: printer unreachable, paper out, cover open, cutter error, rendering failures, ticket failures, and decision model down. Uptime Kuma polls <code>/api/v1/health</code> (503 when the printer is down). Nothing is pushed out.</p>
-    <div class="row">
-      <label>Telegram bot token<input id="a-token" autocomplete="off" placeholder="leave blank to keep current"></label>
-      <label>Telegram chat ID<input id="a-chat"></label>
-    </div>
-    <button id="a-save">Save alert settings</button>
-    <button id="a-test" class="ghost">Send test message</button>
-    <span id="a-status" class="muted"></span>
-  </section>
-
-  <section>
-    <h2>Home Assistant</h2>
-    <p class="muted">Live values and graphs are fetched from Home Assistant when a ticket prints. Use a long-lived access token.</p>
-    <div class="row">
-      <label>URL<input id="h-url" placeholder="http://192.168.1.10:8123"></label>
-      <label>Access token<input id="h-token" autocomplete="off" placeholder="leave blank to keep current"></label>
-    </div>
-    <button id="h-save">Save Home Assistant</button>
-    <button id="h-test" class="ghost">Test connection</button>
-    <span id="h-status" class="muted"></span>
-  </section>
-
-  <section>
-    <h2>New ticket</h2>
-    <div class="row">
-      <label>Recipient
-        <select id="t-recipient">
-          <option value="yannic">Yannic</option>
-          <option value="wife">Allyson</option>
-        </select>
-      </label>
-      <label>Template
-        <select id="t-template"></select>
-      </label>
-    </div>
-    <div class="row">
-      <label>Title (optional)<input id="t-title" maxlength="80"></label>
-      <label>From (optional)<input id="t-sender" maxlength="40" placeholder="hermes"></label>
-    </div>
-    <label>Message<textarea id="t-message" maxlength="2000"></textarea></label>
-    <div class="row">
-      <label>Print at (optional)<input id="t-when" type="datetime-local"></label>
-      <div>
-        <label class="check"><input id="t-hold" type="checkbox"> Hold until released</label>
-        <label>Hold name<input id="t-hold-key" placeholder="user-home"></label>
+  <div class="compose">
+    <section class="tile">
+      <h2>New ticket</h2>
+      <p class="sub">Type the text. Line breaks are kept. No codes needed.</p>
+      <div class="stack">
+        <div class="grid2">
+          <div class="f" style="display:grid;gap:6px">
+            <span class="label" style="margin:0">Recipient</span>
+            <div id="t-recipient" class="seg" role="group" aria-label="Recipient">
+              <button type="button" data-value="yannic" aria-pressed="true">Yannic</button>
+              <button type="button" data-value="wife" aria-pressed="false">Allyson</button>
+            </div>
+          </div>
+          <label class="f">Template
+            <select id="t-template"></select>
+          </label>
+        </div>
+        <label class="f">
+          <span style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span>Message</span><span id="t-count" class="count">0 / 2000</span></span>
+          <textarea id="t-message" maxlength="2000" placeholder="Dinner is at 7 tonight. Bring the good wine."></textarea>
+        </label>
+        <label class="check"><input id="t-clean" type="checkbox"> Tidy spelling first (voice-typed text)</label>
       </div>
+
+      <details class="opts">
+        <summary>Title, sender, timing</summary>
+        <div class="stack">
+          <div class="grid2">
+            <label class="f">Title <span class="muted">optional</span><input id="t-title" maxlength="80" placeholder="Dinner"></label>
+            <label class="f">From <span class="muted">optional</span><input id="t-sender" maxlength="40" placeholder="hermes"></label>
+          </div>
+          <label class="f">Print at <span class="muted">optional, your local time</span><input id="t-when" type="datetime-local"></label>
+          <div class="grid2">
+            <label class="check"><input id="t-hold" type="checkbox"> Hold until I release it</label>
+            <label class="f">Hold name <span class="muted">optional</span><input id="t-hold-key" placeholder="user-home"></label>
+          </div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button id="t-send" class="btn" disabled>Queue ticket</button>
+        <span id="t-status" class="status"></span>
+      </div>
+    </section>
+
+    <section class="tile preview-tile" aria-live="polite">
+      <div class="label"><span>Preview</span><span id="p-info" class="preview-info"></span></div>
+      <div class="stage">
+        <div id="paper" class="paper"><div class="paper-empty">Your ticket<br>appears here</div></div>
+      </div>
+      <p class="hint">The printer's 42-column layout. Bold and large type are not shown.</p>
+    </section>
+  </div>
+
+  <section class="tile">
+    <div class="label"><span>Queue</span><button id="refresh" class="btn small ghost">Refresh</button></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Status</th><th>To</th><th>Message</th><th>Template</th><th></th></tr></thead>
+        <tbody id="tickets"></tbody>
+      </table>
     </div>
-    <button id="t-preview" class="ghost">Preview</button>
-    <button id="t-send">Queue ticket</button>
-    <span id="t-status" class="muted"></span>
-    <pre id="t-output" hidden></pre>
   </section>
 
-  <section>
-    <h2>Tickets</h2>
-    <button id="refresh" class="ghost">Refresh</button>
-    <table>
-      <thead><tr><th>Status</th><th>To</th><th>Message</th><th>Template</th><th>Actions</th></tr></thead>
-      <tbody id="tickets"></tbody>
-    </table>
-  </section>
+  <details class="settings">
+    <summary>Settings</summary>
+
+    <div class="set">
+      <h2>Template and cleanup models</h2>
+      <p class="sub">The template model picks a layout when a ticket uses Auto. The cleanup model tidies voice-typed text. Leave the URL empty to use the fixed rules only.</p>
+      <div class="stack">
+        <label class="check"><input id="m-enabled" type="checkbox"> Use the models</label>
+        <label class="f">Base URL<input id="m-url" placeholder="http://ollama:11434/v1"></label>
+        <div class="grid2">
+          <label class="f">Template model<input id="m-model" placeholder="d1:latest"></label>
+          <label class="f">Cleanup model<input id="m-text" placeholder="granite4.2:3b"></label>
+        </div>
+        <label class="f">Timeout (seconds)<input id="m-timeout" type="number" min="1" max="30" step="1"></label>
+      </div>
+      <div class="actions"><button id="m-save" class="btn">Save model settings</button><span id="m-status" class="status"></span></div>
+    </div>
+
+    <div class="set">
+      <h2>Alerts</h2>
+      <p class="sub">Telegram messages for an unreachable printer, paper out, cover open, cutter errors, failed tickets and a model that is down. Uptime Kuma can poll <code>/api/v1/health</code> (503 when the printer is down).</p>
+      <div class="grid2">
+        <label class="f">Telegram bot token<input id="a-token" autocomplete="off" placeholder="leave blank to keep current"></label>
+        <label class="f">Telegram chat ID<input id="a-chat"></label>
+      </div>
+      <div class="actions"><button id="a-save" class="btn">Save alerts</button><button id="a-test" class="btn ghost">Send test message</button><span id="a-status" class="status"></span></div>
+    </div>
+
+    <div class="set">
+      <h2>Home Assistant</h2>
+      <p class="sub">Live values and graphs are fetched from Home Assistant when a ticket is queued. Use a long-lived access token.</p>
+      <div class="grid2">
+        <label class="f">URL<input id="h-url" placeholder="http://192.168.1.10:8123"></label>
+        <label class="f">Access token<input id="h-token" autocomplete="off" placeholder="leave blank to keep current"></label>
+      </div>
+      <div class="actions"><button id="h-save" class="btn">Save Home Assistant</button><button id="h-test" class="btn ghost">Test connection</button><span id="h-status" class="status"></span></div>
+    </div>
+  </details>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -123,7 +257,14 @@ const api = (path, options = {}) => fetch('/api/v1' + path, {
   if (!r.ok) throw new Error(typeof body === 'string' ? body : JSON.stringify(body.detail ?? body));
   return body;
 });
-const show = (el, text, bad) => { el.textContent = text; el.classList.toggle('err', !!bad); };
+const show = (el, text, bad) => { el.textContent = text; el.classList.toggle('err', !!bad); el.classList.toggle('ok', !bad && !!text); };
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Header: the ring turns to the signal colour and the link reads "Online" only when the API answers.
+function setLink(ok) {
+  $('link').classList.toggle('off', !ok);
+  $('link').innerHTML = ok ? '<b>Online</b> · API' : '<b>Offline</b> · API';
+}
 
 async function loadModel() {
   const m = await api('/settings/model');
@@ -178,31 +319,44 @@ async function testHA() {
   try { await api('/settings/ha/test', { method: 'POST' }); show($('h-status'), 'Home Assistant reachable.'); }
   catch (e) { show($('h-status'), e.message, true); }
 }
+
+function recipient() {
+  return $('t-recipient').querySelector('[aria-pressed="true"]').dataset.value;
+}
 async function loadTemplates() {
   const templates = await api('/templates');
   const select = $('t-template');
-  select.innerHTML = '<option value="auto">Auto (model or rules)</option>';
+  select.innerHTML = '<option value="auto">Auto, chosen for you</option>';
   for (const t of templates) {
     const option = document.createElement('option');
     option.value = t.id; option.dataset.recipient = t.recipient;
-    option.textContent = `${t.id}: ${t.name} (${t.recipient})`;
+    option.textContent = t.name;
     select.appendChild(option);
   }
   filterTemplates();
 }
 function filterTemplates() {
-  const recipient = $('t-recipient').value;
+  const current = recipient();
   for (const option of $('t-template').options) {
-    option.hidden = !!option.dataset.recipient && option.dataset.recipient !== recipient;
+    option.hidden = !!option.dataset.recipient && option.dataset.recipient !== current;
   }
   $('t-template').value = 'auto';
+  schedulePreview();
 }
+$('t-recipient').addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-value]');
+  if (!button) return;
+  for (const b of $('t-recipient').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b === button));
+  filterTemplates();
+});
+
 function ticketBody() {
   const template = $('t-template').value;
   const body = {
-    recipient: $('t-recipient').value,
+    recipient: recipient(),
     message: $('t-message').value,
     template: template === 'auto' ? 'auto' : Number(template),
+    text_state: $('t-clean').checked ? 'unformatted' : 'formatted',
   };
   if ($('t-title').value.trim()) body.title = $('t-title').value.trim();
   if ($('t-sender').value.trim()) body.sender = $('t-sender').value.trim();
@@ -214,39 +368,86 @@ function ticketBody() {
   }
   return body;
 }
-async function preview() {
+
+// Preview: debounced, and a stale answer never overwrites a newer one.
+let previewTimer = null;
+let previewSeq = 0;
+function setPaper(html, stale) {
+  const paper = $('paper');
+  paper.innerHTML = html;
+  paper.classList.toggle('stale', !!stale);
+}
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  const raw = $('t-message').value;
+  const text = raw.trim();
+  $('t-send').disabled = !text;
+  $('t-count').textContent = `${raw.length} / 2000`;
+  $('t-count').classList.toggle('near', raw.length > 1900);
+  if (!text) {
+    previewSeq++;
+    setPaper('<div class="paper-empty">Your ticket<br>appears here</div>');
+    $('p-info').textContent = '';
+    return;
+  }
+  $('p-info').textContent = 'Updating';
+  previewTimer = setTimeout(runPreview, 600);
+}
+async function runPreview() {
+  const seq = ++previewSeq;
   try {
     const out = await api('/tickets/preview', { method: 'POST', body: JSON.stringify(ticketBody()) });
-    $('t-output').hidden = false;
-    $('t-output').textContent = out.text;
-    show($('t-status'), `Template ${out.template_id}, chosen by ${out.selection}.`);
-  } catch (e) { show($('t-status'), e.message, true); }
+    if (seq !== previewSeq) return;
+    setPaper(`<pre>${esc(out.text)}</pre>`);
+    $('p-info').textContent = `Template ${out.template_id} · ${out.selection}`;
+  } catch (e) {
+    if (seq !== previewSeq) return;
+    setPaper(`<div class="paper-error">Preview unavailable.<br><br>${esc(e.message)}</div>`, true);
+    $('p-info').textContent = 'Error';
+  }
 }
+
 async function send() {
+  const btn = $('t-send');
+  btn.disabled = true;
+  show($('t-status'), 'Queuing');
   try {
     const t = await api('/tickets', { method: 'POST', body: JSON.stringify(ticketBody()) });
-    show($('t-status'), `Queued as ${t.status}, template ${t.template_id} (${t.selection}).`);
+    show($('t-status'), `Queued, ${t.status}. Template ${t.template_id}.`);
     $('t-message').value = '';
+    schedulePreview();
     loadTickets();
-  } catch (e) { show($('t-status'), e.message, true); }
+  } catch (e) {
+    show($('t-status'), e.message, true);
+  } finally {
+    btn.disabled = !$('t-message').value.trim();
+  }
 }
+
 async function act(path) {
   try { await api(path, { method: 'POST' }); loadTickets(); }
-  catch (e) { alert(e.message); }
+  catch (e) { show($('t-status'), e.message, true); }
 }
+const STATUS_TEXT = { held: 'Held', pending: 'Queued', printing: 'Printing', sent: 'Sent', failed: 'Failed', cancelled: 'Cancelled' };
 async function loadTickets() {
-  const tickets = await api('/tickets?limit=50');
-  const rows = tickets.map((t) => {
-    const actions = [];
-    if (t.status === 'held') actions.push(`<button class="ghost" data-act="/tickets/${t.id}/release">Release</button>`);
-    if (t.status === 'pending') actions.push(`<button class="ghost" data-act="/tickets/${t.id}/cancel">Cancel</button>`);
-    if (t.status === 'failed' || t.status === 'cancelled') actions.push(`<button class="ghost" data-act="/tickets/${t.id}/retry">Retry</button>`);
-    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    return `<tr><td class="status">${t.status}</td><td>${esc(t.recipient)}</td>
-      <td>${esc(t.title ? t.title + ': ' : '')}${esc(t.message).slice(0, 80)}</td>
-      <td>${t.template_id} <span class="muted">${t.selection}</span></td><td>${actions.join('')}</td></tr>`;
-  });
-  $('tickets').innerHTML = rows.join('') || '<tr><td colspan="5" class="muted">No tickets yet.</td></tr>';
+  try {
+    const tickets = await api('/tickets?limit=50');
+    setLink(true);
+    const rows = tickets.map((t) => {
+      const actions = [];
+      if (t.status === 'held') actions.push(`<button class="btn small ghost" data-act="/tickets/${t.id}/release">Release</button>`);
+      if (t.status === 'pending') actions.push(`<button class="btn small ghost" data-act="/tickets/${t.id}/cancel">Cancel</button>`);
+      if (t.status === 'failed' || t.status === 'cancelled') actions.push(`<button class="btn small ghost" data-act="/tickets/${t.id}/retry">Retry</button>`);
+      const text = (t.title ? t.title + ': ' : '') + t.message;
+      return `<tr><td><span class="pill ${esc(t.status)}">${esc(STATUS_TEXT[t.status] || t.status)}</span></td>
+        <td>${esc(t.recipient)}</td>
+        <td class="msg" title="${esc(text)}">${esc(text)}</td>
+        <td>${t.template_id} <span class="muted">${esc(t.selection)}</span></td><td>${actions.join(' ')}</td></tr>`;
+    });
+    $('tickets').innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-row">No tickets yet</td></tr>';
+  } catch (e) {
+    setLink(false);
+  }
 }
 
 $('m-save').onclick = saveModel;
@@ -254,8 +455,11 @@ $('a-save').onclick = saveAlerts;
 $('h-save').onclick = saveHA;
 $('h-test').onclick = testHA;
 $('a-test').onclick = testAlert;
-$('t-recipient').onchange = filterTemplates;
-$('t-preview').onclick = preview;
+$('t-template').onchange = schedulePreview;
+$('t-clean').onchange = schedulePreview;
+$('t-message').addEventListener('input', schedulePreview);
+$('t-title').addEventListener('input', schedulePreview);
+$('t-sender').addEventListener('input', schedulePreview);
 $('t-send').onclick = send;
 $('t-hold').onchange = () => { $('t-when').disabled = $('t-hold').checked; };
 $('refresh').onclick = loadTickets;
@@ -265,7 +469,7 @@ loadModel().catch((e) => show($('m-status'), e.message, true));
 loadAlerts().catch((e) => show($('a-status'), e.message, true));
 loadHA().catch((e) => show($('h-status'), e.message, true));
 loadTemplates().catch((e) => show($('t-status'), e.message, true));
-loadTickets().catch(() => {});
+loadTickets();
 setInterval(loadTickets, 10000);
 </script>
 </body>
