@@ -1,21 +1,25 @@
+# Printarr, one file. In TrueNAS: Apps > Install Custom App > paste this whole file.
+# The only line you must change is PRINTARR_PRINTER_HOST (the printer's IP address).
+# Settings you change in the web page are kept in the printarr-data volume.
 services:
   printarr:
-    build: .
-    image: printarr:latest
+    image: ghcr.io/ourrage-cmyk/printarr:latest
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      PRINTARR_TIMEZONE: ${PRINTARR_TIMEZONE:-Europe/London}
+      PRINTARR_TIMEZONE: Europe/London
       PRINTARR_PRINTER_MODE: tcp
-      PRINTARR_PRINTER_HOST: ${PRINTER_HOST:?set PRINTER_HOST to the printer's IP address}
+      PRINTARR_PRINTER_HOST: 192.168.1.50  # <- your printer's IP address
       PRINTARR_PRINTER_PORT: "9100"
-      # Optional local decision model (Ollama's OpenAI-compatible endpoint, or any compatible URL).
-      # Leave empty to use the rule-based template choice only.
-      PRINTARR_LLM_BASE_URL: ${PRINTARR_LLM_BASE_URL:-}
-      PRINTARR_LLM_MODEL: ${PRINTARR_LLM_MODEL:-llama3.2:3b}
+      PRINTARR_PAPER_WIDTH: "42"
+      # Optional decision model. Leave the URL empty to use the fixed rules only.
+      # These values are used on the first start only. After that, change the model in the
+      # web page at http://<nas-ip>:8000/ and the change is saved in the data volume.
+      PRINTARR_LLM_ENABLED: "on"
+      PRINTARR_LLM_BASE_URL: ""
+      PRINTARR_LLM_MODEL: llama3.2:3b
     volumes:
-      # On TrueNAS, replace with a dataset path, e.g. /mnt/pool/apps/printarr:/data
       - printarr-data:/data
 
 volumes:

@@ -62,6 +62,7 @@
           "tickets"
         ],
         "summary": "Create Ticket",
+        "description": "Queue a ticket. The template is chosen now, so printing needs no more work.",
         "operationId": "create_ticket_api_v1_tickets_post",
         "requestBody": {
           "required": true,
@@ -111,6 +112,7 @@
               "anyOf": [
                 {
                   "enum": [
+                    "held",
                     "pending",
                     "printing",
                     "sent",
@@ -181,6 +183,157 @@
                     "$ref": "#/components/schemas/TicketOut"
                   },
                   "title": "Response List Tickets Api V1 Tickets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/release": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Release Ticket",
+        "description": "Release a held ticket. It prints within seconds, since its template is already chosen.",
+        "operationId": "release_ticket_api_v1_tickets__ticket_id__release_post",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/holds/{hold_key}/release": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Release Hold",
+        "description": "Release every held ticket with this key. Home Assistant can call this on arrival.",
+        "operationId": "release_hold_api_v1_holds__hold_key__release_post",
+        "parameters": [
+          {
+            "name": "hold_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Hold Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TicketOut"
+                  },
+                  "title": "Response Release Hold Api V1 Holds  Hold Key  Release Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/model": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Model Settings",
+        "operationId": "get_model_settings_api_v1_settings_model_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Model Settings",
+        "description": "Change the decision model. Saved in the database, so it survives restarts.",
+        "operationId": "update_model_settings_api_v1_settings_model_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettings"
                 }
               }
             }
@@ -508,6 +661,93 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ModelSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "OpenAI-compatible base URL, for example http://ollama:11434/v1. Empty means rules only."
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "timeout": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Timeout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "base_url",
+          "model",
+          "timeout"
+        ],
+        "title": "ModelSettings"
+      },
+      "ModelSettingsPatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ModelSettingsPatch"
+      },
       "PreviewOut": {
         "properties": {
           "template_id": {
@@ -693,15 +933,16 @@
           "template": {
             "anyOf": [
               {
-                "type": "integer",
-                "minimum": 1.0
+                "type": "integer"
               },
               {
-                "type": "null"
+                "type": "string",
+                "const": "auto"
               }
             ],
             "title": "Template",
-            "description": "Template id from GET /api/v1/templates. Must belong to the recipient's group."
+            "description": "A template id from GET /api/v1/templates, which must belong to the recipient's group, or 'auto' to let the decision model or the rules choose. Chosen when the request arrives, not when it prints.",
+            "default": "auto"
           },
           "send_at": {
             "anyOf": [
@@ -714,9 +955,31 @@
               }
             ],
             "title": "Send At",
-            "description": "When to print, as ISO 8601. Values without a timezone use the server's PRINTARR_TIMEZONE. Omit to print as soon as possible.",
+            "description": "When to print, as ISO 8601. Values without a timezone use the server's PRINTARR_TIMEZONE. Omit to print as soon as possible. Cannot be combined with hold.",
             "examples": [
               "2026-10-24T17:30:00"
+            ]
+          },
+          "hold": {
+            "type": "boolean",
+            "title": "Hold",
+            "description": "Keep the ticket until POST /tickets/{id}/release or /holds/{hold_key}/release.",
+            "default": false
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key",
+            "description": "Name for a group of held tickets, for example user-home. Used by /holds/{hold_key}/release.",
+            "examples": [
+              "user-home"
             ]
           }
         },
@@ -767,6 +1030,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "held",
               "pending",
               "printing",
               "sent",
@@ -774,6 +1038,17 @@
               "cancelled"
             ],
             "title": "Status"
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key"
           },
           "send_at": {
             "type": "string",
@@ -851,6 +1126,7 @@
           "title",
           "message",
           "status",
+          "hold_key",
           "send_at",
           "next_attempt_at",
           "attempts",

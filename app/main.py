@@ -14,8 +14,10 @@ from datetime import datetime
 from typing import Any, Literal, TypeVar
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.web import WEB_UI
 
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
@@ -24,7 +26,6 @@ from app.receipt import Receipt, render_lines, render_ticket_lines
 from app.scheduler import Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.templates import (
-    DECORATIONS,
     RECIPIENTS,
     TEMPLATES,
     Choice,
@@ -36,7 +37,8 @@ from app.templates import (
 logging.basicConfig(level=os.environ.get("PRINTARR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("printarr")
 
-Status = Literal["pending", "printing", "sent", "failed", "cancelled"]
+Status = Literal["held", "pending", "printing", "sent", "failed", "cancelled"]
+SETTING_KEYS = {"enabled": "llm_enabled", "base_url": "llm_base_url", "model": "llm_model", "timeout": "llm_timeout"}
 T = TypeVar("T")
 
 API_DESCRIPTION = """
@@ -63,19 +65,48 @@ class TicketCreate(BaseModel):
         description="Who asked for the ticket, for the log. For example home-assistant or hermes.",
         examples=["home-assistant"],
     )
-    template: int | None = Field(
-        default=None,
-        ge=1,
-        description="Template id from GET /api/v1/templates. Must belong to the recipient's group.",
+    template: int | Literal["auto"] = Field(
+        default="auto",
+        description=(
+            "A template id from GET /api/v1/templates, which must belong to the recipient's "
+            "group, or 'auto' to let the decision model or the rules choose. Chosen when the "
+            "request arrives, not when it prints."
+        ),
     )
     send_at: datetime | None = Field(
         default=None,
         description=(
             "When to print, as ISO 8601. Values without a timezone use the server's "
-            "PRINTARR_TIMEZONE. Omit to print as soon as possible."
+            "PRINTARR_TIMEZONE. Omit to print as soon as possible. Cannot be combined with hold."
         ),
         examples=["2026-10-24T17:30:00"],
     )
+    hold: bool = Field(
+        default=False,
+        description="Keep the ticket until POST /tickets/{id}/release or /holds/{hold_key}/release.",
+    )
+    hold_key: str | None = Field(
+        default=None,
+        max_length=40,
+        description="Name for a group of held tickets, for example user-home. Used by /holds/{hold_key}/release.",
+        examples=["user-home"],
+    )
+
+
+class ModelSettings(BaseModel):
+    enabled: bool
+    base_url: str = Field(description="OpenAI-compatible base URL, for example http://ollama:11434/v1. Empty means rules only.")
+    model: str
+    timeout: float = Field(ge=1, le=30)
+
+
+class ModelSettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    base_url: str | None = Field(default=None, max_length=300)
+    model: str | None = Field(default=None, min_length=1, max_length=120)
+    timeout: float | None = Field(default=None, ge=1, le=30)
 
 
 class TicketOut(BaseModel):
@@ -85,6 +116,7 @@ class TicketOut(BaseModel):
     title: str | None
     message: str
     status: Status
+    hold_key: str | None
     send_at: datetime
     next_attempt_at: datetime
     attempts: int
@@ -146,17 +178,39 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     settings = settings or load_settings()
     transport = transport or build_transport(settings)
     store = TicketStore(settings.db_path)
-    model = (
-        OpenAICompatibleModel(settings.llm_base_url, settings.llm_model, settings.llm_timeout)
-        if settings.llm_enabled and settings.llm_base_url
-        else None
-    )
     scheduler = Scheduler(store, transport, settings)
     width = settings.paper_width
+
+    def read_model_settings() -> ModelSettings:
+        """Stored settings win. Environment values only seed the first start."""
+        return ModelSettings(
+            enabled=(store.get_setting("llm_enabled") or "").lower() == "true",
+            base_url=store.get_setting("llm_base_url") or "",
+            model=store.get_setting("llm_model") or settings.llm_model,
+            timeout=float(store.get_setting("llm_timeout") or settings.llm_timeout),
+        )
+
+    def current_model() -> OpenAICompatibleModel | None:
+        current = read_model_settings()
+        if not (current.enabled and current.base_url):
+            return None
+        return OpenAICompatibleModel(current.base_url, current.model, current.timeout)
+
+    def seed_model_settings() -> None:
+        defaults = {
+            "llm_enabled": "true" if settings.llm_enabled else "false",
+            "llm_base_url": settings.llm_base_url,
+            "llm_model": settings.llm_model,
+            "llm_timeout": str(settings.llm_timeout),
+        }
+        for key, value in defaults.items():
+            if store.get_setting(key) is None:
+                store.set_setting(key, value)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         store.init()
+        seed_model_settings()
         recovered = store.recover_interrupted()
         if recovered:
             logger.warning("re-queued %d ticket(s) interrupted by a restart", recovered)
@@ -198,8 +252,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=409, detail=str(exc)) from None
 
     def choose(body: TicketCreate) -> Choice:
+        template_id = None if body.template == "auto" else body.template
         try:
-            return resolve_choice(body.recipient, body.title, body.message, body.template, model)
+            return resolve_choice(
+                body.recipient, body.title, body.message, template_id, current_model()
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
 
@@ -236,6 +293,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     @api.post("/tickets", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_ticket(body: TicketCreate) -> dict[str, Any]:
+        """Queue a ticket. The template is chosen now, so printing needs no more work."""
+        if body.hold and body.send_at is not None:
+            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+        if body.hold_key and not body.hold:
+            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
         choice = choose(body)
         return store.create(
             recipient=body.recipient,
@@ -246,7 +308,36 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             template_id=choice.template.id,
             decorations=choice.decorations,
             selection=choice.selection,
+            held=body.hold,
+            hold_key=body.hold_key,
         )
+
+    @api.post("/tickets/{ticket_id}/release", response_model=TicketOut, tags=["tickets"])
+    def release_ticket(ticket_id: str) -> dict[str, Any]:
+        """Release a held ticket. It prints within seconds, since its template is already chosen."""
+        return guarded(store.release, ticket_id)
+
+    @api.post("/holds/{hold_key}/release", response_model=list[TicketOut], tags=["tickets"])
+    def release_hold(hold_key: str) -> list[dict[str, Any]]:
+        """Release every held ticket with this key. Home Assistant can call this on arrival."""
+        return store.release_hold(hold_key)
+
+    @api.get("/settings/model", response_model=ModelSettings, tags=["settings"])
+    def get_model_settings() -> ModelSettings:
+        return read_model_settings()
+
+    @api.put("/settings/model", response_model=ModelSettings, tags=["settings"])
+    def update_model_settings(patch: ModelSettingsPatch) -> ModelSettings:
+        """Change the decision model. Saved in the database, so it survives restarts."""
+        for field, key in SETTING_KEYS.items():
+            value = getattr(patch, field)
+            if value is not None:
+                store.set_setting(key, str(value).lower() if isinstance(value, bool) else str(value))
+        return read_model_settings()
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def web_ui() -> str:
+        return WEB_UI
 
     @api.get("/tickets", response_model=list[TicketOut], tags=["tickets"])
     def list_tickets(
@@ -329,5 +420,3 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
 
 app = create_app()
-
-__all__ = ["DECORATIONS", "app", "create_app"]

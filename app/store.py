@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     title           TEXT,
     message         TEXT NOT NULL,
     status          TEXT NOT NULL
-                    CHECK (status IN ('pending', 'printing', 'sent', 'failed', 'cancelled')),
+                    CHECK (status IN ('held', 'pending', 'printing', 'sent', 'failed', 'cancelled')),
+    hold_key        TEXT,
     send_at_ms      INTEGER NOT NULL,
     next_attempt_ms INTEGER NOT NULL,
     attempts        INTEGER NOT NULL DEFAULT 0,
@@ -43,6 +44,11 @@ CREATE TABLE IF NOT EXISTS tickets (
 );
 CREATE INDEX IF NOT EXISTS tickets_due ON tickets (status, next_attempt_ms);
 CREATE INDEX IF NOT EXISTS tickets_recipient ON tickets (recipient, created_at_ms);
+CREATE INDEX IF NOT EXISTS tickets_hold ON tickets (status, hold_key);
+CREATE TABLE IF NOT EXISTS settings (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
 """
 
 MAX_ERROR_LENGTH = 500
@@ -101,20 +107,24 @@ class TicketStore:
         selection: str,
         sender: str | None = None,
         title: str | None = None,
+        held: bool = False,
+        hold_key: str | None = None,
     ) -> dict[str, Any]:
+        """Queue a ticket. A held ticket waits until released, then prints at once."""
         ticket_id = uuid.uuid4().hex
         now = now_ms()
+        status = "held" if held else "pending"
         with closing(self._connect()) as conn:
             conn.execute(
                 """
-                INSERT INTO tickets (id, recipient, sender, title, message, status,
+                INSERT INTO tickets (id, recipient, sender, title, message, status, hold_key,
                                      send_at_ms, next_attempt_ms, template_id, decorations,
                                      selection, created_at_ms, updated_at_ms)
-                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    ticket_id, recipient, sender, title, message, send_at_ms, send_at_ms,
-                    template_id, ",".join(decorations), selection, now, now,
+                    ticket_id, recipient, sender, title, message, status, hold_key,
+                    send_at_ms, send_at_ms, template_id, ",".join(decorations), selection, now, now,
                 ),
             )
         result = self.get(ticket_id)
@@ -156,6 +166,58 @@ class TicketStore:
         return self._guarded_update(
             ticket_id, ("pending",), "status = 'cancelled'", ()
         )
+
+    def release(self, ticket_id: str) -> dict[str, Any]:
+        """Release a held ticket so it prints now. Its receipt time becomes the release time."""
+        now = now_ms()
+        return self._guarded_update(
+            ticket_id,
+            ("held",),
+            "status = 'pending', send_at_ms = ?, next_attempt_ms = ?",
+            (now, now),
+        )
+
+    def release_hold(self, hold_key: str) -> list[dict[str, Any]]:
+        """Release every held ticket with this key, for example "user-home"."""
+        now = now_ms()
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                ids = [
+                    row["id"]
+                    for row in conn.execute(
+                        "SELECT id FROM tickets WHERE status = 'held' AND hold_key = ?",
+                        (hold_key,),
+                    ).fetchall()
+                ]
+                for ticket_id in ids:
+                    conn.execute(
+                        """
+                        UPDATE tickets
+                        SET status = 'pending', send_at_ms = ?, next_attempt_ms = ?, updated_at_ms = ?
+                        WHERE id = ?
+                        """,
+                        (now, now, now, ticket_id),
+                    )
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
+        released = [self.get(ticket_id) for ticket_id in ids]
+        return [ticket for ticket in released if ticket is not None]
+
+    def get_setting(self, key: str) -> str | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
 
     def requeue(self, ticket_id: str) -> dict[str, Any]:
         return self._guarded_update(

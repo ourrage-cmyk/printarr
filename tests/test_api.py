@@ -110,3 +110,81 @@ def test_printer_status_and_test_print(settings):
 def test_no_authentication_needed(settings):
     with TestClient(create_app(settings)) as client:
         assert client.get("/api/v1/tickets").status_code == 200
+
+
+def test_auto_is_the_default_template(settings):
+    with TestClient(create_app(settings)) as client:
+        body = client.post("/api/v1/tickets", json={"recipient": "wife", "message": "Hi"}).json()
+        assert body["selection"] == "rule"
+        assert body["template_id"] in (4, 5, 6)
+
+
+def test_held_ticket_is_released_and_prints(settings):
+    app = create_app(settings)
+    with TestClient(app) as client:
+        held = client.post(
+            "/api/v1/tickets",
+            json={"recipient": "yannic", "message": "Dinner is ready", "hold": True, "hold_key": "user-home"},
+        ).json()
+        assert held["status"] == "held"
+        assert app.state.scheduler.run_once() == 0  # held tickets never print on their own
+
+        released = client.post(f"/api/v1/holds/user-home/release").json()
+        assert [t["id"] for t in released] == [held["id"]]
+        assert app.state.scheduler.run_once() == 1
+        assert client.get(f"/api/v1/tickets/{held['id']}").json()["status"] == "sent"
+
+
+def test_hold_and_send_at_cannot_be_combined(settings):
+    with TestClient(create_app(settings)) as client:
+        body = {"recipient": "yannic", "message": "x", "hold": True, "send_at": "2026-10-24T17:30:00"}
+        assert client.post("/api/v1/tickets", json=body).status_code == 422
+
+
+def test_release_single_ticket(settings):
+    with TestClient(create_app(settings)) as client:
+        held = client.post(
+            "/api/v1/tickets", json={"recipient": "yannic", "message": "x", "hold": True}
+        ).json()
+        assert client.post(f"/api/v1/tickets/{held['id']}/release").json()["status"] == "pending"
+        assert client.post(f"/api/v1/tickets/{held['id']}/release").status_code == 409
+
+
+def test_model_settings_persist_across_restart(settings):
+    from dataclasses import replace
+
+    with TestClient(create_app(settings)) as client:
+        saved = client.put(
+            "/api/v1/settings/model",
+            json={"enabled": True, "base_url": "http://ollama:11434/v1", "model": "qwen2.5:3b"},
+        ).json()
+        assert saved["base_url"] == "http://ollama:11434/v1"
+
+    # A restart with different environment values must keep what was saved in the UI.
+    fresh_env = replace(settings, llm_base_url="", llm_model="other")
+    with TestClient(create_app(fresh_env)) as client:
+        again = client.get("/api/v1/settings/model").json()
+        assert again["base_url"] == "http://ollama:11434/v1"
+        assert again["model"] == "qwen2.5:3b"
+
+
+def test_web_ui_is_served(settings):
+    with TestClient(create_app(settings)) as client:
+        page = client.get("/")
+        assert page.status_code == 200
+        assert "Decision model" in page.text
+
+
+def test_render_is_fast_enough_for_instant_print(settings):
+    import time
+
+    with TestClient(create_app(settings)) as client:
+        client.post("/api/v1/tickets", json={"recipient": "yannic", "message": "warm up"})
+        held = client.post(
+            "/api/v1/tickets", json={"recipient": "yannic", "message": "Hello " * 50, "hold": True}
+        ).json()
+        started = time.perf_counter()
+        client.post(f"/api/v1/tickets/{held['id']}/release")
+        client.app.state.scheduler.run_once()
+        elapsed = time.perf_counter() - started
+        assert elapsed < 1.0

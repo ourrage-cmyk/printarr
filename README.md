@@ -9,14 +9,32 @@ The web UI for writing and previewing receipts is planned for a later stage. The
 already exposes the rendered receipt as text and as raw ESC/POS bytes so it can be
 built on.
 
-## Run it
+## Install on TrueNAS (one file)
 
-```bash
-PRINTER_HOST=192.168.1.50 docker compose up -d --build
-```
+1. Open [`docker-compose.yml`](docker-compose.yml) and change `PRINTARR_PRINTER_HOST` to
+   your printer's IP address.
+2. In TrueNAS, go to Apps > Install Custom App and paste the whole file.
+3. Open `http://<nas-ip>:8000/` to write tickets and change the decision model.
 
-The API is on port 8000. Interactive docs are at `/docs`, and the schema is also in
-[`docs/openapi.json`](docs/openapi.json).
+Everything the service saves (tickets, the model settings) lives in the `printarr-data`
+volume, so it survives restarts and rebuilds.
+
+The image is built and pushed to `ghcr.io/ourrage-cmyk/printarr` by
+`.github/workflows/image.yml` on every push to `main`. The package must be public for
+TrueNAS to pull it without a login.
+
+Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](docs/openapi.json).
+
+## Holds and Home Assistant
+
+A ticket with `"hold": true` is queued but does not print. The template is still chosen
+when the request arrives. Release it with `POST /api/v1/tickets/{id}/release`, or release
+every ticket with a hold name using `POST /api/v1/holds/{hold_key}/release`. Home Assistant
+can call the hold endpoint when the user gets home. The ticket then prints at once.
+
+Each request takes a few milliseconds to render. A decision model adds its own response
+time, bounded by `PRINTARR_LLM_TIMEOUT` (default 5 s). The model is only used when the
+ticket arrives, so release and print never wait on it.
 
 ## Configuration
 
@@ -35,7 +53,7 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is marked `failed`. |
 | `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
 | `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. Epson TRG: 512 dots, Font A 12 dots wide, so 42 columns. |
-| `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. |
+| `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. Used on first start only; then change it in the web page. |
 | `PRINTARR_LLM_MODEL` | `llama3.2:3b` | Model name sent to that endpoint. |
 | `PRINTARR_LLM_ENABLED` | `on` | The decision model is used when a base URL is set. Set to `off` to disable it. |
 | `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
@@ -53,6 +71,11 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `GET` | `/api/v1/tickets/{id}/preview` | The receipt as plain text. |
 | `GET` | `/api/v1/tickets/{id}/escpos` | The exact ESC/POS byte stream. |
 | `POST` | `/api/v1/tickets/preview` | Render a ticket body without queueing it. |
+| `POST` | `/api/v1/tickets/{id}/release` | Release a held ticket so it prints now. |
+| `POST` | `/api/v1/holds/{hold_key}/release` | Release every held ticket with that name. |
+| `GET` | `/api/v1/templates` | Templates and the recipient group each belongs to. |
+| `GET` / `PUT` | `/api/v1/settings/model` | Decision model URL, model name, on/off and timeout. Saved in the database. |
+| `GET` | `/` | Web page for writing tickets and changing the model. |
 | `GET` | `/api/v1/printer` | Whether the printer is reachable. |
 | `POST` | `/api/v1/printer/test` | Print a test receipt now. Returns 502 if the printer is down. |
 | `GET` | `/healthz` | Liveness check. |
@@ -81,8 +104,9 @@ listed by `GET /api/v1/templates`.
 
 Template choice happens when the ticket is queued:
 
-1. If `template` is given, it must belong to the recipient's group. Otherwise the request
+1. If `template` is a number, it must belong to the recipient's group. Otherwise the request
    fails with 422.
+   `template` defaults to `auto`.
 2. If the decision model is configured and answers with a valid template, it is used.
    It may only add decorations the template allows.
 3. Otherwise a fixed rule picks the template. The rule is deterministic and works without
