@@ -65,7 +65,7 @@ WEB_UI = """<!doctype html>
       <label>Recipient
         <select id="t-recipient">
           <option value="yannic">Yannic</option>
-          <option value="wife">Wife</option>
+          <option value="wife">Allyson</option>
         </select>
       </label>
       <label>Template

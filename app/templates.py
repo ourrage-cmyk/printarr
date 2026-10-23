@@ -19,7 +19,7 @@ from typing import Literal, Protocol
 logger = logging.getLogger("printarr.templates")
 
 Recipient = Literal["yannic", "wife"]
-RECIPIENTS: dict[str, str] = {"yannic": "Yannic", "wife": "Wife"}
+RECIPIENTS: dict[str, str] = {"yannic": "Yannic", "wife": "Allyson"}
 Selection = Literal["explicit", "model", "rule"]
 
 DECORATIONS = ("stars", "frame", "footer")

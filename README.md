@@ -122,7 +122,7 @@ Limits: `sender` 40 characters, `title` 80, `message` 2000. Text is word-wrapped
 
 ## Recipients and templates
 
-`recipient` is a fixed list: `yannic` or `wife`. Each recipient has a group of templates,
+`recipient` is a fixed list: `yannic` or `wife` (shown as Allyson). Each recipient has a group of templates,
 listed by `GET /api/v1/templates`.
 
 Template choice happens when the ticket is queued:
