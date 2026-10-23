@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.receipt import Line
+from app.text import glyph_raster, printable
 
 ESC = b"\x1b"
 GS = b"\x1d"
@@ -52,11 +53,17 @@ def encode(lines: list[Line], feed: int = 4, raster_mode: str = RASTER_GS_L) -> 
             width_bytes, height, data = line.raster
             out += _raster(width_bytes, height, data, raster_mode)
             continue
+        text, as_glyph = printable(line.text)
+        if as_glyph:
+            # Names outside CP437 (Cyrillic, Greek, accented Latin the code page lacks)
+            # print as a drawn line, so they are readable rather than "?".
+            width_bytes, height, data = glyph_raster(text, line.align)
+            out += _raster(width_bytes, height, data, raster_mode)
+            continue
         out += BOLD_ON if line.bold else BOLD_OFF
         out += TALL_ON if line.tall else TALL_OFF
-        # cp437 is what the printer's default code page understands. Anything else
-        # becomes "?" rather than corrupting the rest of the job.
-        out += line.text.encode("cp437", errors="replace") + LF
+        # Anything still outside CP437 becomes "?" rather than corrupting the rest of the job.
+        out += text.encode("cp437", errors="replace") + LF
     out += TALL_OFF + BOLD_OFF + ALIGN["left"]
     out += FEED_LINES + bytes([max(0, min(feed, 255))]) + PARTIAL_CUT
     return bytes(out)
