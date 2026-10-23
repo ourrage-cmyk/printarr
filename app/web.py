@@ -55,7 +55,7 @@ WEB_UI = """<!doctype html>
   .sub { color: var(--mute); font-size: 13px; margin: -4px 0 14px; }
 
   .compose { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 14px; align-items: start; }
-  @media (max-width: 880px) { .compose { grid-template-columns: 1fr; } }
+  @media (max-width: 880px) { .compose { grid-template-columns: 1fr; } .preview-first { order: -1; } }
 
   /* Fields */
   label.f { display: grid; gap: 8px; font: 600 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
@@ -102,7 +102,9 @@ WEB_UI = """<!doctype html>
   .stage { background: var(--field); border-radius: 14px; padding: 18px 12px; flex: 1; display: flex; justify-content: center; align-items: flex-start; }
   .paper { width: 100%; max-width: 360px; background: var(--paper); color: var(--paper-ink); padding: 18px 14px 20px; border-radius: 4px; box-shadow: 0 10px 24px rgba(0,0,0,.22); transition: opacity .15s; }
   .paper.stale { opacity: .5; }
-  .paper pre { margin: 0; font: 12px/1.45 var(--mono); white-space: pre; overflow: hidden; }
+  .paper pre { margin: 0; font: 11.5px/1.45 var(--mono); white-space: pre; overflow: hidden; }
+  /* A tick per character, 42 wide: the printer's paper width, so the ticket's edge reads. */
+  .ruler { font: 11.5px/1 var(--mono); width: 42ch; height: 8px; margin: 0 0 8px; border-bottom: 1px solid var(--paper-edge); background: repeating-linear-gradient(90deg, var(--paper-edge) 0 1px, transparent 1px 1ch); }
   .paper-empty { font: 500 12px/1.6 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: #7a7a74; text-align: center; padding: 56px 8px; }
   .paper-error { font: 13px/1.5 var(--mono); color: #a4161c; padding: 28px 6px; }
   .hint { font: 500 11px/1.5 var(--mono); letter-spacing: .04em; color: var(--mute); margin: 12px 2px 0; }
@@ -186,11 +188,12 @@ WEB_UI = """<!doctype html>
 
       <div class="actions">
         <button id="t-send" class="btn" disabled>Queue ticket</button>
+        <span id="t-hint" class="status">Type a message to queue it.</span>
         <span id="t-status" class="status"></span>
       </div>
     </section>
 
-    <section class="tile preview-tile" aria-live="polite">
+    <section class="tile preview-tile preview-first" aria-live="polite">
       <div class="label"><span>Preview</span><span id="p-info" class="preview-info"></span></div>
       <div class="stage">
         <div id="paper" class="paper"><div class="paper-empty">Your ticket<br>appears here</div></div>
@@ -382,6 +385,7 @@ function schedulePreview() {
   const raw = $('t-message').value;
   const text = raw.trim();
   $('t-send').disabled = !text;
+  $('t-hint').hidden = !!text;
   $('t-count').textContent = `${raw.length} / 2000`;
   $('t-count').classList.toggle('near', raw.length > 1900);
   if (!text) {
@@ -398,7 +402,7 @@ async function runPreview() {
   try {
     const out = await api('/tickets/preview', { method: 'POST', body: JSON.stringify(ticketBody()) });
     if (seq !== previewSeq) return;
-    setPaper(`<pre>${esc(out.text)}</pre>`);
+    setPaper(`<div class="ruler" aria-hidden="true"></div><pre>${esc(out.text)}</pre>`);
     $('p-info').textContent = `Template ${out.template_id} · ${out.selection}`;
   } catch (e) {
     if (seq !== previewSeq) return;
@@ -442,7 +446,7 @@ async function loadTickets() {
       return `<tr><td><span class="pill ${esc(t.status)}">${esc(STATUS_TEXT[t.status] || t.status)}</span></td>
         <td>${esc(t.recipient)}</td>
         <td class="msg" title="${esc(text)}">${esc(text)}</td>
-        <td>${t.template_id} <span class="muted">${esc(t.selection)}</span></td><td>${actions.join(' ')}</td></tr>`;
+        <td>Template ${t.template_id} <span class="muted">${esc(t.selection)}</span></td><td>${actions.join(' ')}</td></tr>`;
     });
     $('tickets').innerHTML = rows.join('') || '<tr><td colspan="5" class="empty-row">No tickets yet</td></tr>';
   } catch (e) {
