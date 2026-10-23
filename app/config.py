@@ -19,11 +19,15 @@ class Settings:
     printer_host: str = ""
     printer_port: int = 9100
     printer_timeout: float = 5.0
-    paper_width: int = 48
+    paper_width: int = 42
     poll_interval: float = 5.0
     max_attempts: int = 5
     retry_base_seconds: int = 30
     scheduler_enabled: bool = True
+    llm_enabled: bool = True
+    llm_base_url: str = ""
+    llm_model: str = "llama3.2:3b"
+    llm_timeout: float = 5.0
 
     @property
     def tzinfo(self) -> ZoneInfo:
@@ -43,11 +47,15 @@ def load_settings() -> Settings:
         printer_host=_env("PRINTER_HOST", ""),
         printer_port=int(_env("PRINTER_PORT", "9100")),
         printer_timeout=float(_env("PRINTER_TIMEOUT", "5")),
-        paper_width=int(_env("PAPER_WIDTH", "48")),
+        paper_width=int(_env("PAPER_WIDTH", "42")),
         poll_interval=float(_env("POLL_INTERVAL", "5")),
         max_attempts=int(_env("MAX_ATTEMPTS", "5")),
         retry_base_seconds=int(_env("RETRY_BASE_SECONDS", "30")),
         scheduler_enabled=_env("SCHEDULER", "on").lower() in _TRUE_VALUES,
+        llm_enabled=_env("LLM_ENABLED", "on").lower() in _TRUE_VALUES,
+        llm_base_url=_env("LLM_BASE_URL", ""),
+        llm_model=_env("LLM_MODEL", "llama3.2:3b"),
+        llm_timeout=float(_env("LLM_TIMEOUT", "5")),
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")

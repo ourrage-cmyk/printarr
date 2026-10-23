@@ -32,7 +32,10 @@ def store(settings):
 
 
 def create(store, send_at_ms=0):
-    return store.create(recipient="Anna", message="hi", send_at_ms=send_at_ms)
+    return store.create(
+        recipient="yannic", message="hi", send_at_ms=send_at_ms,
+        template_id=1, decorations=(), selection="rule",
+    )
 
 
 def test_due_ticket_prints_once(store, settings):

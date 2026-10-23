@@ -8,13 +8,13 @@ SENT = datetime(2026, 10, 23, 21, 30, tzinfo=ZoneInfo("Europe/London"))
 
 
 def test_wrap_respects_width():
-    rows = wrap("word " * 30, 48)
+    rows = wrap("word " * 30, 42)
     assert len(rows) > 1
-    assert all(len(row) <= 48 for row in rows)
+    assert all(len(row) <= 42 for row in rows)
 
 
 def test_wrap_breaks_long_words():
-    assert [len(row) for row in wrap("x" * 100, 48)] == [48, 48, 4]
+    assert [len(row) for row in wrap("x" * 100, 42)] == [42, 42, 16]
 
 
 def test_wrap_keeps_line_breaks():
@@ -25,7 +25,7 @@ def test_render_places_title_and_names():
     receipt = Receipt(
         recipient="Anna", sender="Yannic", title="Dinner", message="Pasta at 7", sent_at=SENT
     )
-    lines = render_lines(receipt, 48)
+    lines = render_lines(receipt, 42)
     texts = [line.text for line in lines]
     assert "TO: Anna" in texts
     assert "FROM: Yannic" in texts
@@ -35,7 +35,7 @@ def test_render_places_title_and_names():
 
 def test_encode_frames_the_job():
     receipt = Receipt(recipient="Anna", message="Pasta at 7", sent_at=SENT)
-    payload = encode(render_lines(receipt, 48))
+    payload = encode(render_lines(receipt, 42))
     assert payload.startswith(INITIALIZE)
     assert payload.endswith(PARTIAL_CUT)
     assert b"Pasta at 7" in payload
@@ -48,6 +48,6 @@ def test_encode_replaces_unsupported_characters():
 
 def test_text_preview_fits_paper_width():
     receipt = Receipt(recipient="Anna", message="Hello " * 40, sent_at=SENT, title="Hi")
-    text = to_text(render_lines(receipt, 48), 48)
-    assert all(len(line) <= 48 for line in text.splitlines())
+    text = to_text(render_lines(receipt, 42), 42)
+    assert all(len(line) <= 42 for line in text.splitlines())
     assert "21:30" in text

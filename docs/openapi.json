@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Printarr",
-    "description": "\nQueue receipt tickets for the Epson TM-T88V. Each ticket has a recipient and a\nmessage, and an optional send time. Tickets are stored in SQLite and printed by a\nbackground scheduler once they are due. Failed prints are retried with backoff.\n",
-    "version": "0.1.0"
+    "description": "\nQueue receipt tickets for the Epson TM-T88V. Clients send plain text. The API picks a\ntemplate for the recipient, renders the receipt, and prints it when it is due.\n\nThere is no authentication. Run it on the home LAN only.\n\nTemplate choice: pass `template` to pick one explicitly from that recipient's group.\nIf you leave it out, a local decision model picks one when it is configured. Otherwise\na fixed rule picks one.\n",
+    "version": "0.2.0"
   },
   "paths": {
     "/healthz": {
@@ -24,6 +24,31 @@
                   },
                   "type": "object",
                   "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "List Templates",
+        "operationId": "list_templates_api_v1_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Templates Api V1 Templates Get"
                 }
               }
             }
@@ -108,6 +133,10 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "yannic",
+                    "wife"
+                  ],
                   "type": "string"
                 },
                 {
@@ -175,7 +204,7 @@
           "tickets"
         ],
         "summary": "Preview",
-        "description": "Render a receipt without queueing it.",
+        "description": "Choose a template and render a receipt without queueing it.",
         "operationId": "preview_api_v1_tickets_preview_post",
         "requestBody": {
           "content": {
@@ -481,6 +510,26 @@
       },
       "PreviewOut": {
         "properties": {
+          "template_id": {
+            "type": "integer",
+            "title": "Template Id"
+          },
+          "decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decorations"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "model",
+              "rule"
+            ],
+            "title": "Selection"
+          },
           "text": {
             "type": "string",
             "title": "Text",
@@ -493,6 +542,9 @@
         },
         "type": "object",
         "required": [
+          "template_id",
+          "decorations",
+          "selection",
           "text",
           "width"
         ],
@@ -532,22 +584,95 @@
         ],
         "title": "PrinterStatus"
       },
+      "TemplateOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          },
+          "title_align": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center"
+            ],
+            "title": "Title Align"
+          },
+          "tall_title": {
+            "type": "boolean",
+            "title": "Tall Title"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "optional_decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Optional Decorations"
+          },
+          "default_decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Decorations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "recipient",
+          "title_align",
+          "tall_title",
+          "rule",
+          "optional_decorations",
+          "default_decorations"
+        ],
+        "title": "TemplateOut"
+      },
       "TicketCreate": {
         "properties": {
           "recipient": {
             "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
+            "enum": [
+              "yannic",
+              "wife"
+            ],
             "title": "Recipient",
-            "examples": [
-              "Anna"
-            ]
+            "description": "A fixed recipient: yannic or wife."
           },
           "message": {
             "type": "string",
             "maxLength": 2000,
             "minLength": 1,
             "title": "Message"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "examples": [
+              "Dinner"
+            ]
           },
           "sender": {
             "anyOf": [
@@ -565,20 +690,18 @@
               "home-assistant"
             ]
           },
-          "title": {
+          "template": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 80
+                "type": "integer",
+                "minimum": 1.0
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Title",
-            "examples": [
-              "Dinner"
-            ]
+            "title": "Template",
+            "description": "Template id from GET /api/v1/templates. Must belong to the recipient's group."
           },
           "send_at": {
             "anyOf": [
@@ -593,7 +716,7 @@
             "title": "Send At",
             "description": "When to print, as ISO 8601. Values without a timezone use the server's PRINTARR_TIMEZONE. Omit to print as soon as possible.",
             "examples": [
-              "2026-10-24T19:00:00"
+              "2026-10-24T17:30:00"
             ]
           }
         },
@@ -677,6 +800,26 @@
             ],
             "title": "Last Error"
           },
+          "template_id": {
+            "type": "integer",
+            "title": "Template Id"
+          },
+          "decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decorations"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "model",
+              "rule"
+            ],
+            "title": "Selection"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -712,6 +855,9 @@
           "next_attempt_at",
           "attempts",
           "last_error",
+          "template_id",
+          "decorations",
+          "selection",
           "created_at",
           "updated_at",
           "printed_at"

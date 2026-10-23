@@ -9,7 +9,7 @@ from collections.abc import Callable
 from app.config import Settings
 from app.escpos import encode
 from app.printer import Transport
-from app.receipt import receipt_for_ticket, render_lines
+from app.receipt import render_ticket_lines
 from app.store import TicketStore, now_ms
 
 logger = logging.getLogger("printarr.scheduler")
@@ -38,9 +38,9 @@ class Scheduler:
         return len(jobs)
 
     def _print(self, ticket: dict) -> None:
-        receipt = receipt_for_ticket(ticket, self.settings.tzinfo)
         try:
-            self.transport.send(encode(render_lines(receipt, self.settings.paper_width)))
+            lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width)
+            self.transport.send(encode(lines))
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
             logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)

@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS tickets (
     next_attempt_ms INTEGER NOT NULL,
     attempts        INTEGER NOT NULL DEFAULT 0,
     last_error      TEXT,
+    template_id     INTEGER NOT NULL,
+    decorations     TEXT NOT NULL DEFAULT '',
+    selection       TEXT NOT NULL CHECK (selection IN ('explicit', 'model', 'rule')),
     created_at_ms   INTEGER NOT NULL,
     updated_at_ms   INTEGER NOT NULL,
     printed_at_ms   INTEGER
@@ -63,6 +66,7 @@ def _iso(ms: int | None) -> str | None:
 
 def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
     data = dict(row)
+    data["decorations"] = [d for d in data["decorations"].split(",") if d]
     data["send_at"] = _iso(data["send_at_ms"])
     data["next_attempt_at"] = _iso(data["next_attempt_ms"])
     data["created_at"] = _iso(data["created_at_ms"])
@@ -92,6 +96,9 @@ class TicketStore:
         recipient: str,
         message: str,
         send_at_ms: int,
+        template_id: int,
+        decorations: tuple[str, ...],
+        selection: str,
         sender: str | None = None,
         title: str | None = None,
     ) -> dict[str, Any]:
@@ -101,10 +108,14 @@ class TicketStore:
             conn.execute(
                 """
                 INSERT INTO tickets (id, recipient, sender, title, message, status,
-                                     send_at_ms, next_attempt_ms, created_at_ms, updated_at_ms)
-                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+                                     send_at_ms, next_attempt_ms, template_id, decorations,
+                                     selection, created_at_ms, updated_at_ms)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (ticket_id, recipient, sender, title, message, send_at_ms, send_at_ms, now, now),
+                (
+                    ticket_id, recipient, sender, title, message, send_at_ms, send_at_ms,
+                    template_id, ",".join(decorations), selection, now, now,
+                ),
             )
         result = self.get(ticket_id)
         assert result is not None

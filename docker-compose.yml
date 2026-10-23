@@ -10,6 +10,10 @@ services:
       PRINTARR_PRINTER_MODE: tcp
       PRINTARR_PRINTER_HOST: ${PRINTER_HOST:?set PRINTER_HOST to the printer's IP address}
       PRINTARR_PRINTER_PORT: "9100"
+      # Optional local decision model (Ollama's OpenAI-compatible endpoint, or any compatible URL).
+      # Leave empty to use the rule-based template choice only.
+      PRINTARR_LLM_BASE_URL: ${PRINTARR_LLM_BASE_URL:-}
+      PRINTARR_LLM_MODEL: ${PRINTARR_LLM_MODEL:-llama3.2:3b}
     volumes:
       # On TrueNAS, replace with a dataset path, e.g. /mnt/pool/apps/printarr:/data
       - printarr-data:/data
