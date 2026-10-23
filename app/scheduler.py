@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 
 from app.alerts import Notifier
@@ -63,10 +64,22 @@ class Scheduler:
 
     def _print(self, ticket: dict) -> None:
         try:
-            lines = render_ticket_lines(
-                ticket, self.settings.tzinfo, self.settings.paper_width, self.live_lines(ticket)
+            started = time.perf_counter()
+            live = self.live_lines(ticket)
+            fetched = time.perf_counter()
+            lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
+            payload = encode(lines)
+            rendered = time.perf_counter()
+            self.transport.send(payload)
+            sent = time.perf_counter()
+            logger.info(
+                "ticket %s timing: data %.0f ms, render %.0f ms, send %.0f ms, total %.0f ms",
+                ticket["id"],
+                (fetched - started) * 1000,
+                (rendered - fetched) * 1000,
+                (sent - rendered) * 1000,
+                (sent - started) * 1000,
             )
-            self.transport.send(encode(lines))
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
             logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)

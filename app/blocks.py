@@ -4,6 +4,7 @@ and the result is stored on the ticket, so printing needs no network call."""
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -83,24 +84,32 @@ def _format(value: str, unit: str | None) -> str:
     return f"{value} {unit}" if unit else value
 
 
+def _resolve_one(block: Block, client: HAClient) -> list[Line]:
+    if isinstance(block, ValueBlock):
+        state = client.state(block.entity_id)
+        shown = state if state not in ("unavailable", "unknown") else "no data"
+        return [Line(f"{block.label}: {_format(shown, block.unit)}")]
+    values = client.numeric_history(block.entity_id, block.hours)
+    if len(values) < 2:
+        raise HAError(f"{block.entity_id} has no numeric history for {block.hours} h")
+    return [
+        Line(f"{block.label} ({block.hours} h, now {values[-1]:g})", align="center"),
+        Line("", raster=(GRAPH_WIDTH // 8, GRAPH_HEIGHT, sparkline_bitmap(values))),
+    ]
+
+
 def resolve_blocks(blocks: list[Block], client: HAClient | None) -> list[Line]:
-    """Fetch every block's data now. Any Home Assistant failure raises HAError."""
-    if blocks and client is None:
+    """Fetch every block's data at once, in parallel. Any Home Assistant failure raises HAError.
+
+    Order is kept: the output follows the order of `blocks`.
+    """
+    if not blocks:
+        return []
+    if client is None:
         raise HAError("Home Assistant is not configured; set its URL and token in the web page")
-    lines: list[Line] = []
-    for block in blocks:
-        assert client is not None
-        if isinstance(block, ValueBlock):
-            state = client.state(block.entity_id)
-            shown = state if state not in ("unavailable", "unknown") else "no data"
-            lines.append(Line(f"{block.label}: {_format(shown, block.unit)}"))
-        else:
-            values = client.numeric_history(block.entity_id, block.hours)
-            if len(values) < 2:
-                raise HAError(f"{block.entity_id} has no numeric history for {block.hours} h")
-            lines.append(Line(f"{block.label} ({block.hours} h, now {values[-1]:g})", align="center"))
-            lines.append(Line("", raster=(GRAPH_WIDTH // 8, GRAPH_HEIGHT, sparkline_bitmap(values))))
-    return lines
+    with ThreadPoolExecutor(max_workers=min(8, len(blocks))) as pool:
+        results = list(pool.map(lambda block: _resolve_one(block, client), blocks))
+    return [line for group in results for line in group]
 
 
 _BLOCK_LIST = TypeAdapter(list[Block])
