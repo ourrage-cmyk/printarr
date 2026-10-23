@@ -75,6 +75,13 @@ class TicketCreate(BaseModel):
 
     recipient: Recipient = Field(description="A fixed recipient: yannic or wife.")
     message: str = Field(min_length=1, max_length=2000)
+    text_state: Literal["formatted", "unformatted"] = Field(
+        default="formatted",
+        description=(
+            "'formatted' prints the text exactly as sent. 'unformatted' (for example speech-to-text) "
+            "is first cleaned up by the text model. If the model is down, the text is sent as it is."
+        ),
+    )
     title: str | None = Field(default=None, max_length=80, examples=["Dinner"])
     sender: str | None = Field(
         default=None,
@@ -141,6 +148,7 @@ class TicketOut(BaseModel):
     attempts: int
     last_error: str | None
     template_id: int
+    text_state: Literal["formatted", "unformatted"]
     decorations: list[str]
     selection: Literal["explicit", "model", "rule"]
     created_at: datetime
@@ -338,6 +346,28 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except TicketStateError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from None
 
+    def current_text_model() -> OpenAICompatibleModel | None:
+        current = read_model_settings()
+        if not (current.enabled and current.base_url):
+            return None
+        return OpenAICompatibleModel(current.base_url, current.text_model, current.timeout)
+
+    def prepare_text(body: TicketCreate) -> str:
+        """Clean up unformatted text before rendering. Falls back to the text as sent."""
+        if body.text_state == "formatted":
+            return body.message
+        model = current_text_model()
+        if model is None:
+            return body.message
+        try:
+            cleaned = model.rewrite(body.message)
+        except Exception as exc:
+            logger.warning("text model unusable, sending text as sent: %s", exc)
+            notifier.problem("text_model", f"text model down, sent text uncleaned: {exc}")
+            return body.message
+        notifier.recovered("text_model", "text model answers again")
+        return cleaned
+
     def on_model_result(error: Exception | None) -> None:
         if error is None:
             notifier.recovered("model", "decision model answers again")
@@ -358,12 +388,12 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
 
-    def render_preview(body: TicketCreate, choice: Choice) -> str:
+    def render_preview(body: TicketCreate, choice: Choice, message: str) -> str:
         receipt = Receipt(
             recipient=RECIPIENTS[body.recipient],
             sender=body.sender,
             title=body.title,
-            message=body.message,
+            message=message,
             sent_at=datetime.fromtimestamp(_resolve_send_at(body.send_at, settings.tzinfo) / 1000, tz=settings.tzinfo),
         )
         lines = render_lines(receipt, width, choice.template, choice.decorations)
@@ -397,12 +427,13 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if body.hold_key and not body.hold:
             raise HTTPException(status_code=422, detail="hold_key needs hold: true")
         choice = choose(body)
+        message = prepare_text(body)
         try:  # reject now rather than queue a ticket that cannot print
             receipt = Receipt(
                 recipient=RECIPIENTS[body.recipient],
                 sender=body.sender,
                 title=body.title,
-                message=body.message,
+                message=message,
                 sent_at=datetime.now(settings.tzinfo),
             )
             encode(render_lines(receipt, width, choice.template, choice.decorations))
@@ -411,7 +442,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         return store.create(
             recipient=body.recipient,
-            message=body.message,
+            message=message,
+            text_state=body.text_state,
             sender=body.sender,
             title=body.title,
             send_at_ms=_resolve_send_at(body.send_at, settings.tzinfo),
@@ -506,9 +538,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def preview(body: TicketCreate) -> dict[str, Any]:
         """Choose a template and render a receipt without queueing it."""
         choice = choose(body)
+        message = prepare_text(body)
         return {
             **_choice_out(choice).model_dump(),
-            "text": render_preview(body, choice),
+            "text_state": body.text_state,
+            "text": render_preview(body, choice, message),
             "width": width,
         }
 

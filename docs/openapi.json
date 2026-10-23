@@ -1083,6 +1083,16 @@
             "minLength": 1,
             "title": "Message"
           },
+          "text_state": {
+            "type": "string",
+            "enum": [
+              "formatted",
+              "unformatted"
+            ],
+            "title": "Text State",
+            "description": "'formatted' prints the text exactly as sent. 'unformatted' (for example speech-to-text) is first cleaned up by the text model. If the model is down, the text is sent as it is.",
+            "default": "formatted"
+          },
           "title": {
             "anyOf": [
               {
@@ -1263,6 +1273,14 @@
             "type": "integer",
             "title": "Template Id"
           },
+          "text_state": {
+            "type": "string",
+            "enum": [
+              "formatted",
+              "unformatted"
+            ],
+            "title": "Text State"
+          },
           "decorations": {
             "items": {
               "type": "string"
@@ -1316,6 +1334,7 @@
           "attempts",
           "last_error",
           "template_id",
+          "text_state",
           "decorations",
           "selection",
           "created_at",

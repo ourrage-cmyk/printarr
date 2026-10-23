@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import app.alerts as alerts
+import app.main
+
 from fastapi.testclient import TestClient
 
 from app.escpos import INITIALIZE
@@ -188,3 +191,47 @@ def test_render_is_fast_enough_for_instant_print(settings):
         client.app.state.scheduler.run_once()
         elapsed = time.perf_counter() - started
         assert elapsed < 1.0
+
+
+def test_formatted_is_the_default_and_is_sent_as_is(settings):
+    with TestClient(create_app(settings)) as client:
+        body = client.post(
+            "/api/v1/tickets", json={"recipient": "yannic", "message": "teh  dinner"}
+        ).json()
+        assert body["text_state"] == "formatted"
+        assert body["message"] == "teh  dinner"
+
+
+def test_unformatted_text_is_cleaned_by_the_text_model(settings, monkeypatch):
+    from app import templates
+
+    monkeypatch.setattr(templates.OpenAICompatibleModel, "rewrite", lambda self, text: "Dinner is ready.")
+    with TestClient(create_app(settings)) as client:
+        client.put(
+            "/api/v1/settings/model",
+            json={"enabled": True, "base_url": "http://ollama:11434/v1", "text_model": "granite4.2:3b"},
+        )
+        body = client.post(
+            "/api/v1/tickets",
+            json={"recipient": "yannic", "message": "um dinner is ready", "text_state": "unformatted"},
+        ).json()
+        assert body["text_state"] == "unformatted"
+        assert body["message"] == "Dinner is ready."
+
+
+def test_unformatted_text_is_sent_as_is_when_text_model_is_down(settings, monkeypatch):
+    sent = []
+    monkeypatch.setattr(alerts, "send_telegram", lambda t, c, text: sent.append(text))
+    monkeypatch.setattr(app.main, "send_telegram", lambda t, c, text: sent.append(text))
+    with TestClient(create_app(settings)) as client:
+        client.put("/api/v1/settings/alerts", json={"telegram_token": "1:abcd", "telegram_chat_id": "9"})
+        client.put(
+            "/api/v1/settings/model",
+            json={"enabled": True, "base_url": "http://127.0.0.1:1/v1", "timeout": 1},
+        )
+        body = client.post(
+            "/api/v1/tickets",
+            json={"recipient": "yannic", "message": "um dinner", "text_state": "unformatted"},
+        ).json()
+        assert body["message"] == "um dinner"
+        assert any("text model down" in text for text in sent)

@@ -126,20 +126,7 @@ class OpenAICompatibleModel:
         self.model = model
         self.timeout = timeout
 
-    def choose(
-        self, options: Sequence[Template], recipient: str, title: str | None, message: str
-    ) -> tuple[int, list[str]]:
-        menu = "\n".join(
-            f"{t.id}: {t.name}, title align {t.title_align}, rule {t.rule!r}, "
-            f"optional decorations {', '.join(t.allowed) or 'none'}"
-            for t in options
-        )
-        system = (
-            "You choose a receipt template for a thermal printer. Reply with only a JSON object "
-            '{"template": <id>, "decorations": [<names>]}. Use an id from the list. '
-            "Only use decorations listed for that template, or an empty list."
-        )
-        user = f"Templates:\n{menu}\n\nRecipient: {recipient}\nTitle: {title or '(none)'}\nMessage: {message}"
+    def _chat(self, system: str, user: str) -> str:
         body = json.dumps(
             {
                 "model": self.model,
@@ -155,7 +142,35 @@ class OpenAICompatibleModel:
         )
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             reply = json.loads(response.read())
-        content = reply["choices"][0]["message"]["content"]
+        return reply["choices"][0]["message"]["content"]
+
+    def rewrite(self, text: str) -> str:
+        """Clean up unformatted text, for example speech-to-text. Used by the text model only."""
+        system = (
+            "You clean up text for a receipt printer. Fix spelling, punctuation and garbled "
+            "speech-to-text. Keep the meaning and the language. Reply with only the cleaned text, "
+            "no quotes and no commentary."
+        )
+        cleaned = self._chat(system, text).strip()
+        if not cleaned:
+            raise ValueError("text model returned nothing")
+        return cleaned
+
+    def choose(
+        self, options: Sequence[Template], recipient: str, title: str | None, message: str
+    ) -> tuple[int, list[str]]:
+        menu = "\n".join(
+            f"{t.id}: {t.name}, title align {t.title_align}, rule {t.rule!r}, "
+            f"optional decorations {', '.join(t.allowed) or 'none'}"
+            for t in options
+        )
+        system = (
+            "You choose a receipt template for a thermal printer. Reply with only a JSON object "
+            '{"template": <id>, "decorations": [<names>]}. Use an id from the list. '
+            "Only use decorations listed for that template, or an empty list."
+        )
+        user = f"Templates:\n{menu}\n\nRecipient: {recipient}\nTitle: {title or '(none)'}\nMessage: {message}"
+        content = self._chat(system, user)
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match is None:
             raise ValueError("model reply contained no JSON object")
