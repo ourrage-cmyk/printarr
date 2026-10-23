@@ -175,7 +175,8 @@ def test_web_ui_is_served(settings):
     with TestClient(create_app(settings)) as client:
         page = client.get("/")
         assert page.status_code == 200
-        assert "Decision model" in page.text
+        assert "New ticket" in page.text
+        assert ">Preview<" in page.text
 
 
 def test_render_is_fast_enough_for_instant_print(settings):
