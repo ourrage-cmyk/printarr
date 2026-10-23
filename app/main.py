@@ -35,6 +35,7 @@ from app.templates import (
     TEMPLATES,
     Choice,
     OpenAICompatibleModel,
+    SystemOneModel,
     Recipient,
     resolve_choice,
 )
@@ -284,11 +285,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             timeout=float(store.get_setting("llm_timeout") or settings.llm_timeout),
         )
 
-    def current_model() -> OpenAICompatibleModel | None:
+    def current_model() -> SystemOneModel | None:
         current = read_model_settings()
         if not (current.enabled and current.base_url):
             return None
-        return OpenAICompatibleModel(current.base_url, current.model, current.timeout)
+        return SystemOneModel(current.base_url, current.model, current.timeout)
 
     def seed_model_settings() -> None:
         defaults = {
