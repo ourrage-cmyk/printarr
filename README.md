@@ -35,7 +35,6 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is marked `failed`. |
 | `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
 | `PRINTARR_PAPER_WIDTH` | `48` | Characters per line in Font A on 80 mm paper. |
-| `PRINTARR_API_KEY` | _(unset)_ | If set, `/api/v1/*` requires an `X-API-Key` header. |
 | `PRINTARR_SCHEDULER` | `on` | Set to `off` to disable the background printing worker. |
 
 ## API
@@ -52,9 +51,13 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `POST` | `/api/v1/tickets/preview` | Render a ticket body without queueing it. |
 | `GET` | `/api/v1/printer` | Whether the printer is reachable. |
 | `POST` | `/api/v1/printer/test` | Print a test receipt now. Returns 502 if the printer is down. |
-| `GET` | `/healthz` | Liveness check. Not behind the API key. |
+| `GET` | `/healthz` | Liveness check. |
 
 Ticket statuses: `pending`, `printing`, `sent`, `failed`, `cancelled`.
+
+The API has no authentication. It is meant for the home LAN only, so do not expose
+port 8000 to the internet. `sender` is a free-text ID for the log, for example
+`home-assistant` or `hermes`.
 
 Example:
 

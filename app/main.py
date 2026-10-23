@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
 import os
 from collections.abc import Callable
@@ -10,9 +9,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Security
+from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse, Response
-from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import Settings, load_settings
@@ -40,7 +38,12 @@ class TicketCreate(BaseModel):
 
     recipient: str = Field(min_length=1, max_length=40, examples=["Anna"])
     message: str = Field(min_length=1, max_length=2000)
-    sender: str | None = Field(default=None, max_length=40, examples=["Yannic"])
+    sender: str | None = Field(
+        default=None,
+        max_length=40,
+        description="Who asked for the ticket, for the log. For example home-assistant or hermes.",
+        examples=["home-assistant"],
+    )
     title: str | None = Field(default=None, max_length=80, examples=["Dinner"])
     send_at: datetime | None = Field(
         default=None,
@@ -122,15 +125,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     )
     app.state.scheduler = scheduler
 
-    key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-    def require_api_key(provided: str | None = Security(key_header)) -> None:
-        if settings.api_key is None:
-            return
-        if provided is None or not hmac.compare_digest(provided, settings.api_key):
-            raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")
-
-    api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
+    # No authentication: this is a LAN-only service, and any client on the network may call it.
+    api = APIRouter(prefix="/api/v1")
 
     def ticket_or_404(ticket_id: str) -> dict[str, Any]:
         ticket = store.get(ticket_id)

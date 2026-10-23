@@ -24,7 +24,6 @@ class Settings:
     max_attempts: int = 5
     retry_base_seconds: int = 30
     scheduler_enabled: bool = True
-    api_key: str | None = None
 
     @property
     def tzinfo(self) -> ZoneInfo:
@@ -49,7 +48,6 @@ def load_settings() -> Settings:
         max_attempts=int(_env("MAX_ATTEMPTS", "5")),
         retry_base_seconds=int(_env("RETRY_BASE_SECONDS", "30")),
         scheduler_enabled=_env("SCHEDULER", "on").lower() in _TRUE_VALUES,
-        api_key=_env("API_KEY", "") or None,
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")

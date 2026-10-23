@@ -38,11 +38,6 @@
         ],
         "summary": "Create Ticket",
         "operationId": "create_ticket_api_v1_tickets_post",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -82,11 +77,6 @@
         ],
         "summary": "List Tickets",
         "operationId": "list_tickets_api_v1_tickets_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "status",
@@ -218,12 +208,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/tickets/{ticket_id}": {
@@ -233,11 +218,6 @@
         ],
         "summary": "Get Ticket",
         "operationId": "get_ticket_api_v1_tickets__ticket_id__get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -281,11 +261,6 @@
         "summary": "Cancel Ticket",
         "description": "Cancel a ticket that has not been printed yet.",
         "operationId": "cancel_ticket_api_v1_tickets__ticket_id__cancel_post",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -329,11 +304,6 @@
         "summary": "Retry Ticket",
         "description": "Queue a failed or cancelled ticket again, to print now.",
         "operationId": "retry_ticket_api_v1_tickets__ticket_id__retry_post",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -376,11 +346,6 @@
         ],
         "summary": "Ticket Preview",
         "operationId": "ticket_preview_api_v1_tickets__ticket_id__preview_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -424,11 +389,6 @@
         "summary": "Ticket Escpos",
         "description": "The exact ESC/POS byte stream for this ticket. The simulator reads this.",
         "operationId": "ticket_escpos_api_v1_tickets__ticket_id__escpos_get",
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -478,12 +438,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/printer/test": {
@@ -505,12 +460,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        }
       }
     }
   },
@@ -610,8 +560,9 @@
               }
             ],
             "title": "Sender",
+            "description": "Who asked for the ticket, for the log. For example home-assistant or hermes.",
             "examples": [
-              "Yannic"
+              "home-assistant"
             ]
           },
           "title": {
@@ -806,13 +757,6 @@
           "type"
         ],
         "title": "ValidationError"
-      }
-    },
-    "securitySchemes": {
-      "APIKeyHeader": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-API-Key"
       }
     }
   }

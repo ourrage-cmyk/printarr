@@ -10,7 +10,6 @@ services:
       PRINTARR_PRINTER_MODE: tcp
       PRINTARR_PRINTER_HOST: ${PRINTER_HOST:?set PRINTER_HOST to the printer's IP address}
       PRINTARR_PRINTER_PORT: "9100"
-      PRINTARR_API_KEY: ${PRINTARR_API_KEY:-}
     volumes:
       # On TrueNAS, replace with a dataset path, e.g. /mnt/pool/apps/printarr:/data
       - printarr-data:/data

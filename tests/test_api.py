@@ -1,4 +1,3 @@
-from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -76,9 +75,6 @@ def test_printer_status_and_test_print(settings):
         assert client.post("/api/v1/printer/test").status_code == 200
 
 
-def test_api_key_is_enforced(settings):
-    with TestClient(create_app(replace(settings, api_key="secret"))) as client:
-        assert client.get("/healthz").status_code == 200
-        assert client.get("/api/v1/tickets").status_code == 401
-        assert client.get("/api/v1/tickets", headers={"X-API-Key": "wrong"}).status_code == 401
-        assert client.get("/api/v1/tickets", headers={"X-API-Key": "secret"}).status_code == 200
+def test_lan_clients_need_no_key(settings):
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/v1/tickets").status_code == 200
