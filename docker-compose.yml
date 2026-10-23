@@ -1,0 +1,19 @@
+services:
+  printarr:
+    build: .
+    image: printarr:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PRINTARR_TIMEZONE: ${PRINTARR_TIMEZONE:-Europe/London}
+      PRINTARR_PRINTER_MODE: tcp
+      PRINTARR_PRINTER_HOST: ${PRINTER_HOST:?set PRINTER_HOST to the printer's IP address}
+      PRINTARR_PRINTER_PORT: "9100"
+      PRINTARR_API_KEY: ${PRINTARR_API_KEY:-}
+    volumes:
+      # On TrueNAS, replace with a dataset path, e.g. /mnt/pool/apps/printarr:/data
+      - printarr-data:/data
+
+volumes:
+  printarr-data:
