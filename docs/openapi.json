@@ -1,0 +1,1633 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Printarr",
+    "description": "\nQueue receipt tickets for the Epson TM-T88V. Clients send plain text. The API picks a\ntemplate for the recipient, renders the receipt, and prints it when it is due.\n\nThere is no authentication. Run it on the home LAN only.\n\nTemplate choice: pass `template` to pick one explicitly from that recipient's group.\nIf you leave it out, a local decision model picks one when it is configured. Otherwise\na fixed rule picks one.\n",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Healthz",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "List Templates",
+        "operationId": "list_templates_api_v1_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Templates Api V1 Templates Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Create Ticket",
+        "description": "Queue a ticket. The template is chosen now, so printing needs no more work.",
+        "operationId": "create_ticket_api_v1_tickets_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "List Tickets",
+        "operationId": "list_tickets_api_v1_tickets_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "held",
+                    "pending",
+                    "printing",
+                    "sent",
+                    "failed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "recipient",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "yannic",
+                    "wife"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TicketOut"
+                  },
+                  "title": "Response List Tickets Api V1 Tickets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/release": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Release Ticket",
+        "description": "Release a held ticket. It prints within seconds, since its template is already chosen.",
+        "operationId": "release_ticket_api_v1_tickets__ticket_id__release_post",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/holds/{hold_key}/release": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Release Hold",
+        "description": "Release every held ticket with this key. Home Assistant can call this on arrival.",
+        "operationId": "release_hold_api_v1_holds__hold_key__release_post",
+        "parameters": [
+          {
+            "name": "hold_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Hold Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TicketOut"
+                  },
+                  "title": "Response Release Hold Api V1 Holds  Hold Key  Release Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/model": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Model Settings",
+        "operationId": "get_model_settings_api_v1_settings_model_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Model Settings",
+        "description": "Change the decision model. Saved in the database, so it survives restarts.",
+        "operationId": "update_model_settings_api_v1_settings_model_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Health",
+        "description": "For Uptime Kuma. Returns 503 when the printer or database is down.",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "503": {
+            "description": "Printer or database down"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/alerts": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Alert Settings",
+        "operationId": "get_alert_settings_api_v1_settings_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Alert Settings",
+        "description": "Set the Telegram bot token and chat ID. Send an empty string to clear a value.",
+        "operationId": "update_alert_settings_api_v1_settings_alerts_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/test": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Test Alert",
+        "operationId": "test_alert_api_v1_alerts_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Test Alert Api V1 Alerts Test Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/ha": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Ha Settings",
+        "operationId": "get_ha_settings_api_v1_settings_ha_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HASettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Ha Settings",
+        "description": "Home Assistant base URL and long-lived access token. Empty string clears a value.",
+        "operationId": "update_ha_settings_api_v1_settings_ha_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HASettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HASettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/ha/test": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Test Ha",
+        "operationId": "test_ha_api_v1_settings_ha_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Test Ha Api V1 Settings Ha Test Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/preview": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Preview",
+        "description": "Choose a template and render a receipt without queueing it.",
+        "operationId": "preview_api_v1_tickets_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Get Ticket",
+        "operationId": "get_ticket_api_v1_tickets__ticket_id__get",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/cancel": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Cancel Ticket",
+        "description": "Cancel a ticket that has not been printed yet.",
+        "operationId": "cancel_ticket_api_v1_tickets__ticket_id__cancel_post",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/retry": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Retry Ticket",
+        "description": "Queue a failed or cancelled ticket again, to print now.",
+        "operationId": "retry_ticket_api_v1_tickets__ticket_id__retry_post",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/preview": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Ticket Preview",
+        "operationId": "ticket_preview_api_v1_tickets__ticket_id__preview_get",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/escpos": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Ticket Escpos",
+        "description": "The exact ESC/POS byte stream for this ticket. The simulator reads this.",
+        "operationId": "ticket_escpos_api_v1_tickets__ticket_id__escpos_get",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/printer": {
+      "get": {
+        "tags": [
+          "printer"
+        ],
+        "summary": "Printer Status",
+        "operationId": "printer_status_api_v1_printer_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/printer/test": {
+      "post": {
+        "tags": [
+          "printer"
+        ],
+        "summary": "Printer Test",
+        "description": "Print a test receipt right away. Returns 502 if the printer is unreachable.",
+        "operationId": "printer_test_api_v1_printer_test_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrinterStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlertSettingsOut": {
+        "properties": {
+          "telegram_configured": {
+            "type": "boolean",
+            "title": "Telegram Configured"
+          },
+          "telegram_token_hint": {
+            "type": "string",
+            "title": "Telegram Token Hint",
+            "description": "Last four characters of the bot token, never the full token."
+          },
+          "telegram_chat_id": {
+            "type": "string",
+            "title": "Telegram Chat Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "telegram_configured",
+          "telegram_token_hint",
+          "telegram_chat_id"
+        ],
+        "title": "AlertSettingsOut"
+      },
+      "AlertSettingsPatch": {
+        "properties": {
+          "telegram_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Token"
+          },
+          "telegram_chat_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Chat Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AlertSettingsPatch"
+      },
+      "HASettingsOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "token_configured": {
+            "type": "boolean",
+            "title": "Token Configured"
+          },
+          "token_hint": {
+            "type": "string",
+            "title": "Token Hint",
+            "description": "Last four characters of the access token, never the full token."
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "token_configured",
+          "token_hint"
+        ],
+        "title": "HASettingsOut"
+      },
+      "HASettingsPatch": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "examples": [
+              "http://192.168.1.10:8123"
+            ]
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HASettingsPatch"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ModelSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "OpenAI-compatible base URL, for example http://192.168.1.231:11434/v1. Empty means rules only."
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Decision model: picks templates and decorations. For example d1:latest."
+          },
+          "text_model": {
+            "type": "string",
+            "title": "Text Model",
+            "description": "Text model for paragraphs, used later. For example granite4.2:3b."
+          },
+          "timeout": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Timeout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "base_url",
+          "model",
+          "text_model",
+          "timeout"
+        ],
+        "title": "ModelSettings"
+      },
+      "ModelSettingsPatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "text_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Model"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ModelSettingsPatch"
+      },
+      "PreviewOut": {
+        "properties": {
+          "template_id": {
+            "type": "integer",
+            "title": "Template Id"
+          },
+          "decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decorations"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "model",
+              "rule"
+            ],
+            "title": "Selection"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The receipt as it would be printed, as plain text."
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_id",
+          "decorations",
+          "selection",
+          "text",
+          "width"
+        ],
+        "title": "PreviewOut"
+      },
+      "PrinterStatus": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "target",
+          "reachable"
+        ],
+        "title": "PrinterStatus"
+      },
+      "SparklineBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "sparkline",
+            "title": "Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "pattern": "^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity Id"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "default": 24
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "entity_id",
+          "label"
+        ],
+        "title": "SparklineBlock"
+      },
+      "TemplateOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          },
+          "title_align": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center"
+            ],
+            "title": "Title Align"
+          },
+          "tall_title": {
+            "type": "boolean",
+            "title": "Tall Title"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "optional_decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Optional Decorations"
+          },
+          "default_decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Decorations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "recipient",
+          "title_align",
+          "tall_title",
+          "rule",
+          "optional_decorations",
+          "default_decorations"
+        ],
+        "title": "TemplateOut"
+      },
+      "TicketCreate": {
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "enum": [
+              "yannic",
+              "wife"
+            ],
+            "title": "Recipient",
+            "description": "A fixed recipient: yannic or wife."
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "text_state": {
+            "type": "string",
+            "enum": [
+              "formatted",
+              "unformatted"
+            ],
+            "title": "Text State",
+            "description": "'formatted' prints the text exactly as sent. 'unformatted' (for example speech-to-text) is first cleaned up by the text model. If the model is down, the text is sent as it is.",
+            "default": "formatted"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "examples": [
+              "Dinner"
+            ]
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender",
+            "description": "Who asked for the ticket, for the log. For example home-assistant or hermes.",
+            "examples": [
+              "home-assistant"
+            ]
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string",
+                "const": "auto"
+              }
+            ],
+            "title": "Template",
+            "description": "A template id from GET /api/v1/templates, which must belong to the recipient's group, or 'auto' to let the decision model or the rules choose. Chosen when the request arrives, not when it prints.",
+            "default": "auto"
+          },
+          "blocks": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ValueBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/SparklineBlock"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "sparkline": "#/components/schemas/SparklineBlock",
+                  "value": "#/components/schemas/ValueBlock"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Blocks",
+            "description": "Live data from Home Assistant, fetched when the request arrives. 'value' prints a label and state. 'sparkline' prints a labelled graph of recent history."
+          },
+          "send_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send At",
+            "description": "When to print, as ISO 8601. Values without a timezone use the server's PRINTARR_TIMEZONE. Omit to print as soon as possible. Cannot be combined with hold.",
+            "examples": [
+              "2026-10-24T17:30:00"
+            ]
+          },
+          "hold": {
+            "type": "boolean",
+            "title": "Hold",
+            "description": "Keep the ticket until POST /tickets/{id}/release or /holds/{hold_key}/release.",
+            "default": false
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key",
+            "description": "Name for a group of held tickets, for example user-home. Used by /holds/{hold_key}/release.",
+            "examples": [
+              "user-home"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "recipient",
+          "message"
+        ],
+        "title": "TicketCreate"
+      },
+      "TicketOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "held",
+              "pending",
+              "printing",
+              "sent",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key"
+          },
+          "send_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Send At"
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Next Attempt At"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "template_id": {
+            "type": "integer",
+            "title": "Template Id"
+          },
+          "text_state": {
+            "type": "string",
+            "enum": [
+              "formatted",
+              "unformatted"
+            ],
+            "title": "Text State"
+          },
+          "decorations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decorations"
+          },
+          "selection": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "model",
+              "rule"
+            ],
+            "title": "Selection"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "printed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "recipient",
+          "sender",
+          "title",
+          "message",
+          "status",
+          "hold_key",
+          "send_at",
+          "next_attempt_at",
+          "attempts",
+          "last_error",
+          "template_id",
+          "text_state",
+          "decorations",
+          "selection",
+          "created_at",
+          "updated_at",
+          "printed_at"
+        ],
+        "title": "TicketOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValueBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "value",
+            "title": "Type"
+          },
+          "entity_id": {
+            "type": "string",
+            "pattern": "^[a-z_]+\\.[a-z0-9_]+$",
+            "title": "Entity Id",
+            "examples": [
+              "sensor.living_room_temperature"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "entity_id",
+          "label"
+        ],
+        "title": "ValueBlock"
+      }
+    }
+  }
+}

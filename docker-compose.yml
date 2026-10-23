@@ -1,0 +1,25 @@
+# Printarr, one file. In TrueNAS: Apps > Install Custom App > paste this whole file.
+# The only line you must change is PRINTARR_PRINTER_HOST (the printer's IP address).
+# Everything it saves (tickets, model and alert settings) is kept in the /data folder below.
+services:
+  printarr:
+    image: ghcr.io/ourrage-cmyk/printarr:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PRINTARR_TIMEZONE: Europe/London
+      PRINTARR_PRINTER_MODE: tcp
+      PRINTARR_PRINTER_HOST: 192.168.1.50  # <- your printer's IP address
+      PRINTARR_PRINTER_PORT: "9100"
+      PRINTARR_PAPER_WIDTH: "42"
+      # Ollama on the LAN. Used on the first start only. After that, change it in the web page
+      # at http://<nas-ip>:8000/ and the change is saved in the data folder. Clear the URL to use
+      # the fixed rules only.
+      PRINTARR_LLM_ENABLED: "on"
+      PRINTARR_LLM_BASE_URL: http://192.168.1.231:11434/v1
+      PRINTARR_LLM_MODEL: d1:latest
+      PRINTARR_LLM_TEXT_MODEL: granite4.2:3b
+    volumes:
+      # One line for all data: database, settings, alert config. Point it at a folder on your SSD dataset.
+      - /mnt/ssd/apps/printarr:/data
