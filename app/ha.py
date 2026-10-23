@@ -57,8 +57,12 @@ class HAClient:
         return values
 
 
+# Per request. Long enough that a slow answer still arrives, well inside the 60 s render deadline.
+HA_CALL_TIMEOUT_S = 20.0
+
+
 def client_from_store(store) -> HAClient | None:
     """Build a client from the URL and token saved in the web page. None if not set."""
     url = store.get_setting("ha_url") or ""
     token = store.get_setting("ha_token") or ""
-    return HAClient(url, token) if url and token else None
+    return HAClient(url, token, timeout=HA_CALL_TIMEOUT_S) if url and token else None

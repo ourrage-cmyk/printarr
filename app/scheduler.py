@@ -21,6 +21,7 @@ logger = logging.getLogger("printarr.scheduler")
 
 
 BATCH_SIZE = 10
+SLOW_TICKET_MS = 10_000  # the target: always under 10 s
 
 
 class Scheduler:
@@ -72,14 +73,16 @@ class Scheduler:
             rendered = time.perf_counter()
             self.transport.send(payload)
             sent = time.perf_counter()
-            logger.info(
-                "ticket %s timing: data %.0f ms, render %.0f ms, send %.0f ms, total %.0f ms",
-                ticket["id"],
-                (fetched - started) * 1000,
-                (rendered - fetched) * 1000,
-                (sent - rendered) * 1000,
-                (sent - started) * 1000,
+            total_ms = (sent - started) * 1000
+            timing = (
+                "ticket %s timing: data %.0f ms, render %.0f ms, send %.0f ms, total %.0f ms"
+                % (ticket["id"], (fetched - started) * 1000, (rendered - fetched) * 1000,
+                   (sent - rendered) * 1000, total_ms)
             )
+            if total_ms > SLOW_TICKET_MS:
+                logger.warning("%s (over the %d s target)", timing, SLOW_TICKET_MS // 1000)
+            else:
+                logger.info(timing)
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
             logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)

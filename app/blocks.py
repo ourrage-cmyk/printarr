@@ -4,7 +4,7 @@ and the result is stored on the ticket, so printing needs no network call."""
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -15,6 +15,9 @@ from app.receipt import Line
 ENTITY_PATTERN = r"^[a-z_]+\.[a-z0-9_]+$"
 GRAPH_WIDTH = 512  # printable dots on the TM-T88V
 GRAPH_HEIGHT = 64
+# Hard limit for fetching a ticket's live data at print time. Slow is preferred to failing,
+# so nothing gives up before this. Normal runs finish well under the 10 s target.
+RENDER_DEADLINE_S = 60.0
 
 
 class ValueBlock(BaseModel):
@@ -107,9 +110,13 @@ def resolve_blocks(blocks: list[Block], client: HAClient | None) -> list[Line]:
         return []
     if client is None:
         raise HAError("Home Assistant is not configured; set its URL and token in the web page")
-    with ThreadPoolExecutor(max_workers=min(8, len(blocks))) as pool:
-        results = list(pool.map(lambda block: _resolve_one(block, client), blocks))
-    return [line for group in results for line in group]
+    pool = ThreadPoolExecutor(max_workers=min(8, len(blocks)))
+    futures = [pool.submit(_resolve_one, block, client) for block in blocks]
+    done, pending = wait(futures, timeout=RENDER_DEADLINE_S)
+    pool.shutdown(wait=False, cancel_futures=True)
+    if pending:
+        raise HAError(f"Home Assistant data did not arrive within {RENDER_DEADLINE_S:.0f} s")
+    return [line for future in futures for line in future.result()]
 
 
 _BLOCK_LIST = TypeAdapter(list[Block])

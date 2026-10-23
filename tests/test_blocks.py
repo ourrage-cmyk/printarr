@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.ha as ha
-from app.blocks import GRAPH_HEIGHT, GRAPH_WIDTH, sparkline_bitmap
+from app.blocks import GRAPH_HEIGHT, GRAPH_WIDTH, ValueBlock, sparkline_bitmap
 from app.escpos import GS, encode
 from app.ha import HAError
 from app.main import create_app
@@ -122,3 +122,35 @@ def test_invalid_entity_id_is_rejected(settings):
             json={"recipient": "yannic", "message": "x", "blocks": [{"type": "value", "entity_id": "Not Valid", "label": "A"}]},
         )
         assert response.status_code == 422
+
+
+def test_slow_home_assistant_is_waited_for_not_dropped(monkeypatch):
+    import time
+
+    import app.blocks as blocks
+
+    monkeypatch.setattr(blocks, "RENDER_DEADLINE_S", 2.0)
+
+    def slow_state(self, entity_id):
+        time.sleep(0.3)
+        return "21.5"
+
+    monkeypatch.setattr(ha.HAClient, "state", slow_state)
+    lines = blocks.resolve_blocks([ValueBlock(type="value", entity_id="sensor.a", label="A")], ha.HAClient("http://x", "t"))
+    assert lines[0].text == "A: 21.5"
+
+
+def test_render_deadline_is_enforced(monkeypatch):
+    import time
+
+    import app.blocks as blocks
+
+    monkeypatch.setattr(blocks, "RENDER_DEADLINE_S", 0.2)
+
+    def stuck_state(self, entity_id):
+        time.sleep(1.0)
+        return "x"
+
+    monkeypatch.setattr(ha.HAClient, "state", stuck_state)
+    with pytest.raises(HAError, match="did not arrive"):
+        blocks.resolve_blocks([ValueBlock(type="value", entity_id="sensor.a", label="A")], ha.HAClient("http://x", "t"))
