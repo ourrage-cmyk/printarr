@@ -156,23 +156,86 @@ class OpenAICompatibleModel:
             raise ValueError("text model returned nothing")
         return cleaned
 
+
+# Yes/no-style questions the decision model scores from 0 to 1, one answer each.
+QUESTIONS: dict[str, str] = {
+    "is_alert": "Is this an alert or warning that needs attention now?",
+    "is_urgent": "Is this urgent?",
+    "is_morning_briefing": "Is this a morning briefing or plan for the day?",
+    "is_evening_briefing": "Is this an evening wrap-up or summary of the day?",
+    "is_short_note": "Is this a short personal note?",
+    "is_list": "Is this a list of items?",
+    "is_personal": "Is this a personal or affectionate message?",
+    "has_numbers_or_stats": "Does this contain numbers, times or statistics?",
+}
+
+# Which questions speak for each template. A template scores the highest of its questions.
+# Edit this table to change the mapping; the template ids are in TEMPLATES above.
+TEMPLATE_QUESTIONS: dict[int, tuple[str, ...]] = {
+    1: ("is_morning_briefing", "is_evening_briefing"),  # Classic
+    2: ("is_list", "has_numbers_or_stats", "is_short_note"),  # Memo
+    3: ("is_personal",),  # Celebration
+    4: ("is_short_note", "is_personal"),  # Note
+    5: ("is_alert", "is_urgent"),  # Bold
+    6: ("is_list", "has_numbers_or_stats"),  # Plain
+}
+MIN_SCORE = 0.5  # below this, no template is trusted and the rules choose
+
+
+class SystemOneModel:
+    """Scores questions about a message with Ollama's structured endpoint, /v1/systemone.
+
+    Text only: no image is sent. The endpoint was built for photos, so its answers on plain
+    text are not yet checked. Any failure raises, and the rules choose instead.
+    """
+
+    def __init__(self, base_url: str, model: str, timeout: float) -> None:
+        root = base_url.rstrip("/")
+        if root.endswith("/v1"):
+            root = root[: -len("/v1")]
+        self.url = root + "/v1/systemone"
+        self.model = model
+        self.timeout = timeout
+
+    def scores(self, recipient: str, title: str | None, message: str) -> dict[str, float]:
+        body = json.dumps(
+            {
+                "model": self.model,
+                "state": (
+                    "A printed receipt ticket. Answer each question about the message. "
+                    f"Recipient: {RECIPIENTS.get(recipient, recipient)}. "
+                    f"Title: {title or '(none)'}. Message: {message}"
+                ),
+                "questions": {
+                    name: {"type": "noul", "instructions": text} for name, text in QUESTIONS.items()
+                },
+            }
+        ).encode()
+        request = urllib.request.Request(
+            self.url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            reply = json.loads(response.read())
+        answers = reply.get("answers", {})
+        result: dict[str, float] = {}
+        for name in QUESTIONS:
+            value = answers.get(name, {}).get("noul")
+            if not isinstance(value, (int, float)) or not 0.0 <= float(value) <= 1.0:
+                raise ValueError(f"decision model gave no usable score for {name}")
+            result[name] = float(value)
+        return result
+
     def choose(
         self, options: Sequence[Template], recipient: str, title: str | None, message: str
     ) -> tuple[int, list[str]]:
-        menu = "\n".join(
-            f"{t.id}: {t.name}, title align {t.title_align}, rule {t.rule!r}, "
-            f"optional decorations {', '.join(t.allowed) or 'none'}"
-            for t in options
-        )
-        system = (
-            "You choose a receipt template for a thermal printer. Reply with only a JSON object "
-            '{"template": <id>, "decorations": [<names>]}. Use an id from the list. '
-            "Only use decorations listed for that template, or an empty list."
-        )
-        user = f"Templates:\n{menu}\n\nRecipient: {recipient}\nTitle: {title or '(none)'}\nMessage: {message}"
-        content = self._chat(system, user)
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match is None:
-            raise ValueError("model reply contained no JSON object")
-        data = json.loads(match.group(0))
-        return int(data["template"]), [str(d) for d in data.get("decorations", [])]
+        scores = self.scores(recipient, title, message)
+        best_id, best_score = None, -1.0
+        for template in options:
+            score = max((scores[q] for q in TEMPLATE_QUESTIONS.get(template.id, ())), default=0.0)
+            if score > best_score:
+                best_id, best_score = template.id, score
+        if best_id is None or best_score < MIN_SCORE:
+            raise ValueError(f"no template scored at least {MIN_SCORE}")
+        # The template's own default decorations; resolve_choice keeps the ones it allows.
+        chosen = next(t for t in options if t.id == best_id)
+        return best_id, list(chosen.default)
