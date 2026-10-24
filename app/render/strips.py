@@ -90,9 +90,10 @@ def stamp_sprite(c: Canvas, x: int, y: int, name: str, scale: int = 3) -> None:
 # ---- ornaments: each draws across x0..x1 at y and returns the height it used ------------------
 def _sun_strip(c: Canvas, x0: int, x1: int, y: int) -> int:
     cx = (x0 + x1) // 2
+    # The arc stops 2 dots above the rule, so the sun sits on it without touching or crossing it.
     for a in range(180, 361, 4):
         rad = math.radians(a)
-        c.fill_rect(js_round(cx + math.cos(rad) * 16) - 1, js_round(y + 16 + math.sin(rad) * 16) - 1, 3, 3)
+        c.fill_rect(js_round(cx + math.cos(rad) * 14) - 1, js_round(y + 14 + math.sin(rad) * 14) - 1, 3, 3)
     c.fill_rect(x0, y + 16, x1 - x0, 2)
     return 18
 
@@ -315,9 +316,16 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += 7 * 2 + 4
     c.y += 4
     c.text(x0, c.y, value, 3)
-    if s.get("unit"):
-        c.text(x0 + text_width(value, 3) + 6, c.y + 14, str(s["unit"]), 2)
+    unit = str(s.get("unit") or "")
+    unit_x = x0 + text_width(value, 3) + 6
+    # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
+    beside = bool(unit) and unit_x + text_width(unit, 2) <= x1
+    if beside:
+        c.text(unit_x, c.y + 7, unit, 2)  # cap 14 ends on the value baseline (cap 21)
     c.y += 28
+    if unit and not beside:
+        c.text(x0, c.y, unit, 2)
+        c.y += 7 * 2 + 4
     series = s.get("series")
     if isinstance(series, list) and len(series) > 1:
         c.y += 4
