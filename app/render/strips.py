@@ -197,7 +197,27 @@ def _label(text: object) -> str:
     return str(text).upper().replace("_", " ")
 
 
+def solid_wrap(text: str, max_w: int) -> list[str]:
+    """Word-wrap full-line body text by its real width in Inter, so no line runs past the card."""
+    from app.render.canvas import solid_width
+
+    lines: list[str] = []
+    cur = ""
+    for word in text.split():
+        trial = f"{cur} {word}" if cur else word
+        if cur and solid_width(trial, 21) > max_w:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
+    if scale == BODY:
+        return solid_wrap(text, max_w)
     per_line = max(1, max_w // (6 * scale))
     lines: list[str] = []
     cur = ""
@@ -215,7 +235,10 @@ def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
 def paragraph(c: Canvas, x: int, y: int, text: str, scale: int, max_w: int) -> int:
     lines = wrap_lines(text, scale, max_w)
     for i, line in enumerate(lines):
-        c.text(x, y + i * (7 * scale + 4), line, scale)
+        if scale == BODY:
+            c.solid(x, y + i * (7 * scale + 4), line, 21)  # body text is full-line (Inter), not dot matrix
+        else:
+            c.text(x, y + i * (7 * scale + 4), line, scale)
     return len(lines) * (7 * scale + 4)
 
 
@@ -328,22 +351,31 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     value = str(s.get("value", "--"))
     unit = str(s.get("unit") or "")
+    if unit.strip().upper() == str(s.get("label", "")).strip().upper():
+        unit = ""  # "750 STEPS" under the label STEPS says it twice
     # The label wraps inside the tile, so a long label never runs over the border.
     for line in wrap_lines(_label(s.get("label", "")), BODY, x1 - x0) or [""]:
-        c.text(x0, c.y, line, BODY)
+        c.solid(x0, c.y, line, 21)
         c.y += 7 * BODY + 4
     c.y += 4
     # Numerals are display size (cap 42) when the value and its unit fit the tile, else body size.
     scale = NUMERAL if text_width(value, NUMERAL) + text_width(unit, BODY) + 6 <= x1 - x0 else BODY
-    c.text(x0, c.y, value, scale)
+    if scale == BODY:
+        c.solid(x0, c.y, value, 21)
+    else:
+        c.text(x0, c.y, value, scale)  # display numerals stay dot matrix
     unit_x = x0 + text_width(value, scale) + 6
     # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
-    beside = bool(unit) and unit_x + text_width(unit, BODY) <= x1
+    from app.render.canvas import solid_width
+
+    value_w = solid_width(value, 21) if scale == BODY else text_width(value, scale)
+    unit_x = x0 + value_w + 6
+    beside = bool(unit) and unit_x + solid_width(unit, 21) <= x1
     if beside:
-        c.text(unit_x, c.y + 7 * scale - 7 * BODY, unit, BODY)  # its baseline sits on the value's baseline
+        c.solid(unit_x, c.y + 7 * scale - 21, unit, 21)  # its baseline sits on the value's baseline
     c.y += 7 * scale + 7
     if unit and not beside:
-        c.text(x0, c.y, unit, BODY)
+        c.solid(x0, c.y, unit, 21)
         c.y += 7 * BODY + 4
     series = s.get("series")
     if isinstance(series, list) and len(series) > 1:
@@ -359,7 +391,7 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for r in list(s.get("rows", []))[:12]:
         card.icon(x0, c.y)
         unit = f" {r['unit']}" if r.get("unit") else ""
-        c.row(x0 + 28, x1, c.y + 2, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", BODY)
+        c.row_solid(x0 + 28, x1, c.y + 2, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", 21)
         c.y += ROW
 
 
@@ -372,7 +404,7 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
         c.y += plot + 16
         unit = f" {s['unit']}" if s.get("unit") else ""
-        c.text(x0, c.y, f"{min(series):.1f}  ..  {series[-1]:.1f}{unit}", BODY)
+        c.solid(x0, c.y, f"{min(series):.1f}  ..  {series[-1]:.1f}{unit}", 21)
         c.y += 22
 
 
@@ -382,9 +414,9 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
-        c.row(x0 + 28, x1, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", BODY)
+        c.row_solid(x0 + 28, x1, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", 21)
         c.y += ROW
-        c.text(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", BODY)
+        c.solid(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", 21)
         c.y += ROW
 
 
@@ -398,7 +430,7 @@ def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += paragraph(c, x0, c.y, str(s["tip"]), BODY, x1 - x0) + 4
     card.ornament("divider", x0, x1)
     if s.get("from"):
-        c.text(x0, c.y, f"- {_label(s['from'])}", BODY)
+        c.solid(x0, c.y, f"- {_label(s['from'])}", 21)
         c.y += ROW
 
 
@@ -409,7 +441,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
-        c.row(x0, x1, c.y, "ACTION", _label(s["action"]), BODY)
+        c.row_solid(x0, x1, c.y, "ACTION", _label(s["action"]), 21)
         c.y += ROW
     card.ornament("divider", x0, x1)
 
@@ -420,7 +452,7 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         _heading(c, x0, _label(s["title"]))
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
-        c.text(x0 + 26, c.y + 2, _label(item.get("text", "")), BODY)
+        c.solid(x0 + 26, c.y + 2, _label(item.get("text", "")), 21)
         c.y += ROW
 
 
@@ -434,7 +466,7 @@ def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0) + 4
     card.ornament("divider", x0, x1)
-    c.text(x0, c.y, "FUN FACT", BODY)
+    c.solid(x0, c.y, "FUN FACT", 21)
     c.y += ROW
 
 
