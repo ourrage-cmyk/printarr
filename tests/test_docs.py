@@ -55,16 +55,17 @@ def test_readme_routes_exist():
 
 
 def test_skill_routes_exist():
-    text = (ROOT / "skills" / "printarr" / "SKILL.md").read_text(encoding="utf-8")
+    text = (ROOT / "docs" / "agents" / "hermes-skill" / "SKILL.md").read_text(encoding="utf-8")
     known = _schema_paths()
     missing = sorted(r for r in _named_routes(text, relative_ok=True) if r not in known and r != "/")
     assert not missing, f"SKILL.md names routes that do not exist: {missing}"
 
 
 def test_skill_copies_match():
-    canonical = (ROOT / "skills" / "printarr" / "SKILL.md").read_text(encoding="utf-8")
-    copy = (ROOT / "docs" / "integrations" / "hermes" / "SKILL.md").read_text(encoding="utf-8")
-    assert copy == canonical, "copy skills/printarr/SKILL.md to docs/integrations/hermes/SKILL.md"
+    canonical = (ROOT / "docs" / "agents" / "hermes-skill" / "SKILL.md").read_text(encoding="utf-8")
+    for copy_path in ("skills/printarr/SKILL.md", "docs/integrations/hermes/SKILL.md"):
+        copy = (ROOT / copy_path).read_text(encoding="utf-8")
+        assert copy == canonical, f"copy docs/agents/hermes-skill/SKILL.md to {copy_path}"
 
 
 def test_local_links_and_images_exist():
