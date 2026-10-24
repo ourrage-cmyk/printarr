@@ -40,7 +40,7 @@ def test_titles_use_the_heavy_face_when_every_word_fits():
 
 
 def test_firm_complaint_has_a_barcode():
-    assert strips.MOODS["firm_complaint"]["header"] == "barcode"
+    assert strips.MOODS["firm_complaint"]["header"] == "bandBarcode"
 
 
 def test_metric_tiles_nest_in_the_card_that_closes_them():
@@ -144,5 +144,5 @@ def test_title_slot_of_the_briefing_is_the_headline():
 
 def test_moods_draw_different_bands():
     headers = {m: spec["header"] for m, spec in strips.MOODS.items()}
-    for a, b in (("playful", "gentle_warning"), ("excited", "happy"), ("confused", "sad")):
+    for a, b in (("playful", "gentle_warning"), ("excited", "happy")):
         assert headers[a] != headers[b]

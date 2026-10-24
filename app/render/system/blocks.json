@@ -191,113 +191,113 @@
   },
   "moods": {
     "neutral": {
-      "header": "hairline",
-      "divider": "hairline",
-      "footer": "dashedRule",
+      "header": "none",
+      "divider": "none",
+      "footer": "none",
       "icon": "box",
       "accent": "outline",
       "sprite_set": "neutral"
     },
     "happy": {
-      "header": "sunStrip",
-      "divider": "tapeTicks",
-      "footer": "dottedWave",
+      "header": "bandDots",
+      "divider": "none",
+      "footer": "none",
       "icon": "sun",
       "accent": "outline",
       "sprite_set": "bright"
     },
     "excited": {
-      "header": "burst",
-      "divider": "tapeTicks",
-      "footer": "dottedWave",
+      "header": "bandZigzag",
+      "divider": "none",
+      "footer": "none",
       "icon": "star",
       "accent": "outline",
       "sprite_set": "bright"
     },
     "loving": {
-      "header": "heart",
-      "divider": "dottedWave",
-      "footer": "dashedRule",
+      "header": "bandDots",
+      "divider": "none",
+      "footer": "none",
       "icon": "heart",
       "accent": "outline",
       "sprite_set": "soft"
     },
     "playful": {
-      "header": "starRow",
-      "divider": "tapeTicks",
-      "footer": "dottedWave",
+      "header": "bandZigzag",
+      "divider": "none",
+      "footer": "none",
       "icon": "bone",
       "accent": "outline",
       "sprite_set": "bright"
     },
     "reminder": {
-      "header": "tapeTicks",
-      "divider": "dashedRule",
-      "footer": "tapeTicks",
+      "header": "bandTicks",
+      "divider": "none",
+      "footer": "none",
       "icon": "clock",
       "accent": "outline",
       "sprite_set": "neutral"
     },
     "factual": {
-      "header": "doubleHairline",
-      "divider": "hairline",
-      "footer": "hairline",
+      "header": "none",
+      "divider": "none",
+      "footer": "none",
       "icon": "thermo",
       "accent": "outline",
       "sprite_set": "neutral"
     },
     "sad": {
-      "header": "dashedRule",
-      "divider": "dashedRule",
-      "footer": "hairline",
+      "header": "bandStipple",
+      "divider": "none",
+      "footer": "none",
       "icon": "drop",
       "accent": "outline",
       "sprite_set": "soft"
     },
     "confused": {
-      "header": "dotDash",
-      "divider": "dashedRule",
-      "footer": "hairline",
+      "header": "bandStipple",
+      "divider": "none",
+      "footer": "none",
       "icon": "question",
       "accent": "outline",
       "sprite_set": "neutral"
     },
     "upset": {
-      "header": "perforation",
-      "divider": "doubleHairline",
-      "footer": "barcode",
+      "header": "bandHatch",
+      "divider": "none",
+      "footer": "none",
       "icon": "warn",
       "accent": "outline",
       "sprite_set": "alert"
     },
     "gentle_warning": {
-      "header": "dottedWave",
-      "divider": "dashedRule",
-      "footer": "hairline",
+      "header": "bandHatch",
+      "divider": "none",
+      "footer": "none",
       "icon": "cloud",
       "accent": "outline",
       "sprite_set": "alert"
     },
     "firm_complaint": {
-      "header": "barcode",
-      "divider": "doubleHairline",
-      "footer": "barcode",
+      "header": "bandBarcode",
+      "divider": "none",
+      "footer": "none",
       "icon": "warn",
       "accent": "firm",
       "sprite_set": "alert"
     },
     "critical": {
-      "header": "barcode",
-      "divider": "perforation",
-      "footer": "barcode",
+      "header": "bandFill",
+      "divider": "none",
+      "footer": "none",
       "icon": "warn",
       "accent": "pill",
       "sprite_set": "alert"
-  },
-  "urgent": {
-      "header": "barcode",
-      "divider": "perforation",
-      "footer": "barcode",
+    },
+    "urgent": {
+      "header": "bandBarcode",
+      "divider": "none",
+      "footer": "none",
       "icon": "warn",
       "accent": "outline",
       "sprite_set": "alert"

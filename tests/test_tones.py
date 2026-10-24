@@ -25,9 +25,41 @@ def test_heart_is_only_for_loving():
         assert has_heart == (mood == "loving"), mood
 
 
-def test_urgent_has_the_barcode_border_and_gentle_has_the_zigzag():
-    assert strips.MOODS["urgent"]["header"] == "barcode"
-    assert strips.MOODS["gentle_warning"]["header"] == "dottedWave"
+FAMILIES = {
+    "none": ("neutral", "factual"),
+    "bandDots": ("loving", "happy"),
+    "bandZigzag": ("excited", "playful"),
+    "bandTicks": ("reminder",),
+    "bandStipple": ("sad", "confused"),
+    "bandHatch": ("gentle_warning", "upset"),
+    "bandBarcode": ("firm_complaint", "urgent"),
+    "bandFill": ("critical",),
+}
+
+
+def test_every_mood_belongs_to_one_family_with_its_own_band():
+    """Six families, six bands: the band carries the mood, one per card at the top, nothing at the foot."""
+    assert sorted(m for ms in FAMILIES.values() for m in ms) == sorted(strips.MOODS)
+    for band, moods in FAMILIES.items():
+        for mood in moods:
+            assert strips.MOODS[mood]["header"] == band, mood
+            assert strips.MOODS[mood]["divider"] == "none" and strips.MOODS[mood]["footer"] == "none", mood
+    assert len(FAMILIES) == len({b for b in FAMILIES})
+
+
+def test_bands_ink_rises_with_urgency():
+    """Squint test: the bands get darker as urgency rises, ending in the solid bar."""
+    from app.render.canvas import Canvas
+
+    def ink(name: str) -> int:
+        c = Canvas()
+        strips.ORNAMENTS[name](c, 20, 490, 10)
+        return sum(bin(b).count("1") for b in c.bits)
+
+    inks = {b: ink(b) for b in FAMILIES if b != "none"}
+    assert len(set(inks.values())) == len(inks)
+    order = sorted(inks, key=inks.get)
+    assert order[-2:] == ["bandBarcode", "bandFill"] and order[0] == "bandDots"
 
 
 def test_urgent_tones_have_a_heavier_outline_and_soft_tones_a_rounder_one():
