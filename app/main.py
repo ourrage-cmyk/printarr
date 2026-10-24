@@ -36,10 +36,21 @@ from app.ha import HAClient, HAError
 from app.scheduler import Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
+from app.slots import (
+    BRIEFING,
+    SLOT_NAMES,
+    SlotProblems,
+    autofill,
+    is_slot_template,
+    slot_lines,
+)
+from app.slots import schema as slot_schema
+from app.slots import validate as validate_slots
 from app.templates import (
     RECIPIENTS,
     TEMPLATES,
     Choice,
+    template_by_id,
     OpenAICompatibleModel,
     SystemOneModel,
     Recipient,
@@ -70,6 +81,20 @@ Template choice: pass `template` to pick one explicitly from that recipient's gr
 If you leave it out, a local decision model picks one when it is configured. Otherwise
 a fixed rule picks one.
 """
+
+
+class SlotTicketCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    template: int = Field(description="A slot template id from GET /api/v1/slot-templates: 101 Briefing, 102 Note.")
+    recipient: Recipient
+    slots: dict[str, Any] = Field(default_factory=dict, description="The slots, see the template's schema.")
+    tone: Literal[TONES] | None = None  # type: ignore[valid-type]
+    kind: Literal[KINDS] | None = None  # type: ignore[valid-type]
+    from_user: Recipient | None = None
+    to_user: Recipient | None = None
+    sender: str | None = Field(default=None, max_length=40)
+    send_at: datetime | None = None
 
 
 class TicketCreate(BaseModel):
@@ -509,7 +534,61 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 "default_decorations": list(t.default),
             }
             for t in TEMPLATES
+            if t.group != "slots"
         ]
+
+    @api.get("/slot-templates", tags=["templates"])
+    def list_slot_templates() -> list[dict[str, Any]]:
+        """Slot templates: fill their slots and POST them to /api/v1/tickets/slots."""
+        return [
+            {"id": template_id, "name": slot_name, "schema": f"/api/v1/templates/{template_id}/schema"}
+            for template_id, slot_name in SLOT_NAMES.items()
+        ]
+
+    @api.get("/templates/{template_id}/schema", tags=["templates"])
+    def slot_template_schema(template_id: int) -> dict[str, Any]:
+        """The slots of a slot template as JSON Schema: names, types, limits and descriptions."""
+        if not is_slot_template(template_id):
+            raise HTTPException(status_code=404, detail=f"template {template_id} has no slots; see GET /api/v1/slot-templates")
+        return slot_schema(template_id)
+
+    @api.post("/tickets/slots", status_code=201, response_model=TicketOut, tags=["tickets"])
+    def create_slot_ticket(body: SlotTicketCreate) -> dict[str, Any]:
+        """Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem."""
+        if not is_slot_template(body.template):
+            raise HTTPException(status_code=422, detail=f"template {body.template} is not a slot template")
+        try:
+            checked = validate_slots(body.template, body.slots)
+        except SlotProblems as exc:
+            raise HTTPException(status_code=422, detail=exc.problems) from None
+        now = datetime.now(settings.tzinfo)
+        filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
+        render_started = time.perf_counter()
+        try:  # check the layout now, so a queued ticket always prints
+            encode(slot_lines(filled), feed=template_by_id(body.template).feed, raster_mode=settings.raster_mode)
+        except Exception as exc:
+            logger.exception("slot rendering failed; ticket not queued")
+            raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
+        render_ms = round((time.perf_counter() - render_started) * 1000)
+        kind = body.kind or ("morning" if body.template == BRIEFING else "note")
+        summary = str(filled.get("paragraph") or filled.get("title") or filled.get("greeting") or "")
+        return store.create(
+            kind=kind,
+            tone=body.tone or DEFAULT_TONE,
+            from_user=body.from_user,
+            to_user=body.to_user,
+            recipient=body.recipient,
+            message=summary or "(slots)",
+            sender=body.sender,
+            title=filled.get("title"),
+            send_at_ms=_resolve_send_at(body.send_at, settings.tzinfo),
+            template_id=body.template,
+            decorations=(),
+            selection="explicit",
+            choice_source="explicit",
+            render_ms=render_ms,
+            slots_json=json.dumps(filled, default=str),
+        )
 
     @api.post("/tickets", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_ticket(body: TicketCreate) -> dict[str, Any]:

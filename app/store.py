@@ -65,6 +65,7 @@ ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("render_ms", "INTEGER"),
     ("print_ms", "INTEGER"),
     ("choice_source", "TEXT"),
+    ("slots_json", "TEXT NOT NULL DEFAULT ''"),
     ("model_scores", "TEXT NOT NULL DEFAULT ''"),
     ("idempotency_key", "TEXT"),
 )
@@ -168,6 +169,7 @@ class TicketStore:
         choice_source: str | None = None,
         model_scores: str = "",
         idempotency_key: str | None = None,
+        slots_json: str = "",
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once.
 
@@ -190,14 +192,14 @@ class TicketStore:
                                      send_at_ms, next_attempt_ms, template_id, text_state,
                                      blocks_json, decorations, selection, created_at_ms, updated_at_ms,
                                      kind, tone, from_user, to_user, inbox_state, render_ms,
-                                     choice_source, model_scores, idempotency_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     choice_source, model_scores, idempotency_key, slots_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
-                    choice_source or selection, model_scores, idempotency_key,
+                    choice_source or selection, model_scores, idempotency_key, slots_json,
                 ),
             )
             except sqlite3.IntegrityError:

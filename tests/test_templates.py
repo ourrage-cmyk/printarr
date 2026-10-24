@@ -21,7 +21,7 @@ class FakeModel:
 
 
 def test_every_recipient_has_a_group():
-    assert set(RECIPIENTS) == {t.group for t in TEMPLATES}
+    assert set(RECIPIENTS) == {t.group for t in TEMPLATES if t.group != "slots"}
     for recipient in RECIPIENTS:
         assert templates_for(recipient)
 

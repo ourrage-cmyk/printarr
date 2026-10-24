@@ -56,6 +56,120 @@
         }
       }
     },
+    "/api/v1/slot-templates": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "List Slot Templates",
+        "description": "Slot templates: fill their slots and POST them to /api/v1/tickets/slots.",
+        "operationId": "list_slot_templates_api_v1_slot_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Slot Templates Api V1 Slot Templates Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/schema": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Slot Template Schema",
+        "description": "The slots of a slot template as JSON Schema: names, types, limits and descriptions.",
+        "operationId": "slot_template_schema_api_v1_templates__template_id__schema_get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Slot Template Schema Api V1 Templates  Template Id  Schema Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/slots": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Create Slot Ticket",
+        "description": "Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem.",
+        "operationId": "create_slot_ticket_api_v1_tickets_slots_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotTicketCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tickets": {
       "post": {
         "tags": [
@@ -1491,6 +1605,131 @@
           "reachable"
         ],
         "title": "PrinterStatus"
+      },
+      "SlotTicketCreate": {
+        "properties": {
+          "template": {
+            "type": "integer",
+            "title": "Template",
+            "description": "A slot template id from GET /api/v1/slot-templates: 101 Briefing, 102 Note."
+          },
+          "recipient": {
+            "type": "string",
+            "enum": [
+              "yannic",
+              "wife"
+            ],
+            "title": "Recipient"
+          },
+          "slots": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Slots",
+            "description": "The slots, see the template's schema."
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "loving",
+                  "neutral",
+                  "reminder",
+                  "playful",
+                  "gentle",
+                  "firm",
+                  "urgent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "note",
+                  "shopping",
+                  "todo",
+                  "alert",
+                  "fun",
+                  "reminder"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "from_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From User"
+          },
+          "to_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To User"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "send_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "template",
+          "recipient"
+        ],
+        "title": "SlotTicketCreate"
       },
       "SparklineBlock": {
         "properties": {
