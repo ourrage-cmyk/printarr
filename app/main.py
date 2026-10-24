@@ -49,7 +49,7 @@ from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
-from app.blocks import Block, resolve_blocks
+from app.blocks import Block, resolve_blocks, unavailable_lines
 from app.ha import HAClient, HAError
 from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
@@ -822,7 +822,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return HAClient(url, token) if url and token else None
 
     def prepare_blocks(body: TicketCreate) -> list[Line]:
-        """Fetch Home Assistant data now. An unreachable Home Assistant rejects the request."""
+        """Fetch Home Assistant data now, for the preview. An unreachable Home Assistant rejects the preview."""
         if not body.blocks:
             return []
         try:
@@ -903,10 +903,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
         if body.blocks and home_assistant() is None:
             raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
-        try:
+        try:  # an unreachable Home Assistant never blocks a ticket: it prints with an unavailable mark
             block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
         except HAError as exc:
-            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
+            logger.warning("home assistant data unavailable at queue time: %s", exc)
+            block_lines = unavailable_lines(body.blocks)
         render_started = time.perf_counter()
         try:  # check the layout now, so a queued ticket always prints
             encode(
@@ -1035,7 +1036,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 return existing
         try:
             if body.preset == PRESET_BRIEFING:
-                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender)
+                # Checked without Home Assistant: the values are read when the ticket prints, not when it is queued.
+                raw_blocks = briefing_preset_blocks(body.slots or {}, None, body.sender)
                 checked = compose_validate(raw_blocks)
             else:
                 checked = compose_validate(body.blocks or [])
@@ -1065,7 +1067,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             selection="explicit",
             choice_source="explicit",
             render_ms=render_ms,
-            slots_json=json.dumps({"blocks": checked}, default=str),
+            # A preset is stored as its slots and built at print time; blocks are stored as checked.
+            slots_json=json.dumps(
+                {"preset": body.preset, "slots": body.slots} if body.preset else {"blocks": checked},
+                default=str,
+            ),
             held=held,
             delivery=delivery,
             hold_key=body.hold_key,
