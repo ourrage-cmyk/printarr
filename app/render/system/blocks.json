@@ -58,7 +58,8 @@
         "label": "string",
         "value": "number or text",
         "unit": "string, optional",
-        "series": "list of numbers, optional, sparkline"
+        "series": "list of numbers, optional, sparkline",
+        "range": "string, optional, the time span of the sparkline (default 24H)"
       },
       "renders": "label, numeral at scale 3, unit, optional sparkline",
       "moods": [
@@ -88,9 +89,10 @@
       "slots": {
         "title": "string",
         "series": "list of numbers, oldest first, up to 48",
-        "unit": "string, optional"
+        "unit": "string, optional",
+        "range": "string, optional, the time span such as 24H or 12H (default 24H)"
       },
-      "renders": "line graph 56 dots tall, dotted gridlines, first and last value labelled",
+      "renders": "line graph with HIGH and LOW above it, and the span and NOW under it",
       "moods": [
         "neutral",
         "factual",

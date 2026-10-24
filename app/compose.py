@@ -56,6 +56,7 @@ class MetricRow(_Strict):
 
 class MetricSlots(MetricRow):
     series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Sparkline, oldest first.")
+    range: str | None = Field(default=None, max_length=8, description="The time the sparkline covers, such as 24H. Default 24H.")
 
 
 class MetricRowsSlots(_Strict):
@@ -72,6 +73,7 @@ class GraphSlots(_Strict):
     title: str = Field(min_length=1, max_length=40)
     series: list[float] = Field(min_length=2, max_length=48, description="Values, oldest first.")
     unit: str | None = Field(default=None, max_length=12)
+    range: str | None = Field(default=None, max_length=8, description="The time the series covers, such as 24H or 12H. Default 24H.")
 
 
 class Dog(_Strict):
