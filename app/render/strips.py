@@ -315,9 +315,16 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += 7 * 2 + 4
     c.y += 4
     c.text(x0, c.y, value, 3)
-    if s.get("unit"):
-        c.text(x0 + text_width(value, 3) + 6, c.y + 14, str(s["unit"]), 2)
+    unit = str(s.get("unit") or "")
+    unit_x = x0 + text_width(value, 3) + 6
+    # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
+    beside = bool(unit) and unit_x + text_width(unit, 2) <= x1
+    if beside:
+        c.text(unit_x, c.y + 14, unit, 2)
     c.y += 28
+    if unit and not beside:
+        c.text(x0, c.y, unit, 2)
+        c.y += 7 * 2 + 4
     series = s.get("series")
     if isinstance(series, list) and len(series) > 1:
         c.y += 4
