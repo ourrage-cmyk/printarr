@@ -35,7 +35,7 @@ paths:
   /tickets/slots:
     post:
       operationId: createSlotTicket
-      summary: "[live] Queue a briefing or note from typed slots. Supports hold, hold_key, idempotency_key and blocks. Bad slots return 422 with each problem."
+      summary: "[live] Queue a briefing or note from typed slots. Supports delivery, idempotency_key and blocks. Bad slots return 422 with each problem."
       requestBody:
         required: true
         content:
@@ -78,7 +78,7 @@ paths:
               schema: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
     post:
       operationId: createTicket
-      summary: "[live] Queue a plain text ticket. Supports hold, hold_key, send_at, idempotency_key and blocks."
+      summary: "[live] Queue a plain text ticket. Supports delivery, send_at, idempotency_key and blocks."
       requestBody:
         required: true
         content:
@@ -86,7 +86,27 @@ paths:
             schema: { $ref: "#/components/schemas/TicketCreate" }
       responses:
         "201": { description: The queued ticket. A repeated idempotency_key returns the first ticket. }
-        "422": { description: Invalid request, for example hold with send_at. }
+        "422": { description: Invalid request, for example delivery at without send_at, or on_release with send_at. }
+
+  /people/{person}/release:
+    post:
+      operationId: releasePersonStrip
+      summary: "[live] Print one person's pile as strips, cutting after each. Only their tickets go on a strip."
+      parameters:
+        - { name: person, in: path, required: true, schema: { $ref: "#/components/schemas/Recipient" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [trigger]
+              properties:
+                trigger: { type: string, enum: [morning, evening, arrival, request] }
+      responses:
+        "200": { description: "The strips printed. Empty when the pile is empty." }
+        "502": { description: "Printer unreachable. The pile is kept." }
 
   /tickets/{ticket_id}/cancel:
     post:
@@ -194,9 +214,11 @@ components:
         from_user: { $ref: "#/components/schemas/Recipient" }
         to_user: { $ref: "#/components/schemas/Recipient" }
         sender: { type: string, maxLength: 40, description: "Use hermes." }
-        send_at: { type: string, format: date-time, description: "Local time without offset uses the server timezone. Omit to print when queued. Cannot be combined with hold." }
-        hold: { type: boolean, default: false }
-        hold_key: { type: string, maxLength: 40 }
+        delivery:
+          type: string
+          enum: [now, at, on_release]
+          description: "now prints at once. at prints at send_at. on_release waits in the recipient's pile for their next strip (the usual choice for briefings)."
+        send_at: { type: string, format: date-time, description: "Local time without offset uses the server timezone. Needed with delivery at." }
         idempotency_key: { type: string, maxLength: 120 }
         blocks: { type: array, maxItems: 8, items: { type: object }, description: "Home Assistant values read at print time." }
     TicketCreate:
@@ -214,8 +236,12 @@ components:
         from_user: { $ref: "#/components/schemas/Recipient" }
         to_user: { $ref: "#/components/schemas/Recipient" }
         blocks: { type: array, maxItems: 8, items: { type: object } }
+        delivery:
+          type: string
+          enum: [now, at, on_release]
+          description: "now prints at once (default). at prints at send_at. on_release waits in the recipient's pile."
         send_at: { type: string, format: date-time }
-        hold: { type: boolean, default: false }
+        hold: { type: boolean, default: false, description: "Older style. Prefer delivery on_release for anything in a person's strip." }
         hold_key: { type: string, maxLength: 40 }
         idempotency_key: { type: string, maxLength: 120 }
     Ticket:
