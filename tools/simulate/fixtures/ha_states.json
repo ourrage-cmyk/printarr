@@ -1,0 +1,21 @@
+[
+  {"entity_id": "sensor.body_battery_most_recent", "state": "72", "attributes": {"unit_of_measurement": "%", "friendly_name": "Body battery"}, "simulation": {"base": 65, "amp": 14}},
+  {"entity_id": "sensor.sleep_score", "state": "81", "attributes": {"friendly_name": "Sleep score"}, "simulation": {"base": 78, "amp": 6}},
+  {"entity_id": "sensor.avg_stress_level", "state": "24", "attributes": {"friendly_name": "Stress"}, "simulation": {"base": 27, "amp": 5}},
+  {"entity_id": "sensor.total_steps", "state": "6120", "attributes": {"unit_of_measurement": "steps", "friendly_name": "Steps"}, "simulation": {"base": 3000, "amp": 1500}},
+  {"entity_id": "sensor.resting_heart_rate", "state": "58", "attributes": {"unit_of_measurement": "bpm", "friendly_name": "Resting heart rate"}, "simulation": {"base": 57, "amp": 3}},
+  {"entity_id": "sensor.yannic_pixel_battery_level", "state": "64", "attributes": {"unit_of_measurement": "%"}, "simulation": {"base": 60, "amp": 20}},
+  {"entity_id": "sensor.body_battery_most_recent_2", "state": "58", "attributes": {"unit_of_measurement": "%"}, "simulation": {"base": 60, "amp": 12}},
+  {"entity_id": "sensor.sleep_score_2", "state": "74", "attributes": {}, "simulation": {"base": 76, "amp": 5}},
+  {"entity_id": "sensor.total_steps_2", "state": "4410", "attributes": {"unit_of_measurement": "steps"}, "simulation": {"base": 2500, "amp": 1200}},
+  {"entity_id": "sensor.resting_heart_rate_2", "state": "63", "attributes": {"unit_of_measurement": "bpm"}, "simulation": {"base": 62, "amp": 2}},
+  {"entity_id": "sensor.garmin_connect_hrv_last_night_average_2", "state": "48", "attributes": {"unit_of_measurement": "ms"}, "simulation": {"base": 50, "amp": 8}},
+  {"entity_id": "sensor.home_temperature", "state": "19.5", "attributes": {"unit_of_measurement": "°C"}, "simulation": {"base": 19.5, "amp": 1.2}},
+  {"entity_id": "sensor.home_humidity", "state": "48", "attributes": {"unit_of_measurement": "%"}, "simulation": {"base": 50, "amp": 6}},
+  {"entity_id": "sensor.realtime_energy_cost", "state": "0.079", "attributes": {"unit_of_measurement": "£/h"}, "simulation": {"base": 0.12, "amp": 0.05}},
+  {"entity_id": "sensor.money_saved_rate", "state": "0.42", "attributes": {"unit_of_measurement": "£/h"}, "simulation": {"base": 0.4, "amp": 0.2}},
+  {"entity_id": "sensor.truenas_pool_usage", "state": "61", "attributes": {"unit_of_measurement": "%"}, "simulation": {"base": 60, "amp": 1}},
+  {"entity_id": "sensor.truenas_cpu_usage", "state": "12", "attributes": {"unit_of_measurement": "%"}, "simulation": {"base": 14, "amp": 8}},
+  {"entity_id": "counter.bridget_poop", "state": "1", "attributes": {}, "simulation": {"base": 1, "amp": 1}},
+  {"entity_id": "counter.kida_poop", "state": "2", "attributes": {}, "simulation": {"base": 1, "amp": 1}}
+]
