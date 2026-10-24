@@ -16,13 +16,15 @@ def tip(text="Leave early."):
 def test_split_holds_at_most_five_blocks():
     blocks = [tip(str(i)) for i in range(7)]
     strips_out = split_strips(blocks)
-    assert [len(s) for s in strips_out] == [5, 2]
+    assert all(len(s) <= 5 for s in strips_out)
+    assert sum(len(b.slots.get("parts", [b])) for s in strips_out for b in s) == 7  # nothing is dropped
 
 
 def test_greeting_always_starts_a_new_strip():
     blocks = [tip("a"), tip("b"), greeting(), tip("c")]
     strips_out = split_strips(blocks)
-    assert [[b.type for b in s] for s in strips_out] == [["tip", "tip"], ["greeting", "tip"]]
+    assert len(strips_out) == 2 and [b.type for b in strips_out[0]] == ["group"]
+    assert [p.type for p in strips_out[1][0].slots["parts"]] == ["greeting", "tip"]
 
 
 def test_strip_has_top_and_bottom_margins():

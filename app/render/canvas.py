@@ -31,9 +31,21 @@ def _inter(cap: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(INTER_PATH), round(cap / INTER_CAP_RATIO))
 
 
+def printable(text: str) -> str:
+    """Characters the printer font has no glyph for (emoji, CJK) print as one question mark, not a black block."""
+    out: list[str] = []
+    for ch in str(text):
+        ok = ord(ch) < 0x2500 and not (0xD800 <= ord(ch) <= 0xDFFF)
+        if ok:
+            out.append(ch)
+        elif not out or out[-1] != "?":
+            out.append("?")
+    return "".join(out)
+
+
 def solid_width(text: str, cap: int = 21) -> int:
     """Advance width of full-line text at cap height `cap`, in dots."""
-    return int(_inter(cap).getlength(text))
+    return int(_inter(cap).getlength(printable(text)))
 
 
 def js_round(value: float) -> int:
@@ -119,11 +131,12 @@ class Canvas:
 
     def solid(self, x: int, y: int, text: str, cap: int = 21) -> int:
         """Full-line text in Inter, cap height `cap` dots, its cap top at y. Returns the advance width."""
+        text = printable(text)
         font = _inter(cap)
         left, _, right, _ = font.getbbox(text)
         cap_top = font.getbbox("H")[1]
         pad = 2
-        width = max(1, right - left) + 2 * pad
+        width = max(1, right - left) + 2 * pad + 6  # a little slack on the right, so no stroke is ever clipped
         image = Image.new("1", (width, cap + 2 * pad + 4), 1)  # 1 is white in Pillow
         # Put the capital H's top on image row `pad`, and the text's left edge on column `pad`.
         ImageDraw.Draw(image).text((pad - left, pad - cap_top), text, font=font, fill=0)

@@ -26,7 +26,8 @@ MOODS: tuple[str, ...] = tuple(R.MOODS)
 AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until it does
 MAX_BLOCKS = 16
 PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
-TICKET_MARGIN = 12  # dots above and below a composed ticket
+TICKET_MARGIN = 24  # dots above a composed ticket
+TICKET_MARGIN_BOTTOM = 90  # and below it: about half an inch of paper before the cut
 CARD_CAPTION = "[card]"  # what a text preview shows in place of a drawn card
 HISTORY_POINTS = 48  # sparkline points: the renderer draws at most this many
 
@@ -290,7 +291,7 @@ def compose_render(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
     lines: list[ReceiptLine] = []
     notes: list[str] = []
     for strip in R.split_strips(_render_blocks(filled)):
-        bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=TICKET_MARGIN, margin_bottom=TICKET_MARGIN)
+        bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=TICKET_MARGIN, margin_bottom=TICKET_MARGIN_BOTTOM)
         lines.append(ReceiptLine(CARD_CAPTION, raster=(bitmap.width // 8, bitmap.height, bitmap.bits)))
         notes.extend(strip_notes)
     return lines, notes
@@ -342,10 +343,13 @@ def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[st
         history = _history(metric["entity_id"], metric.get("hours") or 24, client)
         if history:
             slots["series"] = history
+    for key in ("scope", "as_of"):
+        if metric.get(key):
+            slots[key] = metric[key]
     return {"type": "metric", "mood": "factual", "span": 1, "slots": slots}
 
 
-def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None) -> list[dict[str, Any]]:
+def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None) -> list[dict[str, Any]]:
     """A briefing (template 101) as blocks: a greeting, one metric card per number, and a tip."""
     blocks: list[dict[str, Any]] = []
     head = slots.get("greeting") or slots.get("title")
@@ -356,7 +360,11 @@ def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None) -> list[d
         blocks.append({"type": "greeting", "mood": "neutral", "span": 3, "slots": greeting})
     blocks.extend(_metric_block(metric, client) for metric in slots.get("metrics", []))
     if slots.get("tip"):
-        blocks.append({"type": "tip", "mood": "reminder", "span": 3, "slots": {"tip": slots["tip"]}})
+        tip_slots = {"tip": slots["tip"]}
+        signer = slots.get("from") or slots.get("sign_off") or sender
+        if signer:
+            tip_slots["from"] = signer
+        blocks.append({"type": "tip", "mood": "reminder", "span": 3, "slots": tip_slots})
     return blocks
 
 
@@ -400,7 +408,7 @@ def ticket_lines(
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
     elif template_id == BRIEFING or "metrics" in slots:
-        blocks = briefing_blocks(slots, client)
+        blocks = briefing_blocks(slots, client, sender)
     elif "greeting" in slots:
         blocks = [{"type": "greeting", "mood": "neutral", "span": 3, "slots": {k: slots[k] for k in ("greeting", "summary") if slots.get(k)}}]
         if slots.get("tip"):
