@@ -1033,7 +1033,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 return existing
         try:
             if body.preset == PRESET_BRIEFING:
-                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender)
+                # Checked without Home Assistant: the values are read when the ticket prints, not when it is queued.
+                raw_blocks = briefing_preset_blocks(body.slots or {}, None, body.sender)
                 checked = compose_validate(raw_blocks)
             else:
                 checked = compose_validate(body.blocks or [])
@@ -1063,7 +1064,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             selection="explicit",
             choice_source="explicit",
             render_ms=render_ms,
-            slots_json=json.dumps({"blocks": checked}, default=str),
+            # A preset is stored as its slots and built at print time; blocks are stored as checked.
+            slots_json=json.dumps(
+                {"preset": body.preset, "slots": body.slots} if body.preset else {"blocks": checked},
+                default=str,
+            ),
             held=held,
             delivery=delivery,
             hold_key=body.hold_key,
