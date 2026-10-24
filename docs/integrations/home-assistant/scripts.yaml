@@ -1,0 +1,63 @@
+# Scripts that print from a dashboard button. Paste under script: in configuration.yaml,
+# or into a package file. They use rest_commands.yaml, so add that first.
+
+script:
+  # Print the shopping list (todo.shopping_list) as a shopping ticket.
+  printarr_print_shopping_list:
+    alias: "Print shopping list"
+    sequence:
+      - action: todo.get_items
+        target:
+          entity_id: todo.shopping_list
+        data:
+          status: needs_action
+        response_variable: shopping
+      - variables:
+          items: "{{ shopping['todo.shopping_list']['items'] | map(attribute='summary') | list }}"
+      - if:
+          - condition: template
+            value_template: "{{ items | count == 0 }}"
+        then:
+          - stop: "Shopping list is empty"
+      - action: rest_command.printarr_create_ticket
+        data:
+          recipient: "{{ recipient | default('yannic') }}"
+          kind: shopping
+          tone: neutral
+          title: "Shopping"
+          message: "{{ items | join('\n') }}"
+          sender: home-assistant
+        continue_on_error: true
+    fields:
+      recipient:
+        description: "yannic or wife"
+        example: yannic
+
+  # Leave a message for the other person. Prints when the other person is next due a rundown,
+  # or immediately with hold: false. This script holds it for the evening rundown.
+  printarr_leave_message:
+    alias: "Leave a message for the other person"
+    sequence:
+      - variables:
+          day: "{{ now().date().isoformat() }}"
+      - action: rest_command.printarr_create_ticket
+        data:
+          recipient: "{{ to_user }}"
+          from_user: "{{ from_user }}"
+          to_user: "{{ to_user }}"
+          kind: note
+          tone: "{{ tone | default('neutral') }}"
+          message: "{{ message }}"
+          hold: true
+          hold_key: "evening-{{ to_user }}-{{ day }}"
+          idempotency_key: "message:{{ from_user }}:{{ to_user }}:{{ day }}:{{ message | md5 }}"
+        continue_on_error: true
+    fields:
+      from_user:
+        description: "Who is writing: yannic or wife"
+      to_user:
+        description: "Who it is for: yannic or wife"
+      message:
+        description: "Up to 2000 characters"
+      tone:
+        description: "neutral, loving, reminder, playful, gentle, firm or urgent"

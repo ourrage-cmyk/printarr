@@ -1,0 +1,42 @@
+# rest_command entries for printarr. Paste under rest_command: in configuration.yaml,
+# or into a package file. Replace PRINTARR_URL with the printarr address.
+#
+# Every POST sends a JSON body. Templates are rendered by HA when the automation runs.
+
+rest_command:
+  printarr_create_ticket:
+    url: "http://PRINTARR_URL/api/v1/tickets"
+    method: POST
+    content_type: "application/json"
+    timeout: 15
+    payload: >-
+      {
+        "recipient": "{{ recipient }}",
+        "message": {{ message | tojson }},
+        "kind": "{{ kind | default('note') }}",
+        "tone": "{{ tone | default('neutral') }}",
+        "template": "auto",
+        "sender": "home-assistant",
+        {% if title is defined and title %}"title": {{ title | tojson }},{% endif %}
+        {% if from_user is defined and from_user %}"from_user": "{{ from_user }}",{% endif %}
+        {% if to_user is defined and to_user %}"to_user": "{{ to_user }}",{% endif %}
+        {% if hold_key is defined and hold_key %}"hold": true, "hold_key": "{{ hold_key }}",{% endif %}
+        {% if idempotency_key is defined and idempotency_key %}"idempotency_key": "{{ idempotency_key }}",{% endif %}
+        {% if blocks is defined and blocks %}"blocks": {{ blocks | tojson }},{% endif %}
+        "text_state": "formatted"
+      }
+
+  printarr_release_hold:
+    url: "http://PRINTARR_URL/api/v1/holds/{{ hold_key }}/release"
+    method: POST
+    timeout: 15
+
+  printarr_cancel_ticket:
+    url: "http://PRINTARR_URL/api/v1/tickets/{{ ticket_id }}/cancel"
+    method: POST
+    timeout: 10
+
+  printarr_release_ticket:
+    url: "http://PRINTARR_URL/api/v1/tickets/{{ ticket_id }}/release"
+    method: POST
+    timeout: 10
