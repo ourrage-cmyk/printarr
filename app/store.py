@@ -242,8 +242,9 @@ class TicketStore:
         return {str(row["key"]): row["n"] for row in rows}
 
     def cancel(self, ticket_id: str) -> dict[str, Any]:
+        """Cancel a ticket that has not printed: pending, or held (including a pile ticket)."""
         return self._guarded_update(
-            ticket_id, ("pending",), "status = 'cancelled'", ()
+            ticket_id, ("pending", "held"), "status = 'cancelled'", ()
         )
 
     def release(self, ticket_id: str) -> dict[str, Any]:

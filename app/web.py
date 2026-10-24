@@ -582,7 +582,7 @@ async function loadTickets() {
     const rows = tickets.map((t) => {
       const actions = [];
       if (t.status === 'held') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/release">Release</button>`);
-      if (t.status === 'pending') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/cancel">Cancel</button>`);
+      if (t.status === 'pending' || t.status === 'held') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/cancel">Cancel</button>`);
       if (t.status === 'failed' || t.status === 'cancelled') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/retry">Retry</button>`);
       const text = (t.title ? t.title + ': ' : '') + t.message;
       return `<tr><td><span class="st ${esc(t.status)}">${esc(STATUS_LABEL[t.status] || t.status)}</span></td>
