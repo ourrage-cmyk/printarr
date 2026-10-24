@@ -136,3 +136,60 @@ data in `./dev-data`:
 ```sh
 docker compose -f docker-compose.dev.yml up --build
 ```
+
+## Test with the laptop standing in for the printer
+
+Until the Epson arrives, the server can talk to the printer simulator on the laptop. The
+server's printarr container sends raw ESC/POS to the laptop on TCP 9100, exactly as it would to
+the TM-T88V. The simulator shows each receipt in a browser on the laptop.
+
+**On the laptop (Windows, PowerShell):**
+
+1. Start the simulator. It listens on TCP 9100 on all network interfaces, and its web page is on
+   localhost only.
+   ```powershell
+   cd C:\CLAUDE\printer-simulator
+   docker compose up -d --build
+   Invoke-WebRequest http://localhost:8080/api/health
+   ```
+2. Find the laptop's LAN address. Use the IPv4 address of the adapter that is on the home network:
+   ```powershell
+   ipconfig
+   ```
+   Ask the router for a fixed (DHCP reservation) address for the laptop, so it does not change.
+3. Allow inbound TCP 9100 through Windows Firewall on the private network. Run this once, as
+   administrator. Check that the Wi-Fi or Ethernet network is set to **Private** first:
+   ```powershell
+   New-NetFirewallRule -DisplayName "Printer simulator 9100" -Direction Inbound -Protocol TCP -LocalPort 9100 -Action Allow -Profile Private
+   ```
+4. Keep the laptop awake while you test. If it sleeps, the server reports the printer as
+   unreachable. Turn off sleep on AC power in Windows settings.
+
+**On TrueNAS (shell), check the port is open before you start printarr:**
+
+```sh
+timeout 3 bash -c '</dev/tcp/<laptop-ip>/9100' && echo "port 9100 open" || echo "port 9100 closed"
+```
+
+**Install or update printarr with the laptop as the printer.** In the YAML from
+[`docker-compose.yml`](../../docker-compose.yml), set:
+
+```yaml
+PRINTARR_PRINTER_MODE: tcp
+PRINTARR_PRINTER_HOST: <laptop-ip>   # the laptop, for now
+PRINTARR_PRINTER_PORT: "9100"
+```
+
+Save the app. Then check it, from any machine on the LAN:
+
+```sh
+curl http://<nas-ip>:8000/api/v1/printer                  # reachable: true
+curl -X POST http://<nas-ip>:8000/api/v1/printer/test      # prints a test receipt
+```
+
+The receipt appears in the simulator at `http://localhost:8080` on the laptop. For the full
+check, run `sh scripts/smoke-test.sh http://<nas-ip>:8000` as well.
+
+**Monday, switch to the real printer.** Set `PRINTARR_PRINTER_HOST` to the TM-T88V's IP address
+(give the printer a fixed address first) and save. Nothing else changes. Tickets, settings and
+backups stay as they are.
