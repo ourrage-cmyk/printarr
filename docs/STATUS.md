@@ -17,6 +17,7 @@
 - Ticket PNGs kept for printed and failed tickets: `GET /api/v1/ticket-images` and `GET /api/v1/tickets/{id}/image` (PR #78).
 - Docs refreshed for the NAS install on port 30100 (README, TrueNAS guide, compose with restart and pull_policy always).
 - Hermes skill at `docs/agents/hermes-skill/SKILL.md`, with copies in `skills/printarr/` and `docs/integrations/hermes/`. `tests/test_docs.py` keeps the copies equal.
+- READY8 on main: kind marks at the top-right (envelope, bolt, clock, bulb, cart) and tone outlines. The docs describe them.
 - Schedule-creation control removed from the web UI. The container holds scheduled tickets but never creates schedules.
 - Test suite: 281 tests, all passing on main.
 

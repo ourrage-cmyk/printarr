@@ -146,8 +146,7 @@ The tone sets the feeling at a glance, with one ornament and one icon per tone:
 - **Barcode border:** `urgent`. Needs attention.
 - **White on black title:** `critical`. The only inverted title, for things that need attention now.
 
-Each kind (`morning`, `evening`, `note`, `shopping`, `todo`, `alert`, `fun`, `reminder`) has its own look on the paper,
-and each block's mood changes how it looks. Printed tickets never print the tone name.
+Five block types wear a small mark at the top-right corner of their card: a note (`message`) an envelope, an alert (`alert`) a bolt, a reminder (`tip`) a clock, a fun fact (`fact`) a bulb, and a shopping list (`checklist`) a cart. The mark follows the block, not the `kind` field. The outline follows the tone: heavy square corners for `urgent`, `upset` and `firm_complaint`, the heaviest for `critical`, and rounder corners for `loving`, `gentle_warning`, `playful` and `happy`. Printed tickets never print the tone name.
 The rules and the reasons behind them are in [`docs/design/README.md`](docs/design/README.md), the
 design tokens are in [`docs/design/system/tokens.json`](docs/design/system/tokens.json), and the taste
 guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide/taste-guide.html).

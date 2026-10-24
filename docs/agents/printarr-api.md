@@ -87,6 +87,14 @@ Writing tickets, for agents:
 
 `POST /api/v1/tickets/slots` with `template` 101 or 102 and `slots` checked against `GET /api/v1/templates/{id}/schema`.
 
+## Kinds, tones and marks
+
+- **Kinds** (`kind`): `morning`, `evening`, `note`, `shopping`, `todo`, `alert`, `fun`, `reminder`. Default `note`. A kind is logged and sent with the ticket.
+- **Tones** (`tone`): `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`. Default `neutral`. Printed tickets never print the tone name.
+- **Moods** (per block): `neutral`, `happy`, `excited`, `loving`, `playful`, `reminder`, `factual`, `sad`, `confused`, `upset`, `gentle_warning`, `firm_complaint`, `critical`, `urgent`. A mood changes the ornament, icon, accent and outline only.
+- **Kind marks:** the top-right corner carries an envelope on `message`, a bolt on `alert`, a clock on `tip`, a bulb on `fact` and a cart on `checklist`. Choose the block type that fits the content.
+- **Outline:** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, `critical` the heaviest, and the soft tones (`loving`, `gentle_warning`, `playful`, `happy`) a rounder corner.
+
 ## Reading back
 
 - `GET /api/v1/tickets/{id}`: one ticket.
