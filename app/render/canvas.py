@@ -9,11 +9,31 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from functools import lru_cache
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
 from app.render.glyphs import GLYPHS
+
+# Inter (SIL OFL 1.1), the full-line body face. Titles and numerals stay in the 5x7 dot matrix.
+INTER_PATH = Path(__file__).parent / "fonts" / "Inter.ttf"
+INTER_CAP_RATIO = 0.727  # Inter's cap height as a share of the em
 
 PAPER_DOTS = 512  # 80 mm paper, 512 dots wide
 MAX_HEIGHT = 2400
 ROW_BYTES = PAPER_DOTS // 8
+
+
+@lru_cache(maxsize=8)
+def _inter(cap: int) -> ImageFont.FreeTypeFont:
+    """Inter at the size whose capital H is `cap` dots tall."""
+    return ImageFont.truetype(str(INTER_PATH), round(cap / INTER_CAP_RATIO))
+
+
+def solid_width(text: str, cap: int = 21) -> int:
+    """Advance width of full-line text at cap height `cap`, in dots."""
+    return int(_inter(cap).getlength(text))
 
 
 def js_round(value: float) -> int:
@@ -96,6 +116,35 @@ class Canvas:
         for sx, sy, w, h in self.glyph_dots(x, y, text, scale):
             self.fill_rect(sx, sy, w, h)
         return 6 * scale * len(text)
+
+    def solid(self, x: int, y: int, text: str, cap: int = 21) -> int:
+        """Full-line text in Inter, cap height `cap` dots, its cap top at y. Returns the advance width."""
+        font = _inter(cap)
+        left, _, right, _ = font.getbbox(text)
+        cap_top = font.getbbox("H")[1]
+        pad = 2
+        width = max(1, right - left) + 2 * pad
+        image = Image.new("1", (width, cap + 2 * pad + 4), 1)  # 1 is white in Pillow
+        # Put the capital H's top on image row `pad`, and the text's left edge on column `pad`.
+        ImageDraw.Draw(image).text((pad - left, pad - cap_top), text, font=font, fill=0)
+        pixels = image.load()
+        for py in range(image.height):
+            for px in range(image.width):
+                if pixels[px, py] == 0:
+                    self.set_px(x + px - pad, y + py - pad)
+        return int(font.getlength(text))
+
+    def row_solid(self, x0: int, x1: int, y: int, label: str, value: object, cap: int = 21) -> None:
+        """Label, dot leaders, then the value right-aligned at x1, all in full-line text."""
+        tail = str(value)
+        label_w = int(_inter(cap).getlength(label))
+        tail_w = int(_inter(cap).getlength(tail))
+        self.solid(x0, y, label, cap)
+        self.solid(x1 - tail_w, y, tail, cap)
+        dx = x0 + label_w + 8
+        end = x1 - tail_w - 8
+        for xx in range(dx, end, 6):
+            self.fill_rect(xx, y + cap - 3, 2, 2)
 
     def text_in(self, x0: int, x1: int, y: int, text: str, scale: int = 2) -> None:
         self.text(x0 + (x1 - x0 - text_width(text, scale)) // 2, y, text, scale)
