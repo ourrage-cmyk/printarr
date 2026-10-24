@@ -1,0 +1,28 @@
+# Laptop development: printarr and the printer simulator as two separate services.
+#   docker compose -f docker-compose.dev.yml up --build
+# Web page: http://localhost:8000/   Simulator: http://localhost:8080/
+# Data is kept in ./dev-data (ignored by git).
+services:
+  printarr:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PRINTARR_PRINTER_MODE: tcp
+      PRINTARR_PRINTER_HOST: simulator           # the simulator service below, on TCP 9100
+      PRINTARR_PRINTER_PORT: "9100"
+      PRINTARR_LLM_ENABLED: "off"                # no model needed for development
+    volumes:
+      - ./dev-data:/data
+    depends_on:
+      - simulator
+
+  simulator:
+    # Placeholder until the simulator source is in this repo under simulator/.
+    # Replace with the simulator's image, or set build: ./simulator once it lives here.
+    image: ghcr.io/ourrage-cmyk/printer-simulator:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "9100:9100"
