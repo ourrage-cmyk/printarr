@@ -364,6 +364,9 @@ def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: s
         greeting: dict[str, Any] = {"greeting": head or "TODAY"}
         if text:
             greeting["summary"] = text  # the renderer shortens it if it runs long
+        signer = slots.get("from") or slots.get("sign_off") or sender
+        if signer and not slots.get("tip") and not slots.get("metrics"):
+            greeting["from"] = signer  # nothing below carries the signature, so the greeting does
         blocks.append({"type": "greeting", "mood": "neutral", "span": 3, "slots": greeting})
     blocks.extend(_metric_block(metric, client) for metric in slots.get("metrics", []))
     if slots.get("tip"):

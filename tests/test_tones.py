@@ -32,7 +32,8 @@ FAMILIES = {
     "bandTicks": ("reminder",),
     "bandStipple": ("sad", "confused"),
     "bandHatch": ("gentle_warning", "upset"),
-    "bandBarcode": ("firm_complaint", "urgent"),
+    "bandBlocks": ("firm_complaint",),
+    "bandBarcode": ("urgent",),
     "bandFill": ("critical",),
 }
 
