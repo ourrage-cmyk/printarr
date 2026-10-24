@@ -35,3 +35,17 @@
 - Spoken notes will print straight away. Reminders go on the scheduled slip. The sender is inferred from the addressee.
 - URLs, tokens and printer addresses are set in the first-run setup wizard, never in environment variables.
 - The paper is an 80 mm roll, with 512 dots printable at 180 dpi (about 72 mm). The first roll arrives Monday.
+
+## Model timeouts and alerts (2026-10-24)
+
+Root cause of the "decision model / LLM not available" Telegram alerts: the model timeout was 5 s, and Ollama unloads a model after about 5 idle minutes. The first call after an unload then waited 15.7 s for d1 (8.8 s for granite) and timed out, so each cold call alerted. Warm calls take 0.06 s (d1) and 0.11 s (granite).
+
+What changed:
+- The timeout defaults to 30 s. Migration 7 raises a stored 5 s, the old seed. A value set by hand is kept.
+- printarr warms both models at start and every 4 minutes: d1 through /v1/systemone, granite through /api/generate with keep_alive 30m. d1 rejects /api/generate.
+- A model failure is logged at once but alerts only after 3 failures within 15 minutes. A success clears the count. Telegram gets the real cause: the HTTP status, the timeout, or the network error.
+- A failed model never blocks a print. The rules choose, and the text is printed as sent.
+- Granite calls send max_tokens 1024. A small budget left the answer empty.
+
+Recommended on the Ollama server, outside printarr: set OLLAMA_KEEP_ALIVE=30m so every request keeps its model loaded. Warm-up covers it either way.
+

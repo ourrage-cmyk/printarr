@@ -29,7 +29,7 @@ class Settings:
     llm_base_url: str = ""
     llm_model: str = "d1:latest"  # decision model: template and decoration choice only
     llm_text_model: str = "granite4.2:3b"  # text model: for paragraphs, later
-    llm_timeout: float = 5.0
+    llm_timeout: float = 30.0  # a cold d1 load took 15.7 s, so 5 s always timed out; warm-up keeps loads off the print path
     backup_enabled: bool = True
     backup_hour: int = 3  # local hour for the nightly copy
     backup_keep: int = 7  # nightly copies kept
@@ -67,7 +67,7 @@ def load_settings() -> Settings:
         llm_base_url=_env("LLM_BASE_URL", ""),
         llm_model=_env("LLM_MODEL", "d1:latest"),
         llm_text_model=_env("LLM_TEXT_MODEL", "granite4.2:3b"),
-        llm_timeout=float(_env("LLM_TIMEOUT", "5")),
+        llm_timeout=float(_env("LLM_TIMEOUT", "30")),
         backup_enabled=_env("BACKUP", "on").lower() in _TRUE_VALUES,
         backup_hour=int(_env("BACKUP_HOUR", "3")),
         backup_keep=int(_env("BACKUP_KEEP", "7")),

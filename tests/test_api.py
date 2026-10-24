@@ -232,12 +232,13 @@ def test_unformatted_text_is_sent_as_is_when_text_model_is_down(settings, monkey
             "/api/v1/settings/model",
             json={"enabled": True, "base_url": "http://127.0.0.1:1/v1", "timeout": 1},
         )
-        body = client.post(
-            "/api/v1/tickets",
-            json={"recipient": "yannic", "message": "um dinner", "text_state": "unformatted"},
-        ).json()
-        assert body["message"] == "um dinner"
-        assert any("text model down" in text for text in sent)
+        for _ in range(3):  # an alert needs repeated failures
+            body = client.post(
+                "/api/v1/tickets",
+                json={"recipient": "yannic", "message": "um dinner", "text_state": "unformatted"},
+            ).json()
+            assert body["message"] == "um dinner"  # printed as sent every time
+        assert any("text model failed" in text for text in sent)
 
 
 def test_a_held_ticket_can_be_cancelled(settings):
