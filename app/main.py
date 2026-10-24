@@ -28,6 +28,7 @@ from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
 from app.printer import PrinterError, Transport, build_transport
+from app.status import FAULT_TEXT, decode
 from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks
@@ -58,15 +59,6 @@ SETTING_KEYS = {
 }
 T = TypeVar("T")
 
-# Printer faults read from the real-time status bytes. (request, bit mask, alert text).
-# Bit masks from the Command Reference, dle_eot: n=2 bit 2 cover open, n=3 bit 3 autocutter error,
-# n=4 bits 5-6 paper end sensor.
-PRINTER_FAULTS_BITS = {
-    "cover": (2, 0x04, "printer cover open"),
-    "cutter": (3, 0x08, "autocutter error"),
-    "paper": (4, 0x60, "paper out"),
-}
-PRINTER_FAULTS = {key: text for key, (_, _, text) in PRINTER_FAULTS_BITS.items()}
 
 API_DESCRIPTION = """
 Queue receipt tickets for the Epson TM-T88V. Clients send plain text. The API picks a
@@ -358,8 +350,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         else:
             checks["decision_model"] = "down" if notifier.is_active("model") else "ok"
         checks["scheduler"] = "running" if runtime["scheduler"] else "disabled"
-        for key, label in PRINTER_FAULTS.items():
+        for key in FAULT_TEXT:
             checks[key] = "fault" if notifier.is_active(key) else "ok"
+        checks["paper_near_end"] = "warning" if runtime.get("paper_near_end") else "ok"
         up = checks["database"] == "ok" and checks["printer"] == "ok"
         return {"status": "ok" if up else "down", "checks": checks}, up
 
@@ -371,14 +364,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             notifier.problem("printer", f"printer unreachable: {exc}")
             return
         notifier.recovered("printer", "printer is reachable again")
-        for key, (request, bit, text) in PRINTER_FAULTS_BITS.items():
-            value = answers.get(request)
-            if value is None:
-                continue  # no answer for this request, so say nothing rather than guess
-            if value & bit:
-                notifier.problem(key, text)
+        status = decode(answers)
+        for key in status.known & set(FAULT_TEXT):
+            if key in status.faults:
+                notifier.problem(key, FAULT_TEXT[key])
             else:
-                notifier.recovered(key, f"{text.split(':')[0]} cleared")
+                notifier.recovered(key, f"{FAULT_TEXT[key]} cleared")
+        if "paper_near_end" in status.known:
+            runtime["paper_near_end"] = "paper_near_end" in status.warnings  # shown in health, not alerted
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
