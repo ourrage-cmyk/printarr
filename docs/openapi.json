@@ -357,6 +357,120 @@
         }
       }
     },
+    "/api/v1/blocks": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "List Blocks",
+        "description": "The block catalogue: each type, what it is for, its moods and where its slot schema is.",
+        "operationId": "list_blocks_api_v1_blocks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Blocks Api V1 Blocks Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/blocks/{name}/schema": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Block Schema Route",
+        "description": "The slots of one block type as JSON Schema.",
+        "operationId": "block_schema_route_api_v1_blocks__name__schema_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Block Schema Route Api V1 Blocks  Name  Schema Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/compose": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Create Composed Ticket",
+        "description": "Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first.",
+        "operationId": "create_composed_ticket_api_v1_tickets_compose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComposeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/people/{person}/release": {
       "post": {
         "tags": [
@@ -1573,6 +1687,176 @@
         "type": "object",
         "title": "AlertSettingsPatch"
       },
+      "ComposeCreate": {
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "enum": [
+              "yannic",
+              "wife"
+            ],
+            "title": "Recipient"
+          },
+          "blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Blocks",
+            "description": "Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods."
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "note",
+                  "shopping",
+                  "todo",
+                  "alert",
+                  "fun",
+                  "reminder"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "loving",
+                  "neutral",
+                  "reminder",
+                  "playful",
+                  "gentle",
+                  "firm",
+                  "urgent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          },
+          "from_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From User"
+          },
+          "to_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To User"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "send_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send At"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "at",
+                  "on_release"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
+          "hold": {
+            "type": "boolean",
+            "title": "Hold",
+            "default": false
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "recipient",
+          "blocks"
+        ],
+        "title": "ComposeCreate"
+      },
       "HASettingsOut": {
         "properties": {
           "url": {
@@ -2633,6 +2917,11 @@
               }
             ],
             "title": "Strip Trigger"
+          },
+          "moods": {
+            "type": "string",
+            "title": "Moods",
+            "default": ""
           }
         },
         "type": "object",

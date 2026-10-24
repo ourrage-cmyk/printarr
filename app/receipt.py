@@ -92,10 +92,10 @@ def render_ticket_lines(
     if template.design:
         return list(extra)  # the image is the whole ticket; its live lines are the bitmap
     if template.group == "slots":
-        from app.slots import slot_lines  # imported here: app.slots imports this module
+        from app.compose import ticket_lines  # imported here: app.compose imports app.receipt
 
         slots = json.loads(str(ticket.get("slots_json") or "{}"))
-        return list(extra) or slot_lines(slots)
+        return list(extra) or ticket_lines(slots, None)
     decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
     return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
 
