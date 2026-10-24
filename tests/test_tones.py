@@ -60,7 +60,8 @@ def test_bands_ink_rises_with_urgency():
     inks = {b: ink(b) for b in FAMILIES if b != "none"}
     assert len(set(inks.values())) == len(inks)
     order = sorted(inks, key=inks.get)
-    assert order[-2:] == ["bandBarcode", "bandFill"] and order[0] == "bandDots"
+    assert order[-2:] == ["bandBarcode", "bandFill"]  # urgent is the darkest band, critical a solid bar
+    assert order.index("bandDots") < order.index("bandHatch") < order.index("bandBarcode")
 
 
 def test_urgent_tones_have_a_heavier_outline_and_soft_tones_a_rounder_one():

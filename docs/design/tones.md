@@ -38,7 +38,7 @@ bolt for an alert, clock for a reminder, bulb for a fun fact and cart for a shop
 
 ## Mood bands (one per card, at the top)
 
-The band carries the mood; it is drawn once at the top of the card, 20 dots tall, with no second ornament and no mood words. Ink rises with urgency.
+The band carries the mood; it is drawn once at the top of the card, 28 dots tall, with no second ornament and no mood words. Ink rises with urgency.
 
 | Band | Moods |
 | --- | --- |
