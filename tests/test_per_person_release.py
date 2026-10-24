@@ -9,7 +9,7 @@ import dataclasses
 
 from fastapi.testclient import TestClient
 
-from app.ha import HAClient
+from app.ha import HAClient, HAError
 from app.main import create_app
 from app.store import TicketStore
 from tests.test_strips import Recorder
@@ -161,3 +161,26 @@ def test_a_briefing_preset_reads_its_graph_at_print_time(settings, tmp_path, mon
         fake.history["sensor.steps"] = [5.0, 6.0, 7.0, 8.0]
         release(client, "yannic")
         assert "history sensor.steps" in fake.reads, "the graph is read at release"
+
+
+def test_an_unreachable_home_assistant_never_blocks_a_queued_ticket(settings, tmp_path, monkeypatch):
+    fake = setup_ha(monkeypatch)
+
+    def down(entity_id: str) -> str:
+        raise HAError("Home Assistant unreachable")
+
+    monkeypatch.setattr(fake, "state", down)
+    app, transport, db_path = make(settings, tmp_path)
+    with TestClient(app) as client:
+        set_ha(db_path)
+        queued = client.post("/api/v1/tickets", json={
+            "kind": "note", "tone": "neutral", "recipient": "yannic", "sender": "home-assistant",
+            "message": "Steps check", "delivery": "on_release",
+            "blocks": [{"type": "value", "entity_id": "sensor.steps", "label": "STEPS"}],
+        })
+        assert queued.status_code == 201, queued.text
+        assert queued.json()["status"] == "held"
+
+        result = release(client, "yannic")
+        assert printed_ids(result) == {queued.json()["id"]}, "the ticket prints even though Home Assistant is down"
+        assert len(transport.payloads) == 1

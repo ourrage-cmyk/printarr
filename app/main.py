@@ -48,7 +48,7 @@ from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
-from app.blocks import Block, resolve_blocks
+from app.blocks import Block, resolve_blocks, unavailable_lines
 from app.ha import HAClient, HAError
 from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
@@ -820,14 +820,15 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return HAClient(url, token) if url and token else None
 
     def prepare_blocks(body: TicketCreate) -> list[Line]:
-        """Fetch Home Assistant data now. An unreachable Home Assistant rejects the request."""
+        """Check the layout with Home Assistant data now. An unreachable Home Assistant never blocks a ticket:
+        the data is read again at print time, and the layout check falls back to an unavailable mark."""
         if not body.blocks:
             return []
         try:
             return resolve_blocks(body.blocks, home_assistant())
         except HAError as exc:
-            logger.warning("home assistant data unavailable: %s", exc)
-            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
+            logger.warning("home assistant data unavailable at queue time: %s", exc)
+            return unavailable_lines(body.blocks)
 
     def render_preview(body: TicketCreate, choice: Choice, message: str, extra: list[Line]) -> str:
         receipt = Receipt(
@@ -901,10 +902,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
         if body.blocks and home_assistant() is None:
             raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
-        try:
+        try:  # an unreachable Home Assistant never blocks a ticket: it prints with an unavailable mark
             block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
         except HAError as exc:
-            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
+            logger.warning("home assistant data unavailable at queue time: %s", exc)
+            block_lines = unavailable_lines(body.blocks)
         render_started = time.perf_counter()
         try:  # check the layout now, so a queued ticket always prints
             encode(
