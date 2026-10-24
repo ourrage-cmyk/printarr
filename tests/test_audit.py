@@ -191,3 +191,34 @@ def test_a_graph_fills_its_card_down_to_the_axis():
     strips._draw_row(c, rows[0])
     assert c.y == p.units * strips.UNIT_H  # drawn at the card's height
     assert height - 2 * strips.PAD_V >= p.content_h
+
+
+def test_a_ticket_that_spans_strips_flows_with_one_tile_gap():
+    import numpy as np
+
+    from app import compose
+
+    text = " ".join(f"Sentence number {i} says something about the dogs." for i in range(120))
+    lines, _ = compose.compose_render([{"type": "message", "mood": "neutral", "span": 3, "slots": {"paragraph": text, "from": "H"}}], None)
+    assert len(lines) > 2
+    gaps = []
+    for a, b in zip(lines, lines[1:]):
+        wa, ha, da = a.raster
+        wb, hb, db = b.raster
+        last = np.where(np.frombuffer(da, dtype=np.uint8).reshape(ha, wa).any(axis=1))[0][-1]
+        first = np.where(np.frombuffer(db, dtype=np.uint8).reshape(hb, wb).any(axis=1))[0][0]
+        gaps.append((ha - 1 - last) + first)
+    assert all(gap <= strips.GAP_V for gap in gaps), gaps  # no cut margin between the pieces of one ticket
+
+
+def test_the_blank_before_the_cut_is_fed_with_the_cut_not_drawn_in_the_picture():
+    import numpy as np
+
+    from app import compose
+    from app.templates import CUT_FEED
+
+    lines, _ = compose.compose_render([{"type": "tip", "mood": "neutral", "span": 3, "slots": {"tip": "Leave early."}}], None)
+    width, height, data = lines[0].raster
+    rows = np.frombuffer(data, dtype=np.uint8).reshape(height, width).any(axis=1)
+    assert rows[0] and rows[-1]  # ink on the first and the last row: no margin of its own
+    assert CUT_FEED >= 3

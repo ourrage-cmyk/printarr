@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.receipt import Line
+from app.templates import CUT_FEED  # re-exported: lines fed just before the cut
 from app.text import glyph_raster, printable
 
 ESC = b"\x1b"

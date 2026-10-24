@@ -24,9 +24,9 @@
       "label": "dot5x7 scale 2, uppercase"
     },
     "margins": {
-      "top_dots": 60,
-      "bottom_dots": 60,
-      "note": "Visible blank above and below a strip, 60 dots (about 0.33 in at 180 dpi). With the one-line cutter feed after it, the blank at the end is about half an inch. The strip has no other blank."
+      "top_dots": 0,
+      "bottom_dots": 0,
+      "note": "A strip carries no blank of its own. The blank before the cut (about 90 dots, half an inch) is fed with the cut command, once at the end of the whole piece."
     },
     "strip_rules": {
       "max_blocks": 5,
