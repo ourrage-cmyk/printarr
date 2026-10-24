@@ -26,6 +26,27 @@ rest_command:
         "text_state": "formatted"
       }
 
+  # Briefings and notes from slots (template 101 Briefing, 102 Note). Accepts hold, hold_key,
+  # idempotency_key and blocks, so a held briefing can be prepared before the phone is unplugged.
+  printarr_create_slot_ticket:
+    url: "http://PRINTARR_URL/api/v1/tickets/slots"
+    method: POST
+    content_type: "application/json"
+    timeout: 15
+    payload: >-
+      {
+        "template": {{ template | default(101) }},
+        "recipient": "{{ recipient }}",
+        "sender": "home-assistant",
+        "kind": "{{ kind | default('morning') }}",
+        "tone": "{{ tone | default('neutral') }}",
+        "slots": {{ slots | default({}) | tojson }},
+        {% if hold_key is defined and hold_key %}"hold": true, "hold_key": "{{ hold_key }}",{% endif %}
+        {% if idempotency_key is defined and idempotency_key %}"idempotency_key": "{{ idempotency_key }}",{% endif %}
+        {% if blocks is defined and blocks %}"blocks": {{ blocks | tojson }},{% endif %}
+        "from_user": null
+      }
+
   printarr_release_hold:
     url: "http://PRINTARR_URL/api/v1/holds/{{ hold_key }}/release"
     method: POST

@@ -65,9 +65,13 @@ and home temperature (shared, trending). It explains each choice in step 6.
 
 Greeting is left out, so printarr writes "Good morning, Yannic" from the send time.
 
-## Not yet accepted
+## Held version
 
-Home Assistant releases this briefing when the phone is unplugged, which needs `hold`, `hold_key` and
-`idempotency_key` on the slot endpoint. Those are requested from the API thread. Until then, use
-`POST /tickets` with a plain `message`, `hold: true`, `hold_key: morning-yannic-2026-10-26` and
-`idempotency_key: morning:yannic:2026-10-26`.
+To have Home Assistant release this briefing when the phone is unplugged, send it held instead of
+with `send_at`. Replace `send_at` in the payload with:
+
+```json
+"hold": true,
+"hold_key": "morning-yannic-2026-10-26",
+"idempotency_key": "morning:yannic:2026-10-26"
+```
