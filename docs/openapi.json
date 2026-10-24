@@ -1777,6 +1777,22 @@
             "description": "Keep the ticket until POST /tickets/{id}/release or /holds/{hold_key}/release.",
             "default": false
           },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key",
+            "description": "Makes the request safe to repeat, for example after a timeout. A second request with the same key returns the first ticket and prints nothing new. Use one key per logical ticket, such as morning:yannic:2026-10-26.",
+            "examples": [
+              "morning:yannic:2026-10-26"
+            ]
+          },
           "hold_key": {
             "anyOf": [
               {
