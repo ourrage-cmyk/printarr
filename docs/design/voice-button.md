@@ -109,7 +109,7 @@ Response, for a shopping item (201): `"action": "shopping_add"`, `"items": ["oat
 Rules for the endpoint:
 
 - `dry_run: true` returns the interpretation without queuing or writing. Use it in the web UI and in tests.
-- Shopping items are written to the HA list, not to printarr's database (see below).
+- Shopping items are written to the HA list, managed by Hermes, not to printarr's database (see below).
 - The same transcript sent twice in one day should not make two tickets. Use an `idempotency_key` derived from the transcript and the day, as the HA script already does.
 - An unknown or unclear transcript returns 422, with `detail` and a `how_to_fix` field.
 
@@ -130,10 +130,11 @@ This is the pattern the rest of the API should follow. Keep it in the endpoint, 
 
 ## Shopping list
 
-**Recommendation: keep the list in Home Assistant (`todo.shopping_list`), not in printarr.**
+**Recommendation: keep the list in Home Assistant (`todo.shopping_list`), not in printarr. Hermes manages it through HA.**
 
 Why:
 
+- Yannic confirmed the list lives in Home Assistant and stays managed by Hermes.
 - Assist already writes to a shopping list. Hermes can read and write the same list through HA, and so can the phone app.
 - Printarr already prints it: `printarr_print_shopping_list` reads the entity and sends a `shopping` ticket with `delivery: now`.
 - A second copy in printarr would drift.
@@ -166,7 +167,8 @@ Open check for Yannic: does your Nabu Casa subscription (or self-hosted setup) e
 ## Security and privacy
 
 - Audio stays on the LAN when using faster-whisper. The transcript is logged with the ticket, like any other message.
-- The intake endpoint has no auth, like the rest of the API on the LAN. Do not expose `/intake` through the domain without adding a token check first.
+- The API is LAN-only, and that stays the rule. No API key is added for `/intake` or the rest of the API. The API is not exposed to the internet by this project.
+- If Yannic later exposes the web UI through his domain, he decides that himself, and puts an authentication portal in front of it. That portal, not an API key, is the control for remote access.
 - Messages between the two of you are private. The printed strip is visible to anyone in the room, so a message is printed only on that person's own strip.
 
 ## What this needs from the API thread
