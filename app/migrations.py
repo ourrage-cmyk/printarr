@@ -105,11 +105,24 @@ def _add_slots_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE tickets ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
 
 
+def _add_delivery_columns(conn: sqlite3.Connection) -> None:
+    """Version 5: how a ticket is delivered (now, at, on_release) and which strip printed it."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    for name, definition in (
+        ("delivery", "TEXT NOT NULL DEFAULT 'now'"),
+        ("strip_id", "TEXT"),
+        ("strip_trigger", "TEXT"),
+    ):
+        if name not in have:
+            conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
     _add_idempotency_index,  # version 3
     _add_slots_column,  # version 4
+    _add_delivery_columns,  # version 5
 )
 
 LATEST_VERSION = len(MIGRATIONS)

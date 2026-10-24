@@ -117,6 +117,7 @@ class TicketStore:
         model_scores: str = "",
         idempotency_key: str | None = None,
         slots_json: str = "",
+        delivery: str = "now",
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once.
 
@@ -139,14 +140,14 @@ class TicketStore:
                                      send_at_ms, next_attempt_ms, template_id, text_state,
                                      blocks_json, decorations, selection, created_at_ms, updated_at_ms,
                                      kind, tone, from_user, to_user, inbox_state, render_ms,
-                                     choice_source, model_scores, idempotency_key, slots_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     choice_source, model_scores, idempotency_key, slots_json, delivery)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
-                    choice_source or selection, model_scores, idempotency_key, slots_json,
+                    choice_source or selection, model_scores, idempotency_key, slots_json, delivery,
                 ),
             )
             except sqlite3.IntegrityError:
@@ -337,18 +338,59 @@ class TicketStore:
         claimed = [self.get(ticket_id) for ticket_id in ids]
         return [ticket for ticket in claimed if ticket is not None]
 
-    def mark_sent(self, ticket_id: str, print_ms: int | None = None) -> None:
+    def mark_sent(
+        self,
+        ticket_id: str,
+        print_ms: int | None = None,
+        strip_id: str | None = None,
+        strip_trigger: str | None = None,
+    ) -> None:
         now = now_ms()
         with closing(self._connect()) as conn:
             conn.execute(
                 """
                 UPDATE tickets
                 SET status = 'sent', printed_at_ms = ?, updated_at_ms = ?, last_error = NULL,
-                    print_ms = ?
+                    print_ms = ?, strip_id = ?, strip_trigger = ?
                 WHERE id = ?
                 """,
-                (now, now, print_ms, ticket_id),
+                (now, now, print_ms, strip_id, strip_trigger, ticket_id),
             )
+
+    def pile(self, recipient: str) -> list[dict[str, Any]]:
+        """A person's pile: held tickets that print on their next release, oldest first."""
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM tickets WHERE recipient = ? AND status = 'held' AND delivery = 'on_release' "
+                "ORDER BY created_at_ms ASC",
+                (recipient,),
+            ).fetchall()
+        return [_to_dict(row) for row in rows]
+
+    def claim(self, ticket_ids: list[str]) -> list[str]:
+        """Move held pile tickets to printing. Returns the ids this call won, so a repeat release cannot print twice."""
+        won: list[str] = []
+        now = now_ms()
+        with closing(self._connect()) as conn:
+            for ticket_id in ticket_ids:
+                cursor = conn.execute(
+                    "UPDATE tickets SET status = 'printing', updated_at_ms = ? "
+                    "WHERE id = ? AND status = 'held'",
+                    (now, ticket_id),
+                )
+                if cursor.rowcount == 1:
+                    won.append(ticket_id)
+        return won
+
+    def unclaim(self, ticket_ids: list[str]) -> None:
+        """Put claimed pile tickets back on hold after a failed print."""
+        now = now_ms()
+        with closing(self._connect()) as conn:
+            for ticket_id in ticket_ids:
+                conn.execute(
+                    "UPDATE tickets SET status = 'held', updated_at_ms = ? WHERE id = ? AND status = 'printing'",
+                    (now, ticket_id),
+                )
 
     def record_failure(self, ticket_id: str, error: str, retry_at_ms: int | None) -> None:
         """Retry later when retry_at_ms is set; otherwise mark the ticket failed."""
