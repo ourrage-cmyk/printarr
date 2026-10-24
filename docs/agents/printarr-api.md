@@ -24,6 +24,20 @@ Every 4xx has the same shape:
 
 Schema errors (a missing or wrongly typed field) return FastAPI's `detail` list, with `loc` giving the field path, and a `hint` that names the lists to check.
 
+## Scheduling is the agent's job
+
+printarr is deliberately dumb about time. It stores tickets, assigns templates and blocks to
+text, draws them, and holds a ticket until it is due:
+
+- `delivery: "at"` with `send_at` holds one ticket until that time, then prints it.
+- `delivery: "on_release"` (or `hold: true`) holds a ticket until someone releases it.
+- `POST /api/v1/people/{person}/release` prints a person's waiting tickets, when the caller says so.
+
+printarr never creates a recurring schedule, has no calendar, and the web UI has no schedule
+control. Any job that prints on a time or on arrival, such as the 17:00 shopping list, is set up by
+the agent (Hermes) outside printarr. It calls the API when the job runs, or sends the ticket
+with `send_at` ahead of time. A ticket with no schedule prints only when it is sent.
+
 ## Sending a ticket
 
 ### A plain message, printed now
@@ -87,10 +101,31 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 
 For the simulator on a laptop, point the printer at the laptop's address on TCP port 9100.
 
+## Shopping list
+
+The shopping list lives in Home Assistant and is managed by Hermes. It prints only when someone asks
+for it, or when the agent schedules a print. printarr does not hold the list and does not decide
+when to print it.
+
+## Voice and leave-a-message
+
+Deferred. No hardware is being bought. Messages can come from Hermes directly, or from a Telegram
+bot later. When built, a spoken note prints straight away so it can go on a fridge or mirror. A
+reminder goes on the scheduled slip instead. The sender is inferred from the addressee.
+
+## Setup
+
+URLs, tokens and the printer address are entered in the first-run setup wizard in the web UI. They are
+stored in the database, not in environment variables or the compose file. Nothing in this guide needs them.
+
+## Printer paper
+
+The printer takes an 80 mm roll. The print width is 512 dots at 180 dpi, about 72 mm.
+
 ## Not built yet
 
 - The setup wizard and credentials stored in the database only: in progress in its own thread.
-- Voice intake (`POST /api/v1/intake`): proposed in draft PR #44 (`docs/design/voice-button.md`), not built.
+- Voice intake (`POST /api/v1/intake`): deferred. The voice button is not being bought.
 - Graphs from Home Assistant history: graphs take a `series` list for now.
 - The decision model choosing block type and mood: `auto` resolves to `neutral` until it is built.
 - Shopping list: decided. It lives in Home Assistant and is managed by Hermes. printarr prints it on request or on arrival. The intake route for it is not built yet.

@@ -205,7 +205,6 @@ WEB_UI = r"""<!doctype html>
             <label class="f">Title <span class="opt">optional</span><input id="t-title" maxlength="80" placeholder="Dinner"></label>
             <label class="f">From <span class="opt">optional, for the log</span><input id="t-sender" maxlength="40" placeholder="hermes"></label>
           </div>
-          <label class="f">Print at <span class="opt">optional, your local time</span><input id="t-when" type="datetime-local"></label>
           <div class="grid2">
             <label class="check"><input id="t-hold" type="checkbox"> Hold until I release it</label>
             <label class="f">Hold name <span class="opt">optional</span><input id="t-hold-key" placeholder="user-home"></label>
@@ -508,8 +507,6 @@ function ticketBody() {
   if ($('t-hold').checked) {
     body.hold = true;
     if ($('t-hold-key').value.trim()) body.hold_key = $('t-hold-key').value.trim();
-  } else if ($('t-when').value) {
-    body.send_at = $('t-when').value + ':00';
   }
   return body;
 }
@@ -718,7 +715,6 @@ $('t-message').addEventListener('input', schedulePreview);
 $('t-title').addEventListener('input', schedulePreview);
 $('t-sender').addEventListener('input', schedulePreview);
 $('t-send').onclick = send;
-$('t-hold').onchange = () => { $('t-when').disabled = $('t-hold').checked; };
 $('refresh').onclick = loadTickets;
 $('tickets').onclick = (e) => { const path = e.target.dataset.act; if (path) act(path); };
 for (const id of ['hf-kind', 'hf-tone', 'hf-template', 'hf-status', 'hf-recipient', 'hf-date']) $(id).onchange = loadHistory;

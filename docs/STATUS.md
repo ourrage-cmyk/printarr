@@ -10,18 +10,28 @@
 - Log with timings, moods and strip ids; CSV and JSON export.
 - Backup export and import; health and metrics for monitoring.
 - OpenAPI export regenerated (`docs/openapi.json`).
-- Test suite: 255 tests, all passing on main.
+- Briefings and notes draw as cards in the shared shell (PR #54). Briefing metrics get 24 h Home Assistant sparklines.
+- Greeting starts a new strip at each release (PR #53).
+- Schedule-creation control removed from the web UI. The container holds scheduled tickets but never creates schedules.
+- Test suite: 281 tests, all passing on main.
 
 ## Still to fix or build
 
 - Setup wizard and database-held credentials (setup-wizard thread).
 - Home Assistant token must be entered in settings by Yannic.
 - Telegram bot token and chat id.
-- Voice intake and the parser (PR #44 design, waiting for Yannic's answers).
+- Voice button and intake: deferred by Yannic. No hardware is being bought.
 - Decision model choosing block type and mood (currently rules and `neutral`).
-- Graph series from Home Assistant history.
 - Evening rundown contents (missed messages, dogs, daily summary).
 - Simulator as printer: confirm the config over raw TCP 9100.
 - Grayscale and CJK or emoji output are unverified or unsupported.
-- Decided: the API is LAN-only with no API key. The web UI may be exposed later behind Yannic's own auth portal.
-- Decided: the shopping list lives in Home Assistant and is managed by Hermes. printarr prints it on request or on arrival.
+
+## Decided on 2026-10-24
+
+- The API is LAN-only, with no API key. The web UI may be exposed later behind Yannic's own auth portal.
+- The shopping list lives in Home Assistant and is managed by Hermes. It prints only on request or when the agent schedules it.
+- printarr never creates schedules. The agent (Hermes) sets all timed and recurring jobs through the API. The container only holds a ticket until it is due.
+- The voice button is deferred. No hardware is being bought. Messages can come from Hermes directly or from a Telegram bot.
+- Spoken notes will print straight away. Reminders go on the scheduled slip. The sender is inferred from the addressee.
+- URLs, tokens and printer addresses are set in the first-run setup wizard, never in environment variables.
+- The paper is an 80 mm roll, with 512 dots printable at 180 dpi (about 72 mm). The first roll arrives Monday.
