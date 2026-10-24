@@ -213,3 +213,28 @@ def test_a_composed_greeting_starts_a_new_strip_in_the_pile(settings):
     tip = {"template_id": 103, "slots_json": json.dumps({"blocks": [{"type": "tip"}]})}
     assert opens_strip(briefing) and opens_strip(composed)
     assert not opens_strip(note) and not opens_strip(tip)
+
+
+def test_tickets_printed_together_lose_the_cut_margins_between_them():
+    from app.receipt import Line
+    from app.scheduler import INNER_GAP
+
+    def part(top, body, bottom):
+        data = bytes(64 * top) + b"\xff" * (64 * body) + bytes(64 * bottom)
+        return [Line("", raster=(64, top + body + bottom, data))]
+
+    from app.scheduler import Scheduler
+
+    parts = [part(24, 100, 66), part(24, 50, 66), part(24, 30, 66)]
+    lines = Scheduler._strip_lines(type("S", (), {"settings": type("C", (), {"strip_margin_dots": 0})()})(), parts)
+    total = sum(line.raster[1] for line in lines)
+    assert total == 24 + 100 + INNER_GAP + 50 + INNER_GAP + 30 + 66  # the top of the first and the bottom of the last stay
+
+
+def test_a_tall_picture_is_sent_in_bands_a_printer_can_take():
+    from app.escpos import encode
+    from app.receipt import Line
+
+    data = b"\xff" * (64 * 1120)
+    stream = encode([Line("", raster=(64, 1120, data))])
+    assert stream.count(b"\x1d(L\x02\x000\x32") == 2  # two prints, each under 65535 bytes

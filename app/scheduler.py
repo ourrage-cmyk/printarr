@@ -44,7 +44,7 @@ class ReleaseIncomplete(PrinterError):
 
 
 def opens_strip(ticket: dict) -> bool:
-    """A greeting always starts a new strip: a briefing (template 101) or a composed ticket whose first block is a greeting."""
+    """A greeting leads its strip, and only one greeting fits a strip: a briefing (template 101) or a composed ticket whose first block is a greeting."""
     if int(ticket.get("template_id") or 0) == 101:
         return True
     if int(ticket.get("template_id") or 0) == 103:
@@ -54,6 +54,37 @@ def opens_strip(ticket: dict) -> bool:
             return False
         return bool(blocks) and blocks[0].get("type") == "greeting"
     return False
+
+
+INNER_GAP = 10  # dots between two tickets printed as one piece, the same as between two cards
+
+
+def _gap_line(height: int) -> Line:
+    return Line("", raster=(64, height, bytes(64 * height)))
+
+
+def _trim_blank(lines: list[Line], top: bool) -> list[Line]:
+    """Drops the all-white rows at the top (or bottom) of a ticket's picture: its margin, which a cut needs and a join does not."""
+    order = range(len(lines)) if top else range(len(lines) - 1, -1, -1)
+    out = list(lines)
+    for i in order:
+        line = out[i]
+        if line.raster is None:
+            break
+        width, height, data = line.raster
+        rows = [data[r * width:(r + 1) * width] for r in range(height)]
+        blank = bytes(width)
+        if top:
+            while rows and rows[0] == blank:
+                rows.pop(0)
+        else:
+            while rows and rows[-1] == blank:
+                rows.pop()
+        if rows:
+            out[i] = Line(line.text, line.align, line.bold, line.tall, (width, len(rows), b"".join(rows)))
+            break
+        out[i] = None  # the whole line was margin
+    return [line for line in out if line is not None]
 
 
 class Scheduler:
@@ -265,7 +296,7 @@ class Scheduler:
         release prints nothing new. A failed print puts its claimed tickets back on hold. If a later
         strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
-        pile = self.store.pile(person)
+        pile = sorted(self.store.pile(person), key=lambda ticket: not opens_strip(ticket))  # the briefing leads, the rest follow in order
         strips: list[dict] = []
         for chunk in self._strip_chunks(pile):
             won = self.store.claim([ticket["id"] for ticket in chunk])
@@ -293,12 +324,12 @@ class Scheduler:
         return strips
 
     def _strip_chunks(self, pile: list[dict]) -> list[list[dict]]:
-        """Splits a pile into strips: at most strip_max_blocks tickets, and a greeting starts a new strip."""
+        """Splits a pile into strips: at most strip_max_blocks tickets, and a second greeting starts a new strip."""
         size = max(1, self.settings.strip_max_blocks)
         chunks: list[list[dict]] = []
         current: list[dict] = []
         for ticket in pile:
-            if current and (len(current) >= size or opens_strip(ticket)):
+            if current and (len(current) >= size or (opens_strip(ticket) and any(opens_strip(t) for t in current))):
                 chunks.append(current)
                 current = []
             current.append(ticket)
@@ -311,11 +342,20 @@ class Scheduler:
         return encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
 
     def _strip_lines(self, parts: list[list[Line]]) -> list[Line]:
-        """The tickets one after another. Blank space around each strip comes from the shell, not from here."""
+        """The tickets one after another as one piece of paper. Each ticket was drawn with its own top and bottom
+        margin; those are for a cut, so only the first top and the last bottom stay, and the tickets in between
+        are one card gap apart. Blank space around each strip comes from the shell, not from here."""
         margin = self.settings.strip_margin_dots
         blank = Line("", raster=(64, margin, bytes(64 * margin))) if margin > 0 else None
         lines: list[Line] = [blank] if blank else []
-        for part in parts:
+        last = len(parts) - 1
+        for i, part in enumerate(parts):
+            part = list(part)
+            if i > 0:
+                part = _trim_blank(part, top=True)
+                part.insert(0, _gap_line(INNER_GAP))
+            if i < last:
+                part = _trim_blank(part, top=False)
             lines += part
         if blank:
             lines.append(blank)
