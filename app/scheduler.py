@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -92,6 +93,8 @@ class Scheduler:
         template = template_by_id(int(ticket["template_id"]))
         if template.design:
             return self.design_lines(ticket, template.design)
+        if template.group == "slots":
+            return self.slot_lines_live(ticket)
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return []
@@ -106,6 +109,17 @@ class Scheduler:
         if self.notifier:
             self.notifier.recovered("home_assistant", "Home Assistant answers again")
         return lines
+
+    def slot_lines_live(self, ticket: dict) -> list[Line]:
+        """Lay out a slot ticket, reading its Home Assistant metrics now. Missing values print --."""
+        from app.slots import fetch_values, slot_lines  # imported here: app.slots imports app.receipt
+
+        slots = json.loads(ticket.get("slots_json") or "{}")
+        try:
+            client = client_from_store(self.store)
+        except HAError:
+            client = None
+        return slot_lines(slots, fetch_values(slots, client))
 
     def design_lines(self, ticket: dict, design: str) -> list[Line]:
         """Draw an image design with the entities read now. Missing values print NO DATA."""
