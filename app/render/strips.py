@@ -359,21 +359,22 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += 7 * BODY + 4
     c.y += 4
     # Numerals are display size (cap 42) when the value and its unit fit the tile, else body size.
-    scale = NUMERAL if text_width(value, NUMERAL) + text_width(unit, BODY) + 6 <= x1 - x0 else BODY
-    if scale == BODY:
-        c.solid(x0, c.y, value, 21)
-    else:
-        c.text(x0, c.y, value, scale)  # display numerals stay dot matrix
+    from app.render.canvas import solid_width
+
+    # Numbers are full-line text (Inter): display size (cap 42) when the value fits the tile, else body size.
+    cap = 42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21
+    scale = cap
+    c.solid(x0, c.y, value, cap)
     unit_x = x0 + text_width(value, scale) + 6
     # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
     from app.render.canvas import solid_width
 
-    value_w = solid_width(value, 21) if scale == BODY else text_width(value, scale)
+    value_w = solid_width(value, cap)
     unit_x = x0 + value_w + 6
     beside = bool(unit) and unit_x + solid_width(unit, 21) <= x1
     if beside:
-        c.solid(unit_x, c.y + 7 * scale - 21, unit, 21)  # its baseline sits on the value's baseline
-    c.y += 7 * scale + 7
+        c.solid(unit_x, c.y + cap - 21, unit, 21)  # the unit's baseline sits on the value's baseline  # its baseline sits on the value's baseline
+    c.y += cap + 7
     if unit and not beside:
         c.solid(x0, c.y, unit, 21)
         c.y += 7 * BODY + 4
@@ -570,6 +571,23 @@ def _shorten(block: Block, slots: dict[str, Any], x0: int, x1: int, max_h: int) 
     return trimmed
 
 
+def _pack(row: list[Placed]) -> list[Placed]:
+    """A row with an empty column gives its last card the spare columns, so no row has a gap."""
+    used = sum(p.span for p in row)
+    if len(row) < 2 or used >= COLS:
+        return row
+    last = row[-1]
+    if last.block.span is not None:
+        return row
+    widened = Block(last.block.type, last.block.slots, mood=last.block.mood, span=last.span + (COLS - used))
+    lay = LAYOUT[widened.type]
+    x0, x1 = span_x(last.col, widened.span or lay["span"])
+    slots = dict(widened.slots)
+    content = _measure(widened, slots, x0, x1)
+    units, _ = _units_for(content, lay)
+    return row[:-1] + [Placed(widened, last.col, widened.span, x0, x1, units, content, slots)]
+
+
 def _widen_lone(row: list[Placed]) -> list[Placed]:
     """A row of one card that is narrower than the page takes the full width, so it is centred on the paper."""
     if len(row) != 1 or row[0].span >= COLS or row[0].block.span is not None:
@@ -610,6 +628,7 @@ def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
     if row:
         rows.append(row)
     rows = [_widen_lone(row) for row in rows]
+    rows = [_pack(row) for row in rows]
     return rows, notes
 
 
