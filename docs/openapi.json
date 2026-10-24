@@ -2059,15 +2059,48 @@
             "title": "Recipient"
           },
           "blocks": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "maxItems": 16,
-            "minItems": 1,
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array",
+                "maxItems": 16,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Blocks",
-            "description": "Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods."
+            "description": "Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods. Send blocks or a preset, not both."
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "briefing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset",
+            "description": "A fixed layout instead of blocks. briefing: a time of day, three metrics with sparklines, one larger graph, a body and a fun fact. Fill it with slots."
+          },
+          "slots": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slots",
+            "description": "The preset's slots. Required with preset, see POST /api/v1/tickets/compose."
           },
           "kind": {
             "anyOf": [
@@ -2213,8 +2246,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "recipient",
-          "blocks"
+          "recipient"
         ],
         "title": "ComposeCreate"
       },

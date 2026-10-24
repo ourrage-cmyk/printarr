@@ -110,23 +110,34 @@ curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets \
 For messy speech-to-text input, add `"text_state": "unformatted"`. Message text is 2000 characters at most.
 `POST /api/v1/tickets/preview` returns the plain text of a plain ticket without queueing it.
 
-### Briefings (slot template 101)
+### Briefings (the briefing preset)
 
-Briefings use `POST /api/v1/tickets/slots` with `template: 101`, `delivery: "on_release"` and a fixed
-`idempotency_key`, for example `morning:yannic:2026-10-26`:
+Hermes builds the morning (or evening) briefing with the briefing preset. The preset fixes the layout, so every
+briefing looks the same: a headline with the time of day, three metrics with sparklines, one larger graph, a body and a fun fact.
+Send `preset` and `slots` to `POST /api/v1/tickets/compose` instead of `blocks`. Use `delivery: "on_release"`
+and a fixed `idempotency_key`, for example `morning:yannic:2026-10-26`:
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/slots \
+curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
   -H 'Content-Type: application/json' \
-  -d '{"template": 101, "recipient": "yannic", "sender": "hermes", "kind": "morning",
+  -d '{"recipient": "yannic", "sender": "hermes", "kind": "morning", "preset": "briefing",
        "delivery": "on_release", "idempotency_key": "morning:yannic:2026-10-26",
-       "slots": {"greeting": "Good morning, Yannic",
-                 "metrics": [{"label": "SLEEP", "entity_id": "sensor.sleep_score", "hours": 168}],
-                 "paragraph": "Sleep was short. Take it easy today.", "tip": "Leave five minutes early."}}'
+       "slots": {"time_of_day": "morning",
+                 "metrics": [{"label": "Steps", "entity_id": "sensor.steps", "unit": "steps"},
+                             {"label": "Inside", "entity_id": "sensor.living_room_temperature", "unit": "C"},
+                             {"label": "Battery", "entity_id": "sensor.body_battery", "unit": "%"}],
+                 "graph": {"title": "Heart rate", "entity_id": "sensor.heart_rate", "hours": 12},
+                 "body": "Two dogs walked before breakfast. Rain after lunch, so the run is at 4.",
+                 "fun_fact": "Octopuses have three hearts.", "from": "hermes"}}'
 ```
 
-A briefing is greeting, up to four metrics, one short paragraph and one tip. Metrics come from `/insights/entities`,
-preferring unusual values (`z_score` beyond ±2) and clear trends.
+- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING and so on.
+- `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`.
+- `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
+- `body` is the text. `fun_fact` is one line. Never put "Did you know" in the body.
+- Do not send `blocks` with `preset`. A bad slot returns 422 and names it as `preset.slots.field`.
+
+The older slot briefing (template 101, `POST /api/v1/tickets/slots`) still works, but use the preset for new briefings.
 
 ## 4. Schedule, release, cancel
 

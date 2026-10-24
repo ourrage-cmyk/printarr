@@ -25,7 +25,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app import ticket_images
 from app.notify import MAX_TEXT, NotifyLimiter, clean_text
@@ -66,6 +66,8 @@ from app.compose import (
     compose_render,
     summary as compose_summary,
     validate_blocks as compose_validate,
+    PRESET_BRIEFING,
+    briefing_preset_blocks,
 )
 from app.slots import (
     BRIEFING,
@@ -150,6 +152,27 @@ COMPOSE_EXAMPLE = {
         {"type": "metric", "mood": "factual", "slots": {"label": "Body battery", "value": 72, "unit": "%"}},
     ],
 }
+PRESET_HINT = (
+    "preset briefing takes slots: time_of_day (morning, afternoon or evening), metrics (exactly three, each with "
+    "an entity_id or a value), graph (title with an entity_id or series), body and fun_fact. problems names each "
+    "wrong slot as preset.slots.field. Or send blocks instead of a preset."
+)
+PRESET_EXAMPLE = {
+    "recipient": "yannic",
+    "preset": "briefing",
+    "slots": {
+        "time_of_day": "morning",
+        "metrics": [
+            {"label": "Steps", "entity_id": "sensor.steps", "unit": "steps"},
+            {"label": "Inside", "entity_id": "sensor.living_room_temperature", "unit": "C"},
+            {"label": "Battery", "entity_id": "sensor.body_battery", "unit": "%"},
+        ],
+        "graph": {"title": "Heart rate", "entity_id": "sensor.heart_rate", "hours": 12},
+        "body": "Two dogs walked before breakfast. Rain after lunch, so the run is at 4.",
+        "fun_fact": "Octopuses have three hearts.",
+        "from": "Hermes",
+    },
+}
 BLOCKS_HINT = (
     "Each block is {type, mood, span, slots}. type: one of GET /api/v1/blocks. mood: one of the moods "
     "listed there, or 'auto'. span: 1 to 3 columns, default from the type. slots: check the type's fields "
@@ -168,11 +191,17 @@ class ComposeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     recipient: Recipient
-    blocks: list[dict[str, Any]] = Field(
+    blocks: list[dict[str, Any]] | None = Field(
+        default=None,
         min_length=1,
         max_length=16,
-        description="Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods.",
+        description="Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods. Send blocks or a preset, not both.",
     )
+    preset: Literal["briefing"] | None = Field(
+        default=None,
+        description="A fixed layout instead of blocks. briefing: a time of day, three metrics with sparklines, one larger graph, a body and a fun fact. Fill it with slots.",
+    )
+    slots: dict[str, Any] | None = Field(default=None, description="The preset's slots. Required with preset, see POST /api/v1/tickets/compose.")
     kind: Literal[KINDS] | None = None  # type: ignore[valid-type]
     tone: Literal[TONES] | None = None  # type: ignore[valid-type]
     from_user: Recipient | None = None
@@ -183,6 +212,14 @@ class ComposeCreate(BaseModel):
     hold: bool = False
     hold_key: str | None = Field(default=None, max_length=40)
     idempotency_key: str | None = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def _blocks_or_preset(self) -> "ComposeCreate":
+        if (self.blocks is None) == (self.preset is None):
+            raise ValueError("send blocks or a preset, not both and not neither")
+        if self.preset is None and self.slots is not None:
+            raise ValueError("slots go with a preset; blocks carry their own slots")
+        return self
 
 
 class PersonRelease(BaseModel):
@@ -975,9 +1012,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             if existing is not None:
                 return existing
         try:
-            checked = compose_validate(body.blocks)
+            if body.preset == PRESET_BRIEFING:
+                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender)
+                checked = compose_validate(raw_blocks)
+            else:
+                checked = compose_validate(body.blocks or [])
         except BlockProblem as exc:
-            raise ApiProblem(422, exc.problems, BLOCKS_HINT, COMPOSE_EXAMPLE) from None
+            hint, example = (PRESET_HINT, PRESET_EXAMPLE) if body.preset else (BLOCKS_HINT, COMPOSE_EXAMPLE)
+            raise ApiProblem(422, exc.problems, hint, example) from None
         render_started = time.perf_counter()
         try:  # draw the strips now, so a queued ticket always prints; notes say what was shortened
             lines, notes = compose_render(sign_blocks(checked, body.sender), None)
@@ -987,7 +1029,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         render_ms = round((time.perf_counter() - render_started) * 1000)
         ticket = store.create(
-            kind=body.kind or "note",
+            kind=body.kind or ("morning" if body.preset else "note"),
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
             to_user=body.to_user,
