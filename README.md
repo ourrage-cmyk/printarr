@@ -55,7 +55,8 @@ docker compose -f docker-compose.dev.yml up --build
 ```
 
 The web page is at <http://localhost:8000/>. The simulator is at <http://localhost:8080/>.
-Data is kept in `./dev-data`.
+Data is kept in `./dev-data`. On a fresh install, finish the setup wizard at `/` first. Until setup is done, the
+API answers only the setup routes and health.
 
 ### From source
 
@@ -67,7 +68,7 @@ PRINTARR_PRINTER_MODE=file PRINTARR_OUTPUT_DIR=./out uvicorn app.main:app --port
 
 `file` mode writes each job as a `.bin` file in `PRINTARR_OUTPUT_DIR`, which needs no printer.
 
-### Try the API
+### Try the API (after setup)
 
 ```bash
 curl -X POST localhost:8000/api/v1/tickets \
@@ -80,11 +81,13 @@ curl -X POST localhost:8000/api/v1/tickets \
 The one-file install, the upgrade steps and the rollback steps are in
 [`docs/deploy/truenas.md`](docs/deploy/truenas.md). In short:
 
-1. Create the data folder (for example `/mnt/ssd/apps/printarr`), owned by uid 1000.
-2. In `docker-compose.yml`, change the printer IP address and the data folder.
+1. Create the data folder (for example `/mnt/ssd/apps/printarr`) and give it to uid and gid 568, the TrueNAS app user:
+   `chown -R 568:568 /mnt/ssd/apps/printarr`.
+2. In `docker-compose.yml`, change only the data folder. The file holds the image, memory, ports and storage, and nothing secret.
 3. In TrueNAS, go to Apps, Install Custom App, and paste the file.
-4. Open `http://<nas-ip>:8000/`. Enter the Home Assistant URL and token, and the Telegram details,
-   in the settings on that page. Printarr stores them in its data folder, not in environment variables.
+4. Open `http://<nas-ip>:8000/`. The setup wizard asks for the printer, Home Assistant, the model server, Telegram,
+   names and timezone. Each service has a Test button. Finishing setup saves everything in the data folder.
+   The setup code is printed in the container log, and the API stays closed until setup is finished.
 
 The image is built by [`.github/workflows/image.yml`](.github/workflows/image.yml) and pushed to
 `ghcr.io/ourrage-cmyk/printarr` on every push to `main`. The package must be public for TrueNAS to pull it
@@ -92,7 +95,7 @@ without a login.
 
 ## Connect Home Assistant and Hermes
 
-- **Home Assistant:** create a long-lived access token, paste it into the settings page, and press Test.
+- **Home Assistant:** create a long-lived access token, paste it into the setup wizard or the settings page, and press Test.
   The setup steps and the example automations are in [`docs/integrations/`](docs/integrations/SETUP-CHECKLIST.md).
 - **Hermes:** give the agent [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md) as its instructions and
   [`docs/integrations/hermes/openapi.yaml`](docs/integrations/hermes/openapi.yaml) as its tool definition.
@@ -137,8 +140,9 @@ guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide
 
 ## Configuration
 
-All settings are environment variables with the `PRINTARR_` prefix. Settings you enter in the web page are
-saved in the data folder and take priority after first start.
+Settings are entered in the setup wizard (the web page at `/`) and saved in the data folder. Secrets such as the
+Home Assistant and Telegram tokens are stored there and are never returned by the API. Environment variables with
+the `PRINTARR_` prefix only set defaults, and a saved value wins. The compose files set no secrets.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -171,7 +175,7 @@ saved in the data folder and take priority after first start.
 
 - **Health for Uptime Kuma:** `GET /api/v1/health` returns 200 when the database and printer are fine, and 503
   when the printer is unreachable. Kuma polls the service, nothing is pushed.
-- **Telegram alerts:** enter the bot token and chat ID in the web page, then press Send test message. Alerts cover
+- **Telegram alerts:** enter the bot token and chat ID in the setup wizard or the settings page, then press Send test message. Alerts cover
   an unreachable printer, paper out, cover open, autocutter error, a rendering failure, a ticket that failed after
   retries, and a decision model that is down. Each problem alerts once, and a recovery message follows.
 - **Printer status:** read with DLE EOT every minute. The bit layout comes from the Epson ESC/POS Command Reference.

@@ -200,3 +200,16 @@ def test_a_database_hiccup_after_printing_does_not_strand_the_ticket(settings, m
         assert app.state.scheduler.run_once() == 1
         assert store.get(ticket["id"])["status"] == "sent"
         assert len(transport.payloads) == 1
+
+
+def test_a_composed_greeting_starts_a_new_strip_in_the_pile(settings):
+    import json
+
+    from app.scheduler import opens_strip
+
+    briefing = {"template_id": 101, "slots_json": "{}"}
+    composed = {"template_id": 103, "slots_json": json.dumps({"blocks": [{"type": "greeting"}]})}
+    note = {"template_id": 102, "slots_json": "{}"}
+    tip = {"template_id": 103, "slots_json": json.dumps({"blocks": [{"type": "tip"}]})}
+    assert opens_strip(briefing) and opens_strip(composed)
+    assert not opens_strip(note) and not opens_strip(tip)

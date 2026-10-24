@@ -16,7 +16,7 @@ from app.escpos import encode
 from app.ha import HAError, client_from_store
 from app.metrics import Metrics
 from app.printer import PrinterError, PrintInterrupted, Transport
-from app.receipt import Line, render_ticket_lines, ticket_feed
+from app.receipt import Line, render_ticket_lines, sender_label, ticket_feed
 from app.status import FAULT_TEXT, PrinterStatus, decode
 from app.render.registry import design_line
 from app.text import printable
@@ -39,6 +39,19 @@ class ReleaseIncomplete(PrinterError):
     def __init__(self, strips: list[dict], error: str) -> None:
         super().__init__(error)
         self.strips = strips
+
+
+def opens_strip(ticket: dict) -> bool:
+    """A greeting always starts a new strip: a briefing (template 101) or a composed ticket whose first block is a greeting."""
+    if int(ticket.get("template_id") or 0) == 101:
+        return True
+    if int(ticket.get("template_id") or 0) == 103:
+        try:
+            blocks = json.loads(ticket.get("slots_json") or "{}").get("blocks", [])
+        except ValueError:
+            return False
+        return bool(blocks) and blocks[0].get("type") == "greeting"
+    return False
 
 
 class Scheduler:
@@ -134,7 +147,7 @@ class Scheduler:
             client = client_from_store(self.store)
         except HAError:
             client = None
-        lines = ticket_lines(slots, client)
+        lines = ticket_lines(slots, client, template_id=int(ticket["template_id"]), sender=sender_label(ticket))
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return lines
@@ -163,7 +176,7 @@ class Scheduler:
             lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
             # Lines drawn as images (names outside CP437): log the source text, so the printed
             # bitmap can be matched to what was sent.
-            glyph_sources = [line.text for line in lines if line.raster is None and printable(line.text)[1]]
+            glyph_sources = [line.text for line in lines if line.text and printable(line.text)[1]]
             if glyph_sources:
                 logger.info("ticket %s: %d line(s) drawn as images: %s", ticket["id"], len(glyph_sources), glyph_sources)
             payload = encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
@@ -221,10 +234,8 @@ class Scheduler:
         strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
         pile = self.store.pile(person)
-        size = max(1, self.settings.strip_max_blocks)
         strips: list[dict] = []
-        for start in range(0, len(pile), size):
-            chunk = pile[start : start + size]
+        for chunk in self._strip_chunks(pile):
             won = self.store.claim([ticket["id"] for ticket in chunk])
             if not won:
                 continue
@@ -241,6 +252,20 @@ class Scheduler:
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
             strips.append({"strip_id": strip_id, "ticket_ids": won})
         return strips
+
+    def _strip_chunks(self, pile: list[dict]) -> list[list[dict]]:
+        """Splits a pile into strips: at most strip_max_blocks tickets, and a greeting starts a new strip."""
+        size = max(1, self.settings.strip_max_blocks)
+        chunks: list[list[dict]] = []
+        current: list[dict] = []
+        for ticket in pile:
+            if current and (len(current) >= size or opens_strip(ticket)):
+                chunks.append(current)
+                current = []
+            current.append(ticket)
+        if current:
+            chunks.append(current)
+        return chunks
 
     def _strip_lines(self, tickets: list[dict]) -> list[Line]:
         """The tickets one after another, with a blank margin at the top and bottom of the strip."""

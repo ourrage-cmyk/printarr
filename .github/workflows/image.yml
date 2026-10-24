@@ -58,11 +58,20 @@ jobs:
           build-args: VERSION=${{ github.sha }}
       - name: Smoke test the image
         run: |
-          mkdir -p "$RUNNER_TEMP/data" && sudo chown 1000:1000 "$RUNNER_TEMP/data"
-          docker run -d --name printarr-ci -p 8000:8000 \
+          mkdir -p "$RUNNER_TEMP/data" && sudo chown 568:568 "$RUNNER_TEMP/data"
+          # A stand-in printer on the runner. The container uses host networking, so it can reach it.
+          python3 -c "import socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', 9100)); s.listen(50)
+          while True: c,_=s.accept(); c.close()" &
+          docker run -d --name printarr-ci --network host --user 568:568 \
             -e PRINTARR_PRINTER_MODE=file \
             -v "$RUNNER_TEMP/data:/data" printarr:ci
           for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz >/dev/null 2>&1 && break; sleep 1; done
+          # The API is closed until the setup wizard is finished, so finish it with the logged setup code.
+          code=$(docker logs printarr-ci 2>&1 | sed -n 's/.*setup code \([A-Za-z0-9_-]*\)\..*/\1/p' | tail -n 1)
+          curl -fsS -X POST http://localhost:8000/api/v1/setup/complete \
+            -H 'Content-Type: application/json' -H "X-Setup-Code: $code" \
+            -d '{"printer_host":"127.0.0.1","printer_port":9100,"llm_enabled":false}'
+          echo
           sh scripts/smoke-test.sh http://localhost:8000
       - name: Show container logs
         if: always()

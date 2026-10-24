@@ -88,8 +88,8 @@ def test_evening_arrival_prints_the_rundown_and_waiting_messages(settings):
                    "idempotency_key": f"evening:yannic:{DAY}"}
         client.post("/api/v1/tickets/slots", json=evening)
         result = client.post("/api/v1/people/yannic/release", json=release("yannic", "evening")).json()
-        assert len(result["strips"]) == 1
-        assert len(result["strips"][0]["ticket_ids"]) == 2
+        # The evening rundown opens with a greeting, so it starts a new strip: the waiting note goes first.
+        assert [len(strip["ticket_ids"]) for strip in result["strips"]] == [1, 1]
 
 
 def test_shopping_list_prints_at_once_and_stays_off_the_pile(settings):

@@ -16,8 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from app.ha import HAClient, HAError
 from app.receipt import Line as ReceiptLine
+from app.receipt import format_number
 from app.render import strips as R
-from app.slots import fetch_values, slot_lines
+from app.slots import BRIEFING, NOTE, fetch_values, slot_lines
 
 logger = logging.getLogger("printarr.compose")
 
@@ -26,6 +27,8 @@ AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until
 MAX_BLOCKS = 16
 PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
 TICKET_MARGIN = 12  # dots above and below a composed ticket
+CARD_CAPTION = "[card]"  # what a text preview shows in place of a drawn card
+HISTORY_POINTS = 48  # sparkline points: the renderer draws at most this many
 
 
 class BlockProblem(ValueError):
@@ -47,7 +50,7 @@ class MetricRow(_Strict):
     @model_validator(mode="after")
     def _has_value(self) -> MetricRow:
         if self.value is None and self.entity_id is None:
-            raise ValueError("give a value or an entity_id")
+            raise ValueError("send a value (a number or text) or an entity_id (a Home Assistant entity, such as sensor.steps)")
         return self
 
 
@@ -169,11 +172,16 @@ def block_schema(name: str) -> dict[str, Any]:
     }
 
 
+def plain_message(message: str) -> str:
+    """A validation message without Pydantic's wording."""
+    return message.removeprefix("Value error, ")
+
+
 def _slot_problems(where: str, exc: ValidationError) -> list[dict[str, str]]:
     problems = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error["loc"]) or "slots"
-        problems.append({"slot": f"{where}.slots.{location}", "problem": error["msg"]})
+        problems.append({"slot": f"{where}.slots.{location}", "problem": plain_message(error["msg"])})
     return problems
 
 
@@ -233,7 +241,7 @@ def fetch_entities(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
             continue
         try:
             number = float(client.state(entity))
-            values[entity] = str(int(number)) if number.is_integer() else f"{number:.1f}"
+            values[entity] = format_number(number)
         except (HAError, ValueError, TypeError) as exc:
             logger.warning("entity %s unavailable: %s", entity, exc)
             values[entity] = None
@@ -278,7 +286,7 @@ def compose_render(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
     notes: list[str] = []
     for strip in R.split_strips(_render_blocks(filled)):
         bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=TICKET_MARGIN, margin_bottom=TICKET_MARGIN)
-        lines.append(ReceiptLine("", raster=(bitmap.width // 8, bitmap.height, bitmap.bits)))
+        lines.append(ReceiptLine(CARD_CAPTION, raster=(bitmap.width // 8, bitmap.height, bitmap.bits)))
         notes.extend(strip_notes)
     return lines, notes
 
@@ -292,9 +300,91 @@ def summary(blocks: Sequence[Mapping[str, Any]]) -> str:
     return "(composed)"
 
 
-def ticket_lines(slots: Mapping[str, Any], client: HAClient | None) -> list[ReceiptLine]:
-    """Lay out any stored slot ticket: a composed one, or a slot template (briefing and note)."""
+def _plain(value: Any) -> Any:
+    """A whole number prints without its .0."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def _history(entity_id: str, hours: int, client: HAClient | None) -> list[float] | None:
+    """Up to HISTORY_POINTS numeric states, oldest first. None when Home Assistant gives no history."""
+    if client is None:
+        return None
+    try:
+        values = client.numeric_history(entity_id, hours)
+    except (HAError, ValueError, TypeError) as exc:
+        logger.warning("history for %s unavailable: %s", entity_id, exc)
+        return None
+    if len(values) < 2:
+        return None
+    step = -(-len(values) // HISTORY_POINTS)  # ceiling division: spread the points across the window
+    return values[::step][-HISTORY_POINTS:]
+
+
+def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[str, Any]:
+    """One briefing metric as a metric card. Entity metrics get a sparkline of their history."""
+    slots: dict[str, Any] = {"label": metric["label"]}
+    if metric.get("unit"):
+        slots["unit"] = metric["unit"]
+    if metric.get("series"):
+        slots["series"] = list(metric["series"])
+        slots["value"] = _plain(metric["series"][-1])
+    elif metric.get("value") is not None:
+        slots["value"] = _plain(metric["value"])
+    else:
+        slots["entity_id"] = metric["entity_id"]  # the value is read at print time
+        history = _history(metric["entity_id"], metric.get("hours") or 24, client)
+        if history:
+            slots["series"] = history
+    return {"type": "metric", "mood": "factual", "span": 1, "slots": slots}
+
+
+def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None) -> list[dict[str, Any]]:
+    """A briefing (template 101) as blocks: a greeting, one metric card per number, and a tip."""
+    blocks: list[dict[str, Any]] = []
+    head = slots.get("greeting") or slots.get("title")
+    if head or slots.get("paragraph"):
+        greeting: dict[str, Any] = {"greeting": head or "TODAY"}
+        if slots.get("paragraph"):
+            greeting["summary"] = slots["paragraph"]  # the renderer shortens it if it runs long
+        blocks.append({"type": "greeting", "mood": "neutral", "span": 3, "slots": greeting})
+    blocks.extend(_metric_block(metric, client) for metric in slots.get("metrics", []))
+    if slots.get("tip"):
+        blocks.append({"type": "tip", "mood": "reminder", "span": 3, "slots": {"tip": slots["tip"]}})
+    return blocks
+
+
+def message_blocks(paragraph: str, sender: str | None, title: str | None = None, tip: str | None = None) -> list[dict[str, Any]]:
+    """A note as one message card, signed off by the sender."""
+    slots: dict[str, Any] = {"paragraph": paragraph, "from": sender or "Printarr"}
+    if title:
+        slots["title"] = title
+    if tip:
+        slots["tip"] = tip
+    return [{"type": "message", "mood": "neutral", "span": 3, "slots": slots}]
+
+
+def note_card_lines(message: str, sender: str | None, title: str | None = None) -> list[ReceiptLine]:
+    """A plain note (from the /tickets API) drawn as a message card, in the shared shell."""
+    lines, _ = compose_render(message_blocks(message, sender, title=title), None)
+    return [ReceiptLine(message, raster=line.raster) for line in lines]  # the caption keeps the text for the log
+
+
+def ticket_lines(
+    slots: Mapping[str, Any],
+    client: HAClient | None,
+    template_id: int | None = None,
+    sender: str | None = None,
+) -> list[ReceiptLine]:
+    """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
     if "blocks" in slots:
-        lines, _ = compose_render(slots["blocks"], client)
-        return lines
-    return slot_lines(slots, fetch_values(slots, client))
+        blocks = slots["blocks"]
+    elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
+        blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
+    elif template_id == BRIEFING or "metrics" in slots:
+        blocks = briefing_blocks(slots, client)
+    else:
+        return slot_lines(slots, fetch_values(slots, client))
+    lines, _ = compose_render(blocks, client)
+    return lines

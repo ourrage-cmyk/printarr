@@ -35,11 +35,15 @@ COPY app ./app
 COPY scripts/entrypoint.sh /usr/local/bin/printarr-entrypoint
 RUN chmod 0755 /usr/local/bin/printarr-entrypoint
 
-# Non-root. The data folder on the host must be owned by uid 1000 (see docs/deploy/truenas.md).
-RUN useradd --create-home --uid 1000 printarr \
+# Runs as TrueNAS's app user, uid and gid 568. The data folder on the host must be owned by 568
+# (see docs/deploy/truenas.md). Nothing is written outside /data: HOME points there, the code is
+# read-only to this user, and temporary files use /tmp, which every user can write.
+RUN groupadd --gid 568 printarr \
+    && useradd --uid 568 --gid 568 --no-create-home --home-dir /data --shell /usr/sbin/nologin printarr \
     && mkdir -p /data \
-    && chown printarr:printarr /data
-USER printarr
+    && chown 568:568 /data
+ENV HOME=/data
+USER 568:568
 
 VOLUME ["/data"]
 EXPOSE 8000

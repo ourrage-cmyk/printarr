@@ -6,3 +6,4 @@ data/
 *.db
 *.db-*
 dev-data/
+tools/simulate/out/

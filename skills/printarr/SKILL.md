@@ -9,6 +9,10 @@ printarr queues receipts and prints them on an Epson TM-T88V (80 mm paper). You 
 its REST API. The base URL is `http://<printarr-host>:8000/api/v1`. The API has no authentication and runs
 on the home LAN only.
 
+Before anything else, check that setup is finished. Until Yannic completes the setup wizard at `/`, the API
+answers only the setup routes and `GET /api/v1/health`. Every other call returns 503 with a pointer to the wizard.
+Tell Yannic. Do not try to work around it.
+
 Two people receive prints: `yannic` (Yannic) and `wife` (Allyson). Every request names one of them as
 `recipient`. The name printed on the strip is "Allyson", but the API id is `wife`.
 
@@ -26,6 +30,9 @@ the schema disagree, the schema wins. Every call below was checked against the r
 - `at` needs `send_at`. Without it the call returns 422 `delivery at needs send_at`.
 - `now` cannot take `send_at`. The call returns 422 `delivery now cannot take send_at; use delivery at`.
 - With no `delivery`, the default is `at` if `send_at` is set, otherwise `now`.
+- printarr never creates schedules. You decide when each ticket prints. Each timed item is its own ticket, with
+  `delivery: at` and its own `send_at`. There are no recurring tickets. A repeating reminder is one ticket per
+  occurrence, created by you or by a scheduled job of your own.
 - Release a pile only when someone asks for paper now: `POST /people/{person}/release` with `{"trigger": "request"}`.
   Never release on a schedule. Home Assistant handles the scheduled releases.
 
@@ -141,7 +148,8 @@ invent entity IDs.
 
 ## 6. Recipes
 
-**Shopping list now.** printarr keeps no list. You keep the list, and each print is a snapshot of it.
+**Shopping list now.** The shopping list lives in Home Assistant, and you manage it. printarr keeps no list,
+so each print is a snapshot of the list you send.
 
 ```json
 {"recipient": "yannic", "kind": "shopping", "sender": "hermes", "delivery": "now",
@@ -152,7 +160,8 @@ invent entity IDs.
  ]}
 ```
 
-**Shopping list at 17:00, for when Yannic gets home.** Use `delivery: "at"` with `send_at`.
+**Shopping list at 17:00, for when Yannic gets home.** Create it yourself with `delivery: "at"` and `send_at`.
+printarr does not print it on a timer of its own.
 
 **Leave a message for the other person.** Use `from_user`, `to_user` and `on_release`. It arrives on their
 strip at their next release, and it shows in their inbox as unread. Use the recipe in section 3.
@@ -185,15 +194,16 @@ layout. Trust the schema and the limits in section 3 for those.
 
 ## 7. Errors, and how to fix each one
 
-Validation errors come back as 422. Read every item in `detail`, fix the request, and send it again. Do not resend
-the same body.
+Validation errors come back as 422, and every error has a `hint` that says what to do next. Read the `hint`
+and every item in `detail`, fix the request, and send it again. Do not resend the same body. An `example` is
+included when one helps.
 
-Two shapes come back, depending on the endpoint:
+The shape is `{"detail": ..., "hint": "...", "example": {...}}`. `detail` takes one of three forms:
 
 - A list of `{"slot": "...", "problem": "..."}`. The `slot` is a path into the request, for example
   `blocks[0].slots.label`. Fix that field.
-- A string or a FastAPI list with `loc` and `msg`. The string says what is wrong, for example
-  `"delivery at needs send_at"`. The `loc` names the field.
+- A string, for example `"delivery at needs send_at"`.
+- A list with `loc` and `msg`, from schema validation. The `loc` names the field, for example `["body", "recipient"]`.
 
 | Message contains | Fix |
 |---|---|

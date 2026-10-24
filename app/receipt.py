@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from typing import Literal
 
-from app.templates import TEMPLATES, Template, template_by_id
+from app.templates import RECIPIENTS, TEMPLATES, Template, template_by_id
 
 Align = Literal["left", "center"]
 
@@ -67,12 +67,29 @@ class Receipt:
     title: str | None = None
 
 
+def format_number(value: float) -> str:
+    """Whole numbers stay whole, large values get one decimal, small ones keep their digits (0.079 stays 0.079)."""
+    if float(value).is_integer():
+        return str(int(value))
+    if abs(value) >= 10:
+        return f"{value:.1f}"
+    return f"{value:.3g}"
+
+
+def sender_label(ticket: Mapping[str, object]) -> str | None:
+    """Who the ticket is from: the name of its sender, else the sender label the caller gave."""
+    from_user = str(ticket.get("from_user") or "")
+    return RECIPIENTS.get(from_user) or (str(ticket["sender"]) if ticket.get("sender") else None)
+
+
 def receipt_for_ticket(ticket: Mapping[str, object], tz: tzinfo) -> Receipt:
     """Build the receipt content for a stored ticket row."""
+    from_user = str(ticket.get("from_user") or "")
+    sender = RECIPIENTS.get(from_user) or (str(ticket["sender"]) if ticket["sender"] else None)
     return Receipt(
-        recipient=str(ticket["recipient"]),
+        recipient=RECIPIENTS.get(str(ticket["recipient"]), str(ticket["recipient"])),
         message=str(ticket["message"]),
-        sender=str(ticket["sender"]) if ticket["sender"] else None,
+        sender=sender,
         title=str(ticket["title"]) if ticket["title"] else None,
         sent_at=datetime.fromtimestamp(int(ticket["send_at_ms"]) / 1000, tz=tz),  # type: ignore[arg-type]
     )
@@ -95,7 +112,11 @@ def render_ticket_lines(
         from app.compose import ticket_lines  # imported here: app.compose imports app.receipt
 
         slots = json.loads(str(ticket.get("slots_json") or "{}"))
-        return list(extra) or ticket_lines(slots, None)
+        return list(extra) or ticket_lines(slots, None, template_id=template.id, sender=sender_label(ticket))
+    if ticket.get("kind") == "note":
+        from app.compose import note_card_lines  # imported here: app.compose imports app.receipt
+
+        return list(extra) or note_card_lines(str(ticket["message"]), sender_label(ticket), str(ticket["title"]) if ticket["title"] else None)
     decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
     return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
 

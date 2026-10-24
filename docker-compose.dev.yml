@@ -2,17 +2,13 @@
 #   docker compose -f docker-compose.dev.yml up --build
 # Web page: http://localhost:8000/   Simulator: http://localhost:8080/
 # Data is kept in ./dev-data (ignored by git).
+# In the setup wizard, set the printer host to: simulator   (port 9100). Turn the model server off.
 services:
   printarr:
     build: .
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      PRINTARR_PRINTER_MODE: tcp
-      PRINTARR_PRINTER_HOST: simulator           # the simulator service below, on TCP 9100
-      PRINTARR_PRINTER_PORT: "9100"
-      PRINTARR_LLM_ENABLED: "off"                # no model needed for development
     volumes:
       - ./dev-data:/data
     depends_on:

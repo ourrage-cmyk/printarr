@@ -18,9 +18,13 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+import threading
+
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from starlette.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
@@ -31,7 +35,10 @@ from app.config import Settings, load_settings
 from app.insights import InsightCache, collect
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
-from app.printer import PrinterError, Transport, build_transport
+from app.printer import PrinterError, SwitchableTransport, Transport, build_transport
+from app import setup as setup_flow
+from app.setup import CheckName, SetupValues, check_item, run_checks
+from app.setup_page import SETUP_UI
 from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
@@ -42,6 +49,7 @@ from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
+    plain_message,
     BLOCKS as compose_blocks,
     BlockProblem,
     catalogue as compose_catalogue,
@@ -96,6 +104,51 @@ If you leave it out, a local decision model picks one when it is configured. Oth
 a fixed rule picks one.
 """
 
+
+class ApiProblem(Exception):
+    """A 4xx that tells the caller, and an agent reading the reply, how to fix the request.
+
+    The reply is {detail, hint, example}: detail says what is wrong, hint says what to do, and example
+    shows a request that works.
+    """
+
+    def __init__(self, status_code: int, detail: Any, hint: str, example: Any = None) -> None:
+        super().__init__(str(detail))
+        self.status_code = status_code
+        self.detail = detail
+        self.hint = hint
+        self.example = example
+
+
+VALIDATION_HINT = (
+    "Each field named in detail is wrong or missing. loc gives its path in the body. Valid types, "
+    "moods and templates: GET /api/v1/blocks, GET /api/v1/slot-templates, GET /api/v1/templates. "
+    "Every field and its allowed values: /openapi.json, or /docs."
+)
+HA_HINT = (
+    "Home Assistant is not set up. Save its URL and a long-lived token in settings: "
+    "PUT /api/v1/settings/ha, or use the setup wizard. Then retry."
+)
+COMPOSE_EXAMPLE = {
+    "recipient": "yannic",
+    "blocks": [
+        {"type": "greeting", "mood": "happy", "slots": {"greeting": "GOOD MORNING", "summary": "Two dogs walked."}},
+        {"type": "metric", "mood": "factual", "slots": {"label": "Body battery", "value": 72, "unit": "%"}},
+    ],
+}
+BLOCKS_HINT = (
+    "Each block is {type, mood, span, slots}. type: one of GET /api/v1/blocks. mood: one of the moods "
+    "listed there, or 'auto'. span: 1 to 3 columns, default from the type. slots: check the type's fields "
+    "with GET /api/v1/blocks/{type}/schema. problems names each wrong slot as blocks[i].slots.field."
+)
+SLOT_HINT = (
+    "Slot tickets use template 101 (briefing) or 102 (note). See GET /api/v1/slot-templates, then "
+    "GET /api/v1/templates/{id}/schema for its slots. problems names each wrong slot."
+)
+HOLD_HINT = (
+    "A held ticket waits for a release. Use hold: true alone to hold until released, or send_at alone to "
+    "print at that time, or delivery on_release to wait for a person's release. The two cannot be mixed."
+)
 
 class ComposeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -370,16 +423,24 @@ def resolve_delivery(
         return hold, "at" if send_at is not None else "now"
     if delivery == "on_release":
         if send_at is not None:
-            raise HTTPException(status_code=422, detail="delivery on_release cannot take send_at")
+            raise ApiProblem(422, "delivery on_release cannot take send_at",
+                             "on_release tickets wait for the person's release. Remove send_at, or use delivery at.",
+                             {"delivery": "on_release"})
         return True, "on_release"
     if delivery == "at":
         if send_at is None:
-            raise HTTPException(status_code=422, detail="delivery at needs send_at")
+            raise ApiProblem(422, "delivery at needs send_at",
+                             "delivery at prints at send_at. Give send_at as local ISO 8601, for example 2026-10-30T10:00:00.",
+                             {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
         if hold:
-            raise HTTPException(status_code=422, detail="delivery at cannot be held")
+            raise ApiProblem(422, "delivery at cannot be held",
+                             "A scheduled ticket prints at its time and is not held. Drop hold, or drop send_at and use hold.",
+                             {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
         return False, "at"
     if send_at is not None:
-        raise HTTPException(status_code=422, detail="delivery now cannot take send_at; use delivery at")
+        raise ApiProblem(422, "delivery now cannot take send_at",
+                         "delivery now prints straight away. For a later time use delivery at with send_at.",
+                         {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
     return hold, "now"
 
 
@@ -421,12 +482,17 @@ def preview_warnings(text: str) -> list[str]:
     return warnings
 
 
+# Paths that answer while setup is open: the wizard page, health, the setup routes and the docs.
+SETUP_OPEN_PATHS = ("/", "/setup", "/healthz", "/api/v1/health", "/docs", "/openapi.json", "/redoc")
+
+
 def create_app(settings: Settings | None = None, transport: Transport | None = None) -> FastAPI:
-    settings = settings or load_settings()
-    transport = transport or build_transport(settings)
+    settings = settings or setup_flow.stored_overrides(load_settings())
+    transport = SwitchableTransport(transport or build_transport(settings))
     store = TicketStore(settings.db_path)
     width = settings.paper_width
-    runtime = {"scheduler": False}
+    runtime = {"scheduler": False, "setup_open": settings.setup_required}
+    setup_lock = threading.Lock()
 
     def read_alert_settings() -> AlertSettings:
         return AlertSettings(
@@ -511,9 +577,37 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if "paper_near_end" in status.known:
             runtime["paper_near_end"] = "paper_near_end" in status.warnings  # shown in health, not alerted
 
+    def start_setup() -> None:
+        """Print a new setup code at every start. Legacy installs already have settings, so they skip the wizard.
+
+        The same code opens the wizard while setup is open, and later opens /setup to change settings.
+        """
+        if not settings.setup_required:
+            return
+        if store.get_setting(setup_flow.COMPLETE_KEY) is None and setup_flow.is_legacy_install(store):
+            store.set_setting(setup_flow.COMPLETE_KEY, "true")
+        runtime["setup_open"] = store.get_setting(setup_flow.COMPLETE_KEY) != "true"
+        code = setup_flow.new_code()
+        store.set_setting(setup_flow.CODE_HASH_KEY, setup_flow.code_hash(code))
+        app.state.setup_code = code
+        if runtime["setup_open"]:
+            logger.warning(
+                "printarr setup: open this printarr's web page in a browser and enter setup code %s. "
+                "A new code is printed at each start until setup is finished.",
+                code,
+            )
+        else:
+            logger.warning(
+                "printarr settings: to change settings, open /setup and enter setup code %s. "
+                "A new code is printed at each start.",
+                code,
+            )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         store.init()
+        setup_flow.make_private(settings.db_path)
+        start_setup()
         seed_model_settings()
         interrupted = store.fail_interrupted()
         if interrupted:
@@ -553,7 +647,24 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     )
     app.state.scheduler = scheduler
 
+    @app.middleware("http")
+    async def setup_gate(request: Request, call_next):
+        path = request.url.path
+        if runtime["setup_open"] and not (path in SETUP_OPEN_PATHS or path.startswith("/api/v1/setup/")):
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Setup is not finished. Open the printarr web page and complete the setup wizard.",
+                    "setup": "/",
+                },
+            )
+        return await call_next(request)
+
     api = APIRouter(prefix="/api/v1")
+
+    def require_setup_code(code: str | None) -> None:
+        if not setup_flow.code_matches(code, store.get_setting(setup_flow.CODE_HASH_KEY)):
+            raise HTTPException(status_code=401, detail="setup code is wrong. Copy it from the printarr log.")
 
     def ticket_or_404(ticket_id: str) -> dict[str, Any]:
         ticket = store.get(ticket_id)
@@ -609,7 +720,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 on_model_result,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from None
+            raise ApiProblem(422, str(exc), "template must be 'auto' or a template id from GET /api/v1/templates.") from None
 
     def home_assistant() -> HAClient | None:
         url = store.get_setting("ha_url") or ""
@@ -680,23 +791,24 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not body.hold:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
                 return existing
         if not is_slot_template(body.template):
-            raise HTTPException(status_code=422, detail=f"template {body.template} is not a slot template")
+            raise ApiProblem(422, f"template {body.template} is not a slot template", SLOT_HINT,
+                             {"template": 101, "recipient": "yannic", "slots": {"greeting": "Good morning, Yannic"}})
         try:
             checked = validate_slots(body.template, body.slots)
         except SlotProblems as exc:
-            raise HTTPException(status_code=422, detail=exc.problems) from None
+            raise ApiProblem(422, exc.problems, SLOT_HINT) from None
         now = datetime.now(settings.tzinfo)
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
         if body.blocks and home_assistant() is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
         try:
             block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
         except HAError as exc:
@@ -742,9 +854,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a ticket. The template is chosen now, so printing needs no more work."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not body.hold:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
@@ -752,7 +864,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         choice = choose(body)
         message = prepare_text(body)
         if body.blocks and home_assistant() is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
         render_started = time.perf_counter()
         try:  # reject now rather than queue a ticket that cannot print
             receipt = Receipt(
@@ -816,9 +928,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not held:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
@@ -826,7 +938,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         try:
             checked = compose_validate(body.blocks)
         except BlockProblem as exc:
-            raise HTTPException(status_code=422, detail=exc.problems) from None
+            raise ApiProblem(422, exc.problems, BLOCKS_HINT, COMPOSE_EXAMPLE) from None
         render_started = time.perf_counter()
         try:  # draw the strips now, so a queued ticket always prints; notes say what was shortened
             lines, notes = compose_render(checked, None)
@@ -895,7 +1007,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """
         client = home_assistant()
         if client is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
 
         found = insight_cache.get(person, limit, lambda: collect(person, client.numeric_history, limit))
         return [asdict(item) for item in found]
@@ -1019,9 +1131,54 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=502, detail=str(exc)) from None
         return {"reachable": True}
 
+    @api.get("/setup/status", tags=["setup"])
+    def setup_status() -> dict[str, Any]:
+        """The wizard's starting values. Secrets are only reported as set or not set."""
+        return {"complete": not runtime["setup_open"], **setup_flow.status_view(store, settings)}
+
+    @api.post("/setup/check/{item}", tags=["setup"], responses={401: {"description": "Setup code is wrong"}})
+    def setup_check(
+        item: CheckName,
+        values: SetupValues,
+        x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
+    ) -> dict[str, Any]:
+        """Test one service with the values in the wizard. Nothing is saved."""
+        require_setup_code(x_setup_code)
+        result = check_item(item, values)
+        return {"item": item, "ok": result.ok, "detail": result.detail}
+
+    @api.post("/setup/complete", tags=["setup"], responses={422: {"description": "A check failed"}})
+    def setup_complete(
+        values: SetupValues,
+        x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
+    ) -> dict[str, Any]:
+        """Check every service that was filled in, then save everything. Also used to change settings later.
+
+        The first call finishes setup and opens the API. After that, the same call saves changes, and a
+        blank secret keeps the saved one (list it in `clear` to remove it). A failed check returns 422
+        with what to fix. Nothing is saved unless every check passes.
+        """
+        with setup_lock:
+            require_setup_code(x_setup_code)
+            values = setup_flow.fill_secrets(values, store)
+            failed = {name: r.detail for name, r in run_checks(values).items() if not r.ok}
+            if failed:
+                raise HTTPException(status_code=422, detail=failed)
+            setup_flow.save_values(store, values)
+            store.set_setting(setup_flow.COMPLETE_KEY, "true")
+            runtime["setup_open"] = False
+            transport.swap(build_transport(setup_flow.printer_settings(settings, values)))
+        logger.info("printarr settings saved")
+        return {"complete": True, "restart_needed": values.timezone != settings.timezone}
+
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def web_ui() -> str:
-        return WEB_UI
+        return SETUP_UI if runtime["setup_open"] else WEB_UI
+
+    @app.get("/setup", response_class=HTMLResponse, include_in_schema=False)
+    def setup_page() -> str:
+        """The wizard while setup is open; afterwards the same page edits the saved settings."""
+        return SETUP_UI
 
     @api.get("/tickets", response_model=list[TicketOut], tags=["tickets"])
     def list_tickets(
@@ -1195,6 +1352,28 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def get_metrics() -> dict[str, Any]:
         """Counters since start: tickets printed, failures, dead letters, interrupted jobs, pauses."""
         return {**metrics.snapshot(), "queue_paused": scheduler.paused_reason}
+
+    @app.exception_handler(ApiProblem)
+    async def _api_problem(_: Request, exc: ApiProblem) -> JSONResponse:
+        body: dict[str, Any] = {"detail": exc.detail, "hint": exc.hint}
+        if exc.example is not None:
+            body["example"] = exc.example
+        return JSONResponse(status_code=exc.status_code, content=body)
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
+        sentences = []
+        for error in exc.errors():
+            field = ".".join(str(part) for part in error["loc"][1:]) or "the request"
+            if error["type"] == "literal_error":
+                sentences.append(f"{field} must be one of {error['ctx']['expected']}.")
+            else:
+                sentences.append(f"{field}: {plain_message(error['msg'])}.")
+        hint = " ".join([*sentences, VALIDATION_HINT])
+        return JSONResponse(
+            status_code=422,
+            content={"detail": jsonable_encoder(exc.errors()), "hint": hint},
+        )
 
     app.include_router(api)
     app.state.watch_printer = watch_printer  # tests and the heartbeat share this check
