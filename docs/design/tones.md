@@ -29,3 +29,9 @@ Rules:
 - Fun facts use the playful tone, not reminders, and never print "Did you know" as a lead-in on
   reminders or notes.
 - Printed tickets never print the tone name.
+
+Outline weight: the card outline also carries the tone. `urgent`, `upset` and `firm_complaint`
+draw a heavy (4 dot) square-cornered outline, `critical` the heaviest (5 dots), and soft tones
+(`loving`, `gentle_warning`, `playful`, `happy`) draw a rounder corner. The rest use the shell's own
+2-dot outline. Each kind of ticket also wears its own mark at the top-right: envelope for a note,
+bolt for an alert, clock for a reminder, bulb for a fun fact and cart for a shopping list.

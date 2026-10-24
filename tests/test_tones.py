@@ -28,3 +28,13 @@ def test_heart_is_only_for_loving():
 def test_urgent_has_the_barcode_border_and_gentle_has_the_zigzag():
     assert strips.MOODS["urgent"]["header"] == "barcode"
     assert strips.MOODS["gentle_warning"]["header"] == "dottedWave"
+
+
+def test_urgent_tones_have_a_heavier_outline_and_soft_tones_a_rounder_one():
+    """The card outline carries the tone: heavy and square for urgent, round for soft."""
+    for mood in ("urgent", "critical"):
+        assert strips.STROKE_BY_MOOD[mood] > strips.STROKE
+        assert strips.RADIUS_BY_MOOD[mood] < strips.RADIUS
+    for mood in ("loving", "gentle_warning"):
+        assert strips.RADIUS_BY_MOOD[mood] > strips.RADIUS
+    assert strips.STROKE_BY_MOOD["critical"] == max(strips.STROKE_BY_MOOD.values())
