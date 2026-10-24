@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from app import ticket_images
 from app.web import WEB_UI
 from app.version import PACKAGE_VERSION, build_info
 
@@ -1348,6 +1349,51 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raster_mode=settings.raster_mode,
         )
         return Response(content=data, media_type="application/octet-stream")
+
+    @api.get("/ticket-images", tags=["tickets"])
+    def list_ticket_images(limit: int = Query(50, ge=1, le=250)) -> list[dict[str, Any]]:
+        """Recent tickets that have a saved PNG, newest first. Fetch one with GET /tickets/{id}/image."""
+        rows = []
+        for ticket_id in ticket_images.recent(settings.images_dir, limit):
+            ticket = store.get(ticket_id)
+            if ticket is None:  # an image whose ticket was removed from the database
+                continue
+            try:
+                template_name = template_by_id(ticket["template_id"]).name
+            except KeyError:  # a template id no longer in the code
+                template_name = None
+            rows.append({
+                "id": ticket["id"],
+                "kind": ticket["kind"],
+                "template_id": ticket["template_id"],
+                "template": template_name,
+                "recipient": ticket["recipient"],
+                "status": ticket["status"],
+                "created_at": ticket["created_at"],
+                "printed_at": ticket["printed_at"],
+                "image_url": f"/api/v1/tickets/{ticket['id']}/image",
+            })
+        return rows
+
+    @api.get(
+        "/tickets/{ticket_id}/image",
+        response_class=Response,
+        tags=["tickets"],
+        responses={200: {"content": {"image/png": {}}}},
+    )
+    def ticket_image(ticket_id: str) -> Response:
+        """The PNG of what was sent to the printer for this ticket, from its last print or failed attempt."""
+        ticket_or_404(ticket_id)
+        path = ticket_images.image_path(settings.images_dir, ticket_id)
+        if path is None or not path.is_file():
+            raise ApiProblem(
+                404,
+                "no image kept for this ticket",
+                hint="Images are kept for the newest tickets that reached the printer or failed there. "
+                "A ticket still waiting, cancelled before printing, or older than the kept ones has none. "
+                "GET /api/v1/ticket-images lists the images kept.",
+            )
+        return Response(content=path.read_bytes(), media_type="image/png")
 
     @api.get("/printer", response_model=PrinterStatus, tags=["printer"])
     def printer_status() -> PrinterStatus:

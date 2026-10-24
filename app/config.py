@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 PRINTER_MODES = ("tcp", "file", "usb", "serial")  # usb and serial are placeholders, see printer.py
@@ -39,9 +40,16 @@ class Settings:
     # production. Tests switch it off with an explicit Settings(setup_required=False).
     setup_required: bool = True
 
+    image_keep: int = 250  # newest ticket images kept, as PNG files next to the database
+
     @property
     def tzinfo(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)
+
+    @property
+    def images_dir(self) -> Path:
+        """Where the PNG of each printed or failed ticket is kept: /data/tickets/images by default."""
+        return Path(self.db_path).parent / "tickets" / "images"
 
 
 def _env(name: str, default: str) -> str:
@@ -52,6 +60,7 @@ def load_settings() -> Settings:
     settings = Settings(
         db_path=_env("DB_PATH", "/data/printarr.db"),
         output_dir=_env("OUTPUT_DIR", "/data/output"),
+        image_keep=int(_env("IMAGE_KEEP", "250")),
         timezone=_env("TIMEZONE", "Europe/London"),
         printer_mode=_env("PRINTER_MODE", "tcp").lower(),
         raster_mode=_env("RASTER_MODE", "gs_l").lower(),

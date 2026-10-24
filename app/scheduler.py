@@ -13,6 +13,7 @@ from app.alerts import Notifier
 from app.blocks import parse_blocks, unavailable_lines
 from app.config import Settings
 from app.escpos import encode
+from app.escpos_image import payload_to_png
 from app.ha import HAError, client_from_store
 from app.metrics import Metrics
 from app.printer import PrinterError, PrintInterrupted, Transport
@@ -20,6 +21,7 @@ from app.receipt import Line, render_ticket_lines, sender_label, ticket_feed
 from app.status import FAULT_TEXT, PrinterStatus, decode
 from app.render.registry import design_line
 from app.text import printable
+from app import ticket_images
 from app.templates import template_by_id
 from app.blocks import resolve_blocks
 from app.store import TicketStore, now_ms
@@ -174,7 +176,26 @@ class Scheduler:
                 self.notifier.recovered("home_assistant", "Home Assistant answers again")
         return [line]
 
+    def _keep_image(self, ticket: dict, payload: bytes | None) -> str | None:
+        """Save the bytes sent to the printer as a PNG. Returns the file path, or None when there is none.
+
+        Never raises: a bad image must not hold up the queue or undo a print.
+        """
+        if payload is None:
+            return None
+        try:
+            png = payload_to_png(payload)
+            path = ticket_images.save(self.settings.images_dir, ticket["id"], png, self.settings.image_keep)
+            return str(path)
+        except Exception:
+            logger.exception("ticket %s: could not save its image", ticket["id"])
+            return None
+
+    def _ticket_lines(self, ticket: dict) -> list[Line]:
+        return render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, self.live_lines(ticket))
+
     def _print(self, ticket: dict) -> None:
+        payload: bytes | None = None  # kept for the ticket image, also when the send fails
         try:
             started = time.perf_counter()
             live = self.live_lines(ticket)
@@ -201,7 +222,11 @@ class Scheduler:
                 logger.info(timing)
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
-            logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)
+            image = self._keep_image(ticket, payload)
+            logger.warning(
+                "ticket %s attempt %d failed: %s (image: %s)",
+                ticket["id"], ticket["attempts"], error, image or "none",
+            )
             self.metrics.incr("print_failures")
             if isinstance(exc, PrintInterrupted):
                 self.metrics.incr("print_interrupted")
@@ -211,6 +236,7 @@ class Scheduler:
             return
         if self.notifier:
             self.notifier.recovered("printer", "printer is reachable again")
+        self._keep_image(ticket, payload)
         self.metrics.incr("tickets_printed")
         self._mark_sent(ticket["id"], print_ms=round(total_ms))
         logger.info("ticket %s printed", ticket["id"])
@@ -245,14 +271,21 @@ class Scheduler:
             won = self.store.claim([ticket["id"] for ticket in chunk])
             if not won:
                 continue
-            tickets = [self.store.get(ticket_id) for ticket_id in won]
+            tickets = [t for t in (self.store.get(ticket_id) for ticket_id in won) if t is not None]
             strip_id = uuid.uuid4().hex
+            parts: list[list[Line]] = []
             try:
-                lines = self._strip_lines([t for t in tickets if t is not None])
-                self.transport.send(encode(lines, feed=1, raster_mode=self.settings.raster_mode))
+                parts = [self._ticket_lines(ticket) for ticket in tickets]
+                self.transport.send(encode(self._strip_lines(parts), feed=1, raster_mode=self.settings.raster_mode))
             except Exception as exc:
                 self.store.unclaim(won)
+                # Each ticket in the failed strip keeps its own image, drawn as its own ticket.
+                for ticket, part in zip(tickets, parts):
+                    image = self._keep_image(ticket, self._ticket_payload(part, ticket))
+                    logger.warning("ticket %s in failed strip %s (image: %s)", ticket["id"], strip_id, image or "none")
                 raise ReleaseIncomplete(strips, str(exc) or type(exc).__name__) from exc
+            for ticket, part in zip(tickets, parts):
+                self._keep_image(ticket, self._ticket_payload(part, ticket))
             for ticket_id in won:
                 self._mark_sent(ticket_id, strip_id=strip_id, strip_trigger=trigger)
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
@@ -273,13 +306,17 @@ class Scheduler:
             chunks.append(current)
         return chunks
 
-    def _strip_lines(self, tickets: list[dict]) -> list[Line]:
+    def _ticket_payload(self, lines: list[Line], ticket: dict) -> bytes:
+        """The bytes for one ticket on its own, as its image is drawn. A strip adds margins around the tickets."""
+        return encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
+
+    def _strip_lines(self, parts: list[list[Line]]) -> list[Line]:
         """The tickets one after another. Blank space around each strip comes from the shell, not from here."""
         margin = self.settings.strip_margin_dots
         blank = Line("", raster=(64, margin, bytes(64 * margin))) if margin > 0 else None
         lines: list[Line] = [blank] if blank else []
-        for ticket in tickets:
-            lines += render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, self.live_lines(ticket))
+        for part in parts:
+            lines += part
         if blank:
             lines.append(blank)
         return lines
