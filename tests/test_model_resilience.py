@@ -134,3 +134,61 @@ def test_model_calls_send_no_keep_alive(monkeypatch):
         pass
     assert seen and all("keep_alive" not in body for body in seen)
 
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_deadline_hands_out_the_smaller_of_the_limit_and_what_is_left():
+    clock = FakeClock()
+    deadline = templates.Deadline(50, clock=clock)
+    assert deadline.allow(45) == 45
+    clock.now = 20
+    assert deadline.allow(45) == 30  # 30 s left, so the next call gets 30 s, not 45
+
+
+def test_an_exhausted_deadline_raises_before_any_call():
+    clock = FakeClock()
+    deadline = templates.Deadline(50, clock=clock)
+    clock.now = 49.5
+    try:
+        deadline.allow(45)
+    except templates.ModelError as exc:
+        assert "used up" in str(exc)
+    else:
+        raise AssertionError("expected the budget to be used up")
+
+
+def test_the_decision_gets_only_what_the_text_clean_up_left(monkeypatch):
+    clock = FakeClock()
+    timeouts = []
+
+    def fake_urlopen(request, timeout):
+        timeouts.append(timeout)
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(templates.urllib.request, "urlopen", fake_urlopen)
+    deadline = templates.Deadline(50, clock=clock)
+    clock.now = 40  # granite took 40 s
+    model = templates.SystemOneModel("http://ollama:11434/v1", "d1:latest", timeout=45)
+    choice = templates.resolve_choice("yannic", None, "hi", None, model, None, deadline)
+    assert choice.selection == "rule"
+    assert timeouts == [10]  # 50 s budget less 40 s used
+
+
+def test_an_exhausted_budget_falls_back_to_rules_without_calling_the_model(monkeypatch):
+    clock = FakeClock()
+    called = []
+    monkeypatch.setattr(templates.urllib.request, "urlopen", lambda *a, **k: called.append(1))
+    deadline = templates.Deadline(50, clock=clock)
+    clock.now = 50
+    model = templates.SystemOneModel("http://ollama:11434/v1", "d1:latest", timeout=45)
+    results = []
+    choice = templates.resolve_choice("yannic", None, "hi", None, model, results.append, deadline)
+    assert choice.selection == "rule" and called == []
+    assert results and isinstance(results[0], templates.ModelError)
