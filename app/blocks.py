@@ -1,5 +1,5 @@
-"""Graphic and data blocks for a ticket. Values come from Home Assistant at request time,
-and the result is stored on the ticket, so printing needs no network call."""
+"""Graphic and data blocks for a ticket. Home Assistant is asked at queue time only to check that it
+answers; the values are read again when the ticket prints, so a held ticket shows current data."""
 
 from __future__ import annotations
 

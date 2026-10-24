@@ -50,9 +50,12 @@ def opens_strip(ticket: dict) -> bool:
         return True
     if int(ticket.get("template_id") or 0) == 103:
         try:
-            blocks = json.loads(ticket.get("slots_json") or "{}").get("blocks", [])
+            stored = json.loads(ticket.get("slots_json") or "{}")
         except ValueError:
             return False
+        if "preset" in stored:  # the briefing preset always opens with its greeting
+            return True
+        blocks = stored.get("blocks", [])
         return bool(blocks) and blocks[0].get("type") == "greeting"
     return False
 
