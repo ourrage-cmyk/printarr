@@ -88,6 +88,14 @@ a fixed rule picks one.
 """
 
 
+class PersonRelease(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trigger: Literal["morning", "evening", "arrival", "request"] = Field(
+        default="request", description="Why the strip is printed, kept in the log."
+    )
+
+
 class SlotTicketCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -100,6 +108,9 @@ class SlotTicketCreate(BaseModel):
     to_user: Recipient | None = None
     sender: str | None = Field(default=None, max_length=40)
     send_at: datetime | None = None
+    delivery: Literal["now", "at", "on_release"] | None = Field(
+        default=None, description="As for /tickets: now, at, or on_release (the recipient's pile)."
+    )
     hold: bool = Field(default=False, description="Keep the ticket until released, as for /tickets.")
     hold_key: str | None = Field(default=None, max_length=40, examples=["user-home"])
     idempotency_key: str | None = Field(
@@ -155,6 +166,14 @@ class TicketCreate(BaseModel):
     )
     to_user: Recipient | None = Field(
         default=None, description="The person it is for. With from_user, it is an inbox item."
+    )
+    delivery: Literal["now", "at", "on_release"] | None = Field(
+        default=None,
+        description=(
+            "now: print and cut at once. at: print at send_at. on_release: wait in the recipient's "
+            "pile and print with their next POST /api/v1/people/{person}/release. Omitted, it is at "
+            "when send_at is set, otherwise now."
+        ),
     )
     blocks: list[Block] = Field(
         default_factory=list,
@@ -239,6 +258,9 @@ class TicketOut(BaseModel):
     choice_source: str | None = None
     render_ms: int | None = None
     print_ms: int | None = None
+    delivery: str = "now"
+    strip_id: str | None = None
+    strip_trigger: str | None = None
 
 
 class ChoiceOut(BaseModel):
@@ -303,6 +325,30 @@ def _resolve_send_at(value: datetime | None, tz: Any) -> int:
     if value.tzinfo is None:
         value = value.replace(tzinfo=tz)
     return int(value.timestamp() * 1000)
+
+
+def resolve_delivery(
+    delivery: str | None, send_at: datetime | None, hold: bool
+) -> tuple[bool, str]:
+    """Return (held, delivery). Omitted, a ticket is 'at' when it has send_at, otherwise 'now'.
+
+    'on_release' tickets wait in the person's pile until POST /people/{person}/release.
+    """
+    if delivery is None:
+        return hold, "at" if send_at is not None else "now"
+    if delivery == "on_release":
+        if send_at is not None:
+            raise HTTPException(status_code=422, detail="delivery on_release cannot take send_at")
+        return True, "on_release"
+    if delivery == "at":
+        if send_at is None:
+            raise HTTPException(status_code=422, detail="delivery at needs send_at")
+        if hold:
+            raise HTTPException(status_code=422, detail="delivery at cannot be held")
+        return False, "at"
+    if send_at is not None:
+        raise HTTPException(status_code=422, detail="delivery now cannot take send_at; use delivery at")
+    return hold, "now"
 
 
 def _choice_out(choice: Choice) -> ChoiceOut:
@@ -589,6 +635,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.post("/tickets/slots", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_slot_ticket(body: SlotTicketCreate) -> dict[str, Any]:
         """Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem."""
+        held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
             raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
         if body.hold_key and not body.hold:
@@ -640,7 +687,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             choice_source="explicit",
             render_ms=render_ms,
             slots_json=json.dumps(filled, default=str),
-            held=body.hold,
+            held=held,
+            delivery=delivery,
             hold_key=body.hold_key,
             idempotency_key=body.idempotency_key,
             blocks_json=json.dumps([block.model_dump() for block in body.blocks]),
@@ -649,6 +697,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.post("/tickets", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_ticket(body: TicketCreate) -> dict[str, Any]:
         """Queue a ticket. The template is chosen now, so printing needs no more work."""
+        held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
             raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
         if body.hold_key and not body.hold:
@@ -696,7 +745,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             template_id=choice.template.id,
             decorations=choice.decorations,
             selection=choice.selection,
-            held=body.hold,
+            held=held,
+            delivery=delivery,
             hold_key=body.hold_key,
             idempotency_key=body.idempotency_key,
         )
@@ -705,6 +755,15 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def release_ticket(ticket_id: str) -> dict[str, Any]:
         """Release a held ticket. It prints within seconds, since its template is already chosen."""
         return guarded(store.release, ticket_id)
+
+    @api.post("/people/{person}/release", tags=["tickets"])
+    def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:
+        """Print this person's pile as strips, cutting after each. Only this person's tickets go on a strip."""
+        try:
+            strips = scheduler.print_release(person, body.trigger)
+        except PrinterError as exc:
+            raise HTTPException(status_code=502, detail=f"printer unreachable, pile kept: {exc}") from None
+        return {"person": person, "trigger": body.trigger, "strips": strips}
 
     @api.post("/holds/{hold_key}/release", response_model=list[TicketOut], tags=["tickets"])
     def release_hold(hold_key: str) -> list[dict[str, Any]]:

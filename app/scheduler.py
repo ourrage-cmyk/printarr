@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import uuid
 import time
 from collections.abc import Callable
 
@@ -184,6 +185,45 @@ class Scheduler:
         self.metrics.incr("tickets_printed")
         self.store.mark_sent(ticket["id"], print_ms=round(total_ms))
         logger.info("ticket %s printed", ticket["id"])
+
+    def print_release(self, person: str, trigger: str) -> list[dict]:
+        """Print one person's pile as strips. Each strip holds only this person's tickets and is cut after it.
+
+        A strip is cut after strip_max_blocks tickets. Tickets are claimed before printing, so a repeat
+        release prints nothing new. A failed print puts its claimed tickets back on hold.
+        """
+        pile = self.store.pile(person)
+        size = max(1, self.settings.strip_max_blocks)
+        strips: list[dict] = []
+        for start in range(0, len(pile), size):
+            chunk = pile[start : start + size]
+            won = self.store.claim([ticket["id"] for ticket in chunk])
+            if not won:
+                continue
+            tickets = [self.store.get(ticket_id) for ticket_id in won]
+            strip_id = uuid.uuid4().hex
+            try:
+                lines = self._strip_lines([t for t in tickets if t is not None])
+                self.transport.send(encode(lines, feed=1, raster_mode=self.settings.raster_mode))
+            except Exception:
+                self.store.unclaim(won)
+                raise
+            for ticket_id in won:
+                self.store.mark_sent(ticket_id, strip_id=strip_id, strip_trigger=trigger)
+            logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
+            strips.append({"strip_id": strip_id, "ticket_ids": won})
+        return strips
+
+    def _strip_lines(self, tickets: list[dict]) -> list[Line]:
+        """The tickets one after another, with a blank margin at the top and bottom of the strip."""
+        margin = self.settings.strip_margin_dots
+        blank = Line("", raster=(64, margin, bytes(64 * margin))) if margin > 0 else None
+        lines: list[Line] = [blank] if blank else []
+        for ticket in tickets:
+            lines += render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, self.live_lines(ticket))
+        if blank:
+            lines.append(blank)
+        return lines
 
     def _record_failure(self, ticket: dict, error: str) -> None:
         if ticket["attempts"] >= self.settings.max_attempts:

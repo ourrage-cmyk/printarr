@@ -33,6 +33,8 @@ class Settings:
     backup_enabled: bool = True
     backup_hour: int = 3  # local hour for the nightly copy
     backup_keep: int = 7  # nightly copies kept
+    strip_max_blocks: int = 5  # a strip is cut after this many tickets, even mid-pile
+    strip_margin_dots: int = 90  # blank space at the top and bottom of a strip, 0.5 in at 180 dpi
 
     @property
     def tzinfo(self) -> ZoneInfo:
@@ -66,6 +68,8 @@ def load_settings() -> Settings:
         backup_enabled=_env("BACKUP", "on").lower() in _TRUE_VALUES,
         backup_hour=int(_env("BACKUP_HOUR", "3")),
         backup_keep=int(_env("BACKUP_KEEP", "7")),
+        strip_max_blocks=int(_env("STRIP_MAX_BLOCKS", "5")),
+        strip_margin_dots=int(_env("STRIP_MARGIN_DOTS", "90")),
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")
