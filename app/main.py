@@ -36,7 +36,9 @@ from app.insights import InsightCache, collect
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
 from app.printer import PrinterError, SwitchableTransport, Transport, build_transport
+from app import discovery
 from app import setup as setup_flow
+from app.discovery import DiscoverRequest
 from app.setup import CheckName, SetupValues, check_item, run_checks
 from app.setup_page import SETUP_UI
 from app.metrics import Metrics
@@ -1156,6 +1158,34 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         require_setup_code(x_setup_code)
         result = check_item(item, values)
         return {"item": item, "ok": result.ok, "detail": result.detail}
+
+    @api.post("/setup/discover", tags=["setup"], responses={401: {"description": "Setup code is wrong"}, 422: {"description": "Network not allowed"}})
+    def setup_discover(
+        body: DiscoverRequest,
+        x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
+    ) -> dict[str, Any]:
+        """Look on the local network for one service. Nothing is saved, and no credentials are sent.
+
+        Without a network, the /24 around printarr is used. Inside Docker's own range there is no home
+        network to find, so the response asks for one and suggests 192.168.1.0/24.
+        """
+        require_setup_code(x_setup_code)
+        network_text = body.network.strip() or discovery.detect_network(discovery.own_address()) or ""
+        if not network_text:
+            return {
+                "service": body.service, "network": None, "needs_network": True,
+                "suggested_network": discovery.SUGGESTED_NETWORK, "candidates": [],
+            }
+        try:
+            network = discovery.parse_network(network_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        found = discovery.scan(body.service, network)
+        return {
+            "service": body.service, "network": str(network), "needs_network": False,
+            "suggested_network": discovery.SUGGESTED_NETWORK,
+            "candidates": [candidate.as_dict() for candidate in found],
+        }
 
     @api.post("/setup/complete", tags=["setup"], responses={422: {"description": "A check failed"}})
     def setup_complete(
