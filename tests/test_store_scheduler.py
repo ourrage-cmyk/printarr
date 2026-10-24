@@ -114,3 +114,32 @@ def test_interrupted_tickets_are_requeued(store):
 
     assert store.recover_interrupted(20) == 1
     assert store.get(ticket["id"])["status"] == "pending"
+
+
+def test_same_idempotency_key_returns_the_first_ticket(store):
+    first = store.create(
+        recipient="yannic", message="Morning", send_at_ms=0, template_id=1,
+        decorations=(), selection="rule", idempotency_key="morning:yannic:2026-10-26",
+    )
+    second = store.create(
+        recipient="yannic", message="Morning again", send_at_ms=0, template_id=1,
+        decorations=(), selection="rule", idempotency_key="morning:yannic:2026-10-26",
+    )
+    assert second["id"] == first["id"]
+    assert second["message"] == "Morning"
+    assert len(store.search(recipient="yannic")) == 1
+
+
+def test_tickets_without_a_key_are_not_merged(store):
+    a = create(store)
+    b = create(store)
+    assert a["id"] != b["id"]
+
+
+def test_release_hold_twice_is_harmless(store):
+    store.create(
+        recipient="yannic", message="Home", send_at_ms=0, template_id=1,
+        decorations=(), selection="rule", held=True, hold_key="user-home",
+    )
+    assert len(store.release_hold("user-home")) == 1
+    assert store.release_hold("user-home") == []
