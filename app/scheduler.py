@@ -14,6 +14,7 @@ from app.escpos import encode
 from app.ha import HAError, client_from_store
 from app.printer import PrinterError, Transport
 from app.receipt import Line, render_ticket_lines, ticket_feed
+from app.status import FAULT_TEXT, PrinterStatus, decode
 from app.render.registry import design_line
 from app.text import printable
 from app.templates import template_by_id
@@ -41,13 +42,50 @@ class Scheduler:
         self.settings = settings
         self.clock = clock
         self.notifier = notifier
+        self._paused_reason: str | None = None
+        self._last_status_ms: int | None = None
+        self._last_status: PrinterStatus | None = None
+
+    @property
+    def paused_reason(self) -> str | None:
+        """Why the queue is waiting, or None when it is printing normally."""
+        return self._paused_reason
 
     def run_once(self) -> int:
         """Print every ticket that is due right now. Returns how many were attempted."""
-        jobs = self.store.claim_due(self.clock(), BATCH_SIZE)
+        now = self.clock()
+        if self.store.count_due(now) == 0:
+            return 0
+        if self._blocked_by_printer(now):
+            return 0
+        jobs = self.store.claim_due(now, BATCH_SIZE)
         for ticket in jobs:
             self._print(ticket)
         return len(jobs)
+
+    def _blocked_by_printer(self, now: int) -> bool:
+        """Hold the queue while the printer reports a fault, and resume when it clears.
+
+        Status is read at most once per poll interval. A printer that cannot be reached is
+        not a pause: the send fails and the ticket backs off as usual.
+        """
+        if self._last_status_ms is None or now - self._last_status_ms >= self.settings.poll_interval * 1000:
+            self._last_status_ms = now
+            try:
+                self._last_status = decode(self.transport.read_status())
+            except PrinterError:
+                self._last_status = None
+        status = self._last_status
+        if status is None or not status.blocking:
+            if self._paused_reason is not None:
+                logger.info("printer ready again, resuming queue (was: %s)", self._paused_reason)
+                self._paused_reason = None
+            return False
+        reason = ", ".join(sorted(FAULT_TEXT[key] for key in status.faults))
+        if reason != self._paused_reason:
+            logger.warning("queue paused: %s", reason)
+            self._paused_reason = reason
+        return True
 
     def live_lines(self, ticket: dict) -> list[Line]:
         """Fetch Home Assistant data now, so a held or scheduled ticket prints current values."""

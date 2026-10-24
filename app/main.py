@@ -377,9 +377,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     async def lifespan(_: FastAPI):
         store.init()
         seed_model_settings()
-        recovered = store.recover_interrupted()
-        if recovered:
-            logger.warning("re-queued %d ticket(s) interrupted by a restart", recovered)
+        interrupted = store.fail_interrupted()
+        if interrupted:
+            logger.warning("%d ticket(s) were printing at restart and were not reprinted: %s",
+                           len(interrupted), ", ".join(interrupted))
+            notifier.send_now(
+                f"Printarr: {len(interrupted)} ticket(s) were interrupted by a restart and were not "
+                "reprinted, to avoid a duplicate. Check the paper, then retry them from the web UI if needed."
+            )
         worker = (
             SchedulerThread(scheduler, settings.poll_interval)
             if settings.scheduler_enabled
