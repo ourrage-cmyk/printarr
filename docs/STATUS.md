@@ -21,7 +21,7 @@
 - Decision model choosing block type and mood (currently rules and `neutral`).
 - Graph series from Home Assistant history.
 - Evening rundown contents (missed messages, dogs, daily summary).
-- Shopping list: where it lives, and how it prints.
 - Simulator as printer: confirm the config over raw TCP 9100.
 - Grayscale and CJK or emoji output are unverified or unsupported.
-- No API key: fine on a trusted LAN, not for the open internet.
+- Decided: the API is LAN-only with no API key. The web UI may be exposed later behind Yannic's own auth portal.
+- Decided: the shopping list lives in Home Assistant and is managed by Hermes. printarr prints it on request or on arrival.
