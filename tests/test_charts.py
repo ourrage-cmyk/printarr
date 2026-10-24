@@ -58,3 +58,19 @@ def test_long_tip_is_not_cut(monkeypatch):
 def test_axis_labels_fit_the_tile(span):
     width = solid_width(span, 14) + solid_width("NOW", 14)
     assert width < strips.OUTER_R - strips.OUTER_L
+
+
+def test_no_card_content_runs_past_its_card():
+    """A tile whose label wraps and has a sparkline still fits inside its card, so nothing overlaps the next card."""
+    blocks = [
+        Block("greeting", {"greeting": "Good morning, Yannic", "summary": "Cloudy, 12 C."}),
+        Block("metric", {"label": "Body battery", "value": 74, "unit": "%", "series": [40, 52, 61, 58, 70, 74]}),
+        Block("metric", {"label": "Stress", "value": 21, "series": [30, 28, 25, 22, 21]}),
+        Block("metric", {"label": "Steps", "value": 6120, "series": [0, 1000, 3000, 6120]}),
+        Block("tip", {"tip": "Leave ten minutes early when it rains."}),
+    ]
+    rows, _ = strips.layout(blocks)
+    for row in rows:
+        for placed in row:
+            needed = placed.content_h + 2 * strips.PAD_V
+            assert placed.units * strips.UNIT_H >= needed, (placed.block.type, placed.units, needed)
