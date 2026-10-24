@@ -1,0 +1,50 @@
+# printarr health and queue sensors. Paste under sensor: and binary_sensor: in configuration.yaml,
+# or into a package. Replace PRINTARR_URL with the printarr address.
+#
+# /api/v1/health returns 200 when the printer and database are up, and 503 when one is down.
+# The rest sensor treats 503 as a readable response, so the JSON body still arrives.
+
+rest:
+  - resource: "http://PRINTARR_URL/api/v1/health"
+    scan_interval: 120
+    timeout: 10
+    sensor:
+      - name: "printarr printer check"
+        unique_id: printarr_printer_check
+        value_template: "{{ value_json.checks.printer }}"
+        icon: mdi:printer-pos
+      - name: "printarr database check"
+        unique_id: printarr_database_check
+        value_template: "{{ value_json.checks.database }}"
+        icon: mdi:database-check
+
+  # Queue size: how many tickets are waiting to print. Capped at 200 by the API.
+  - resource: "http://PRINTARR_URL/api/v1/tickets?status=pending&limit=200"
+    scan_interval: 300
+    timeout: 10
+    sensor:
+      - name: "printarr queue size"
+        unique_id: printarr_queue_size
+        value_template: "{{ value_json | length }}"
+        unit_of_measurement: "tickets"
+        icon: mdi:playlist-check
+
+  - resource: "http://PRINTARR_URL/api/v1/tickets?status=held&limit=200"
+    scan_interval: 300
+    timeout: 10
+    sensor:
+      - name: "printarr held tickets"
+        unique_id: printarr_held_count
+        value_template: "{{ value_json | length }}"
+        unit_of_measurement: "tickets"
+        icon: mdi:clock-outline
+
+# Problem sensor for dashboards and alerts. On when the printer or database check is not "ok".
+template:
+  - binary_sensor:
+      - name: "printarr problem"
+        unique_id: printarr_problem
+        device_class: problem
+        state: >-
+          {{ states('sensor.printarr_printer_check') != 'ok'
+             or states('sensor.printarr_database_check') != 'ok' }}
