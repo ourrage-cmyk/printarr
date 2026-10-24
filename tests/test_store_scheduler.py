@@ -4,7 +4,7 @@ import pytest
 
 from app.printer import PrinterError
 from app.scheduler import Scheduler
-from app.store import TicketNotFound, TicketStateError, TicketStore
+from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 
 
 class RecordingTransport:
@@ -22,6 +22,35 @@ class RecordingTransport:
 
     def check(self) -> None:
         pass
+
+    def read_status(self) -> dict[int, int | None]:
+        return {1: 0x12, 2: 0x12, 3: 0x12, 4: 0x12}
+
+
+class FaultyTransport(RecordingTransport):
+    """Reports a fault until `clear()` is called, the way a cover left open does."""
+
+    def __init__(self, fault_bytes: dict[int, int]) -> None:
+        super().__init__()
+        self.fault_bytes = fault_bytes
+        self.status_reads = 0
+
+    def read_status(self) -> dict[int, int | None]:
+        self.status_reads += 1
+        answers = {1: 0x12, 2: 0x12, 3: 0x12, 4: 0x12}
+        answers.update(self.fault_bytes)
+        return answers
+
+    def clear(self) -> None:
+        self.fault_bytes = {}
+
+
+class UnreachableTransport(RecordingTransport):
+    def send(self, data: bytes) -> None:
+        raise PrinterError("cannot reach printer")
+
+    def read_status(self) -> dict[int, int | None]:
+        raise PrinterError("cannot reach printer")
 
 
 @pytest.fixture
@@ -107,13 +136,30 @@ def test_unknown_ticket_raises(store):
         store.cancel("missing")
 
 
-def test_interrupted_tickets_are_requeued(store):
+def test_interrupted_tickets_fail_instead_of_reprinting(store, settings):
     ticket = create(store)
     store.claim_due(10, 10)
     assert store.get(ticket["id"])["status"] == "printing"
 
-    assert store.recover_interrupted(20) == 1
-    assert store.get(ticket["id"])["status"] == "pending"
+    assert store.fail_interrupted(20) == [ticket["id"]]
+    failed = store.get(ticket["id"])
+    assert failed["status"] == "failed"
+    assert "not reprinted" in failed["last_error"]
+
+    transport = RecordingTransport()
+    assert Scheduler(store, transport, settings, clock=lambda: 30).run_once() == 0
+    assert transport.sent == []
+
+
+def test_requeue_prints_an_interrupted_ticket_on_purpose(store, settings):
+    ticket = create(store)
+    store.claim_due(10, 10)
+    store.fail_interrupted(20)
+    store.requeue(ticket["id"])
+
+    transport = RecordingTransport()
+    assert Scheduler(store, transport, settings, clock=now_ms).run_once() == 1
+    assert store.get(ticket["id"])["status"] == "sent"
 
 
 def test_same_idempotency_key_returns_the_first_ticket(store):
@@ -143,3 +189,48 @@ def test_release_hold_twice_is_harmless(store):
     )
     assert len(store.release_hold("user-home")) == 1
     assert store.release_hold("user-home") == []
+
+
+def test_queue_pauses_while_cover_is_open_and_resumes_when_closed(store, settings):
+    ticket = create(store, send_at_ms=0)
+    now = [0]
+    transport = FaultyTransport({2: 0x12 | 0x04})  # cover open
+    scheduler = Scheduler(store, transport, settings, clock=lambda: now[0])
+
+    assert scheduler.run_once() == 0
+    assert "printer cover open" in scheduler.paused_reason
+    assert store.get(ticket["id"])["status"] == "pending"
+    assert store.get(ticket["id"])["attempts"] == 0  # a fault does not use up an attempt
+
+    transport.clear()
+    now[0] = 6_000  # the next status poll, after poll_interval (5 s)
+    assert scheduler.run_once() == 1
+    assert scheduler.paused_reason is None
+    assert store.get(ticket["id"])["status"] == "sent"
+
+
+def test_status_is_read_once_per_poll_interval(store, settings):
+    create(store, send_at_ms=0)
+    transport = FaultyTransport({3: 0x12 | 0x08})  # autocutter error
+    scheduler = Scheduler(store, transport, settings, clock=lambda: 0)
+    for at_ms in (0, 1_000, 2_000, 4_999):
+        scheduler.clock = lambda at_ms=at_ms: at_ms
+        scheduler.run_once()
+    assert transport.status_reads == 1
+
+
+def test_paper_near_end_does_not_pause(store, settings):
+    create(store, send_at_ms=0)
+    transport = FaultyTransport({4: 0x12 | 0x0C})
+    assert Scheduler(store, transport, settings, clock=lambda: 0).run_once() == 1
+
+
+def test_unreachable_printer_backs_off_instead_of_pausing(store, settings):
+    ticket = create(store, send_at_ms=0)
+    scheduler = Scheduler(store, UnreachableTransport(), settings, clock=lambda: 0)
+    assert scheduler.run_once() == 1
+    after = store.get(ticket["id"])
+    assert after["status"] == "pending"
+    assert after["attempts"] == 1
+    assert after["next_attempt_at"] is not None
+    assert scheduler.paused_reason is None
