@@ -2912,7 +2912,7 @@
               }
             ],
             "title": "Send At",
-            "description": "When to print, as ISO 8601. Values without a timezone use the server's PRINTARR_TIMEZONE. Omit to print as soon as possible. Cannot be combined with hold.",
+            "description": "When to print, as ISO 8601. Values without a timezone use the server's the timezone set in the setup wizard. Omit to print as soon as possible. Cannot be combined with hold.",
             "examples": [
               "2026-10-24T17:30:00"
             ]
