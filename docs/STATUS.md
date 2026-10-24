@@ -13,12 +13,15 @@
 - Briefings and notes draw as cards in the shared shell (PR #54). Briefing metrics get 24 h Home Assistant sparklines.
 - Greeting starts a new strip at each release (PR #53).
 - The running version is shown in Settings and in `/healthz` as `version` and `git_sha`. CI bakes the commit sha into the image; a local build shows `dev`.
+- Telegram ping for threads: `POST /api/v1/notify`, one message a minute per caller (PR #80).
+- Ticket PNGs kept for printed and failed tickets: `GET /api/v1/ticket-images` and `GET /api/v1/tickets/{id}/image` (PR #78).
+- Docs refreshed for the NAS install on port 30100 (README, TrueNAS guide, compose with restart and pull_policy always).
+- Hermes skill at `docs/agents/hermes-skill/SKILL.md`, with copies in `skills/printarr/` and `docs/integrations/hermes/`. `tests/test_docs.py` keeps the copies equal.
 - Schedule-creation control removed from the web UI. The container holds scheduled tickets but never creates schedules.
 - Test suite: 281 tests, all passing on main.
 
 ## Still to fix or build
 
-- Setup wizard and database-held credentials (setup-wizard thread).
 - Home Assistant token must be entered in settings by Yannic.
 - Telegram bot token and chat id.
 - Voice button and intake: deferred by Yannic. No hardware is being bought.

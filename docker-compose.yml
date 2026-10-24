@@ -1,7 +1,7 @@
 # Printarr for TrueNAS. Apps > Install Custom App > paste this whole file.
 #
 # Change the line marked "<- change" if you need a different data folder. Then open the app's Logs,
-# copy the setup code, and finish the setup wizard at http://<nas-ip>:8000/ (docs/deploy/truenas.md).
+# copy the setup code, and finish the setup wizard at http://<nas-ip>:30100/ (docs/deploy/truenas.md).
 #
 # This file holds only the image, memory, CPUs, ports and storage. Everything else (printer, Home
 # Assistant, model server, Telegram, names, timezone) is set in the wizard and saved in the data folder.
@@ -9,13 +9,14 @@
 services:
   printarr:
     image: ghcr.io/ourrage-cmyk/printarr:latest   # pin to a sha-... tag to stay on one build
+    pull_policy: always                           # pull the newest image on every start
     user: "568:568"                               # TrueNAS's app user; the data folder must be owned by 568
-    restart: unless-stopped
+    restart: always
     stop_grace_period: 30s                        # time allowed to finish a print on shutdown
     mem_limit: 512m
     cpus: 1.0
     ports:
-      - "8000:8000"                               # web page and API at http://<nas-ip>:8000/
+      - "30100:8000"                              # web page and API at http://<nas-ip>:30100/ (port 8000 is taken on this NAS; use "8000:8000" if it is free)
     volumes:
       # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 568
       # (chown -R 568:568 /mnt/SSDCAGE/printarr). The app refuses to start otherwise, and says so in the logs.

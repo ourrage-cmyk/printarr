@@ -93,7 +93,6 @@ Writing tickets, for agents:
 - `GET /api/v1/log` and `GET /api/v1/log/summary`: what happened, with timings, moods and strip ids.
 - `GET /api/v1/log/export?format=csv`: the same as a file.
 - `GET /api/v1/tickets/{id}/preview`: the text of the printed ticket.
-- `GET /api/v1/tickets/{id}/preview`: the text of the printed ticket.
 
 ### Looking at what a ticket looked like
 
@@ -150,8 +149,9 @@ reminder goes on the scheduled slip instead. The sender is inferred from the add
 
 ## Setup
 
-URLs, tokens and the printer address are entered in the first-run setup wizard in the web UI. They are
-stored in the database, not in environment variables or the compose file. Nothing in this guide needs them.
+URLs, tokens and the printer address are entered in the first-run setup wizard in the web UI, and changed later at `/setup`
+with the setup code from the log. They are stored in the database, not in environment variables or the compose file.
+Nothing in this guide needs them. The Hermes skill is at `docs/agents/hermes-skill/SKILL.md`.
 
 ## Printer paper
 
@@ -159,8 +159,6 @@ The printer takes an 80 mm roll. The print width is 512 dots at 180 dpi, about 7
 
 ## Not built yet
 
-- The setup wizard and credentials stored in the database only: in progress in its own thread.
 - Voice intake (`POST /api/v1/intake`): deferred. The voice button is not being bought.
-- Graphs from Home Assistant history: graphs take a `series` list for now.
 - The decision model choosing block type and mood: `auto` resolves to `neutral` until it is built.
-- Shopping list: decided. It lives in Home Assistant and is managed by Hermes. printarr prints it on request or on arrival. The intake route for it is not built yet.
+- Shopping list intake: not built. The list lives in Home Assistant and Hermes sends it as a checklist ticket when it is asked for, or when Hermes schedules it.
