@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Res
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
+from app.version import PACKAGE_VERSION, build_info
 
 from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.backup import BackupError, NightlyBackup, NightlyThread, import_bytes
@@ -620,6 +621,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         store.init()
+        info = build_info()
+        logger.info(
+            "printarr version %s, build %s, database schema %s",
+            info["version"], info["git_sha"], store.schema_version(),
+        )
         setup_flow.make_private(settings.db_path)
         start_setup()
         seed_model_settings()
@@ -655,7 +661,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     app = FastAPI(
         title="Printarr",
-        version="0.2.0",
+        version=PACKAGE_VERSION,
         description=API_DESCRIPTION,
         lifespan=lifespan,
     )
@@ -766,7 +772,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     @app.get("/healthz", tags=["meta"])
     def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", **build_info()}
 
     @api.get("/templates", response_model=list[TemplateOut], tags=["templates"])
     def list_templates() -> list[dict[str, Any]]:

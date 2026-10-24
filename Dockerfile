@@ -15,10 +15,12 @@ LABEL org.opencontainers.image.title="printarr" \
       org.opencontainers.image.source="https://github.com/ourrage-cmyk/printarr" \
       org.opencontainers.image.version="${VERSION}"
 
+# The git commit the image was built from. Shown in the web UI and /healthz. CI passes the sha.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PRINTARR_DB_PATH=/data/printarr.db \
-    PRINTARR_OUTPUT_DIR=/data/output
+    PRINTARR_OUTPUT_DIR=/data/output \
+    PRINTARR_BUILD_SHA=${VERSION}
 
 # tini is PID 1: it forwards SIGTERM to uvicorn and reaps children.
 RUN apt-get update \

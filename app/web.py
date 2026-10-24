@@ -331,6 +331,8 @@ WEB_UI = r"""<!doctype html>
       </div>
       <div class="actions"><button id="h-save" class="btn">Save Home Assistant</button><button id="h-test" class="btn">Test connection</button><span id="h-status" class="status"></span></div>
     </div>
+
+    <p class="sub" id="build-info">Version: loading</p>
   </details>
 </main>
 <script>
@@ -741,6 +743,10 @@ loadAlerts().catch((e) => show($('a-status'), e.message, true));
 loadHA().catch((e) => show($('h-status'), e.message, true));
 loadTemplates().catch((e) => show($('t-status'), e.message, true));
 loadTickets();
+fetch('/healthz').then((r) => r.json()).then((b) => {
+  const sha = b.git_sha === 'dev' ? 'dev build' : b.git_sha.slice(0, 7);
+  $('build-info').textContent = `Version ${b.version} · commit ${sha}`;
+}).catch(() => { $('build-info').textContent = 'Version unknown'; });
 showTab(location.hash.slice(1));
 setInterval(() => { loadTickets(); }, 10000);
 </script>

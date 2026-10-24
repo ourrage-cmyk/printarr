@@ -12,7 +12,7 @@ if [ ! -d "$data_dir" ] || [ ! -w "$data_dir" ]; then
 fi
 mkdir -p "$output_dir" "$data_dir/backups"
 
-echo "printarr: starting on port 8000, data in $data_dir"
+echo "printarr: build ${PRINTARR_BUILD_SHA:-dev}, starting on port 8000, data in $data_dir"
 # One worker only: the ticket scheduler runs inside this process.
 # On SIGTERM, uvicorn stops accepting requests and waits up to 20 s for work in progress.
 exec uvicorn app.main:app \

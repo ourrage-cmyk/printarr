@@ -12,6 +12,7 @@
 - OpenAPI export regenerated (`docs/openapi.json`).
 - Briefings and notes draw as cards in the shared shell (PR #54). Briefing metrics get 24 h Home Assistant sparklines.
 - Greeting starts a new strip at each release (PR #53).
+- The running version is shown in Settings and in `/healthz` as `version` and `git_sha`. CI bakes the commit sha into the image; a local build shows `dev`.
 - Schedule-creation control removed from the web UI. The container holds scheduled tickets but never creates schedules.
 - Test suite: 281 tests, all passing on main.
 
@@ -25,6 +26,7 @@
 - Evening rundown contents (missed messages, dogs, daily summary).
 - Simulator as printer: confirm the config over raw TCP 9100.
 - Grayscale and CJK or emoji output are unverified or unsupported.
+- Logging for diagnosis. Hermes must be able to find out why something went wrong from printarr's logs alone, without shell access. Log every ticket and release through its stages (queued, rendered, sent, printed, failed), with ids, timings, the printer and model outcomes, and the reason for each failure. Log setup and settings changes, without secrets. Keep the logs readable from the API. Not started; the first step is a written list of events.
 
 ## Decided on 2026-10-24
 
