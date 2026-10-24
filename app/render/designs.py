@@ -10,8 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.render import system
-from app.render.canvas import Bitmap, Canvas
-from app.render.strips import BODY, OUTER_L, OUTER_R, RADIUS, ROW
+from app.render.canvas import Bitmap, Canvas, solid_width
+from app.render.strips import BODY, OUTER_L, OUTER_R, RADIUS, ROW, solid_wrap
 
 LEFT = 14  # card edges, 14 dots from the paper edges
 RIGHT = 498
@@ -28,6 +28,7 @@ class Variant:
     row: int = 24  # space between rows of text
     head: int = 22  # space between the TODAY heading and the first row
     bar: int = 22  # from a segmented bar's label to the bar
+    solid: bool = False  # body text in full-line Inter; the dot matrix is kept for titles only
 
 
 @dataclass(frozen=True)
@@ -52,8 +53,18 @@ def card(c: Canvas, v: Variant, body: Callable[[int, int], None], x0: int = LEFT
     c.y = bottom + v.gap
 
 
-def paragraph(c: Canvas, x: int, y: int, text: str, scale: int, max_w: int) -> int:
-    """Word-wrapped capitals. Returns the height used."""
+def title(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
+    """A title: the only text drawn in the dot matrix font."""
+    c.text(x, y, text, scale)
+
+
+def paragraph(c: Canvas, x: int, y: int, text: str, scale: int, max_w: int, solid: bool = False) -> int:
+    """Word-wrapped text. Full-line Inter when solid, else capitals in the dot font. Returns the height used."""
+    if solid:
+        lines = solid_wrap(text, max_w)
+        for i, line in enumerate(lines):
+            c.solid(x, y + i * (7 * scale + 4), line, 21)
+        return len(lines) * (7 * scale + 4)
     per_line = max_w // (6 * scale)
     lines: list[str] = []
     current = ""
@@ -75,20 +86,27 @@ def _or_no_data(value: object) -> str:
 
 
 def hello(c: Canvas, v: Variant, summary: str, x0: int, x1: int) -> None:
-    c.text(x0, c.y, "HELLO YANNIC", v.scale + 1)
+    title(c, x0, c.y, "HELLO YANNIC", v.scale + 1)
     c.y += 7 * (v.scale + 1) + 8
-    c.y += paragraph(c, x0, c.y, summary, v.scale, x1 - x0) + 2
+    c.y += paragraph(c, x0, c.y, summary, v.scale, x1 - x0, v.solid) + 2
+
+
+def _row(c: Canvas, v: Variant, x0: int, x1: int, label: str, value: str) -> None:
+    if v.solid:
+        c.row_solid(x0, x1, c.y, label, value, 21)  # full-line label and value, dot leaders between
+    else:
+        c.row(x0, x1, c.y, label, value, v.scale)
 
 
 def rows(c: Canvas, m: Morning, x0: int, x1: int, v: Variant = Variant()) -> None:
-    c.text(x0, c.y, "TODAY", v.scale)
+    title(c, x0, c.y, "TODAY", v.scale)
     c.y += v.head
     bb = m.body_battery
-    c.row(x0, x1, c.y, "BODY BATTERY", NO_DATA if bb is None else f"{bb}/100", v.scale)
+    _row(c, v, x0, x1, "BODY BATTERY", NO_DATA if bb is None else f"{bb}/100")
     c.y += v.row
-    c.row(x0, x1, c.y, "STRESS AVG", _or_no_data(m.stress), v.scale)
+    _row(c, v, x0, x1, "STRESS AVG", _or_no_data(m.stress))
     c.y += v.row
-    c.row(x0, x1, c.y, "STEPS", NO_DATA if m.steps is None else f"{m.steps:,}", v.scale)
+    _row(c, v, x0, x1, "STEPS", NO_DATA if m.steps is None else f"{m.steps:,}")
     c.y += v.row
 
 
@@ -99,8 +117,13 @@ def segbar(c: Canvas, m: Morning, x0: int, x1: int, v: Variant = Variant()) -> N
         ("RAM", m.ram, "%"),
     ]
     for label, percent, unit in items:
-        c.text(x0, c.y, label, v.scale)
-        c.text_right(x1, c.y, NO_DATA if percent is None else f"{percent}{unit}", v.scale)
+        value = NO_DATA if percent is None else f"{percent}{unit}"
+        if v.solid:
+            c.solid(x0, c.y, label, 21)
+            c.solid(x1 - solid_width(value, 21), c.y, value, 21)
+        else:
+            c.text(x0, c.y, label, v.scale)
+            c.text_right(x1, c.y, value, v.scale)
         # Same call as the Node renderer: bar height 10, 20 segments. The handoff spec says
         # 10 segments, 20 dots tall. Kept as rendered until the spec is confirmed. A missing
         # value draws an empty bar, so the card keeps its shape.
@@ -136,7 +159,7 @@ def system_card(
 def morning_system(m: Morning) -> Bitmap:
     """The morning design under the receipt system: card radius and ornaments from app/render/system."""
     # Same card shell as the blocks: radius 4 and stroke 2 (app/render/system/blocks.json), body at scale 3.
-    v = Variant(radius=RADIUS, scale=BODY, gap=system.spacing("m"), row=ROW, head=ROW, bar=7 * BODY + 5)
+    v = Variant(radius=RADIUS, scale=BODY, gap=system.spacing("m"), row=ROW, head=ROW, bar=7 * BODY + 5, solid=True)
     cards = system.decorations().get("morning", {})
     c = Canvas()
     c.y = TOP
