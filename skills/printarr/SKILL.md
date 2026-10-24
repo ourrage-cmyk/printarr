@@ -8,7 +8,7 @@ description: Print receipt strips on the printarr thermal printer through its RE
 printarr queues receipt strips and prints them on an Epson TM-T88V (80 mm paper). You talk to it only
 through its REST API.
 
-- Base URL: `http://192.168.1.231:30100/api/v1`. Health and version are at `http://192.168.1.231:30100/healthz`.
+- Base URL: `http://192.168.1.231:30100/api/v1`. Health and build are at `http://192.168.1.231:30100/healthz`.
 - No authentication. The API is for the home LAN only. Never expose it to the internet.
 - Two recipients: `yannic` (Yannic) and `wife` (Allyson). Every request names one as `recipient`.
   The strip says "Allyson", but the API id is `wife`.
@@ -28,7 +28,7 @@ setup wizard, every other call returns 503. Tell Yannic. Do not work around it.
 | `POST /api/v1/printer/test` | Print a test strip. Only when Yannic asks |
 | `GET /api/v1/tickets?status=held&recipient=wife` | The queue. Filters: `status`, `recipient`, `limit` (max 200), `offset` |
 | `GET /api/v1/tickets/{id}` | One ticket: status, attempts, `last_error` |
-| `GET /api/v1/log?limit=20` | History with timings and moods. `GET /api/v1/log/summary` for counts |
+| `GET /api/v1/log?limit=20` | History with timings, moods and strip ids. `GET /api/v1/log/summary` for counts |
 
 Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 
@@ -38,7 +38,7 @@ Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 |---|---|
 | `GET /api/v1/blocks` | The block types, their moods, spans and limits |
 | `GET /api/v1/blocks/{type}/schema` | The JSON Schema for one block's `slots`. Read it before the first use of a type |
-| `GET /api/v1/slot-templates` | The fixed layouts: 101 Briefing, 102 Note |
+| `GET /api/v1/slot-templates` | The fixed layouts: 101 Briefing (older slot form), 102 Note |
 | `GET /api/v1/templates/{id}/schema` | The schema for a slot template's `slots` |
 | `GET /api/v1/insights/entities?person=yannic&limit=12` | Numeric Home Assistant entities, most notable first. Returns 422 when Home Assistant is not set up |
 
@@ -46,7 +46,7 @@ Use only the slots a schema lists. Do not invent entity IDs. Take them from `/in
 
 ## 3. Compose a strip (the default)
 
-`POST /api/v1/tickets/compose` takes an ordered list of blocks and draws them as strips.
+`POST /api/v1/tickets/compose` takes an ordered list of blocks and draws them as tiles on a strip.
 
 ```bash
 curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
@@ -67,33 +67,58 @@ curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
   }'
 ```
 
-Top-level fields: `recipient` (required), `blocks` (required, 1 to 16), `kind`, `tone`, `from_user`, `to_user`,
-`sender`, `delivery`, `send_at`, `hold`, `hold_key`, `idempotency_key`.
+Top-level fields: `recipient` (required), `blocks` or `preset` (one of them, required), `slots` (with `preset` only),
+`kind`, `tone`, `from_user`, `to_user`, `sender`, `delivery`, `send_at`, `hold`, `hold_key`, `idempotency_key`.
 
 - `kind`: `morning`, `evening`, `note`, `shopping`, `todo`, `alert`, `fun`, `reminder`. Default `note`.
-- `tone`: `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`. Default `neutral`.
+  A preset ticket defaults to `morning`.
+- `tone`: `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`. Default `neutral`. Printed tickets never print the tone name.
 - Each block is `{"type", "mood", "slots"}`. **`mood` is required on every block.** Use one of:
   `neutral`, `happy`, `excited`, `loving`, `playful`, `reminder`, `factual`, `sad`, `confused`, `upset`,
-  `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints `neutral`.
-- Kind marks: a small mark sits at the top-right of a card for five block types: `message` (envelope), `alert` (bolt),
-  `tip` (clock), `fact` (bulb) and `checklist` (cart). The mark follows the block, so pick the block type that fits.
-- A greeting always starts a new strip. A strip holds at most 5 blocks.
+  `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints as `neutral` for now.
+- Up to 16 blocks per ticket. Each block is its own bordered tile. Tiles sit side by side when they fit, and a
+  strip is cut by height, not by block count.
+- A greeting block always starts a new strip. On release, the greeting-led ticket (a briefing) leads the pile (see section 4).
+
+### What the paper shows for each mood
+
+Every card has at most one mood band across its top edge. The band carries the mood, so the mood reads at a glance.
+
+| Band | Moods |
+|---|---|
+| none (plain card) | `neutral`, `factual` |
+| sparse dots | `loving`, `happy` |
+| zigzag | `excited`, `playful` |
+| upright ticks | `reminder` |
+| dense stipple | `sad`, `confused` |
+| diagonal hatch | `gentle_warning`, `upset` |
+| blocks | `firm_complaint` |
+| barcode | `urgent` |
+| solid black bar, inverted title | `critical` |
+
+The outline also follows the mood. `urgent`, `upset` and `firm_complaint` draw a heavy square outline (the heaviest for
+`critical`). `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners. Pick the mood the paper should say
+at a glance. Do not print mood names or tone names in the text.
+
+**Kind marks.** A small mark sits at the top-right of a card for five block types: `message` (envelope), `alert` (bolt),
+`tip` (clock), `fact` (bulb) and `checklist` (cart). The mark follows the block, so pick the block type that fits.
 
 ### Block types
 
 | Type | Slots | Limits |
 |---|---|---|
-| `greeting` | `greeting`, `summary` | greeting 40 chars, summary 200 |
-| `metric` | `label` and `value` or `entity_id`; `unit`, `series` | label 40, unit 12, series 2 to 48 numbers |
-| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`); `title` | label 40, title 40 |
-| `graph` | `title`, `series` (2 to 48 numbers); `unit` | title 40 |
+| `greeting` | `greeting`, `summary`, `from` | greeting 40 chars, summary 200, from 20 |
+| `metric` | `label` and `value` or `entity_id`; `unit`, `series`, `range`, `as_of`, `scope` | label 40, unit 12, series 2 to 48 numbers |
+| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`, `scope`); `title`, `as_of` | label 40, title 40 |
+| `graph` | `title`, `series` (2 to 48 numbers); `unit`, `range` | title 40 |
 | `dog_counts` | `dogs` (1 or 2 of `name`, `pee`, `poop`, `food`, `run`, integer counts) | name 20 |
 | `message` | `paragraph`, `from`; `title`, `tip` | paragraph 800, from 20, title 40, tip 120 |
-| `alert` | `label`, `paragraph`; `action` | label 40, paragraph 400, action 40 |
+| `alert` | `label`, `paragraph`, `from`; `action` | label 40, paragraph 400, action 40 |
 | `checklist` | `items` (1 to 8 of `text` plus `checked`); `title` | item text 120, title 40 |
 | `tip` | `tip` | 120 |
 | `fact` | `paragraph` | 200 |
 
+`scope` is `inside` or `outside` and prints as IN or OUT after the label. `as_of` prints as AS OF 08:15 under the readings.
 An `entity_id` is read from Home Assistant when the strip prints, not when you send it. A missing value prints `--`.
 
 ### Simple text
@@ -107,7 +132,8 @@ curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets \
        "kind": "reminder", "tone": "reminder", "delivery": "on_release"}'
 ```
 
-For messy speech-to-text input, add `"text_state": "unformatted"`. Message text is 2000 characters at most.
+For messy speech-to-text input, add `"text_state": "unformatted"`. A text model then cleans spelling and speech errors,
+and a decision model picks the template. If either model fails, the text prints as sent. Message text is 2000 characters at most.
 `POST /api/v1/tickets/preview` returns the plain text of a plain ticket without queueing it.
 
 ### Briefings (the briefing preset)
@@ -131,10 +157,12 @@ curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
                  "fun_fact": "Octopuses have three hearts.", "from": "hermes"}}'
 ```
 
-- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING and so on.
+- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING.
 - `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`.
+  `hours` (1 to 168, default 24) sets how far back the sparkline reaches.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
-- `body` is the text. `fun_fact` is one line. Never put "Did you know" in the body.
+- `body` is the text, up to 800 characters. `fun_fact` is one line, up to 200 characters.
+  Write the fact as one sentence. Do not add a label above it such as "Did you know" or "Fun fact". The fact stands on its own, and the words can appear inside the sentence when they read naturally.
 - Do not send `blocks` with `preset`. A bad slot returns 422 and names it as `preset.slots.field`.
 
 The older slot briefing (template 101, `POST /api/v1/tickets/slots`) still works, but use the preset for new briefings.
@@ -146,13 +174,17 @@ printarr never creates schedules. It holds a ticket until it is due. You decide 
 | `delivery` | When it prints | Use it for |
 |---|---|---|
 | `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and Allyson |
-| `at` | At `send_at` (local time, no offset, for example `2026-10-25T18:00:00`) as its own strip | "Remind me at 18:00", a shopping list for when Yannic gets home |
-| `now` | Straight away, as its own strip | Shopping lists on request, alerts |
+| `at` | At `send_at` (local time, no offset, for example `2026-10-25T18:00:00`) | "Remind me at 18:00", a shopping list for when Yannic gets home |
+| `now` | Straight away | Shopping lists on request, alerts |
 
 - `at` needs `send_at`. `now` must not have `send_at`.
 - No recurring tickets exist. A repeating reminder is one ticket per occurrence, each with its own `send_at`.
 - Scheduled releases belong to Home Assistant. Release a pile yourself only when someone asks for paper now:
   `POST /api/v1/people/{person}/release` with `{"trigger": "request"}`. Triggers: `morning`, `evening`, `arrival`, `request`.
+- **How a release prints.** One release prints one person's pile on paper. The greeting-led ticket (the briefing) goes on top,
+  and the other tickets follow in the order they were queued. Tickets sit one tile apart, with no cut between them.
+  A strip is cut after 12 tickets, or when it gets too tall, and a new greeting starts a new strip. The cut is made after each strip.
+  A repeat release prints only tickets that are not yet printed.
 - Hold and release: set `"hold": true` with a `hold_key` such as `user-home`. Release one ticket with
   `POST /api/v1/tickets/{id}/release`, or every ticket with that key with `POST /api/v1/holds/{hold_key}/release`.
   Do not hold strip content for a person. Use `on_release`.
@@ -183,7 +215,7 @@ For a list that prints when Yannic gets home, send it with `delivery: "at"` and 
 ```bash
 curl -sS -X POST http://192.168.1.231:30100/api/v1/notify \
   -H 'Content-Type: application/json' \
-  -d '{"text": "Printarr is on build 86. The next test can run."}'
+  -d '{"text": "The printer is unplugged. The evening strip is waiting in the queue."}'
 ```
 
 - Body: `{"text": "..."}`, 1 to 1000 characters. Unknown fields are rejected.
@@ -205,7 +237,9 @@ curl -sS -o ticket.png http://192.168.1.231:30100/api/v1/tickets/<id>/image
 ```
 
 A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
-Text is drawn from an approximation of Font A, so check the wording against the real paper or the simulator.
+The picture is decoded from the exact bytes sent to the printer, so tiles, bands, marks and charts are exact.
+Text is drawn with an approximation of Font A, so check the wording against the real paper or the simulator.
+A ticket inside a strip is saved on its own, without the cut or the gap around it.
 
 To diagnose a ticket that looks wrong: find its id, fetch the image, and compare it with
 `GET /api/v1/tickets/{id}` (the blocks, moods and `last_error`).
@@ -213,20 +247,20 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 ## 7. Writing rules for tickets
 
 - **Say the headline once.** Use `title` or the block's heading, and do not repeat it in the body.
-- **Title plus a short body.** One message in one box. Do not split a single message across two blocks.
+- **Title plus a short body.** One message in one tile. Do not split a single message across two blocks.
 - **Greetings belong to briefings.** A single-topic ticket (bins, a reminder, a note) has no greeting block.
-- **"Did you know" only in a `fact` block with mood `playful`, as a fun fact.** Never on a reminder, note or alert.
-- **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
-- **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
-  - `loving` (heart ornament): messages between Yannic and Allyson.
-  - `reminder` (tape ornament): times and to-dos.
-  - `gentle_warning` (zigzag): a soft heads-up.
-  - `urgent` (barcode border): needs attention.
-  - `critical` (white on black): needs attention now, and only then.
+- **Fun facts stand alone.** Use a `fact` block with mood `playful`, and write just the fact. Never print a label above it
+  such as "Did you know" or "Fun fact". The words are not forbidden inside a sentence, but a fact never goes on a reminder, note or alert.
+- **Shopping lists are checklists**, one item per entry. Never put items in one paragraph.
+- **Pick the mood to match the intent:**
+  - `loving` (sparse dots): messages between Yannic and Allyson.
+  - `reminder` (upright ticks): times and to-dos.
+  - `gentle_warning` (diagonal hatch, rounder outline): a soft heads-up.
+  - `urgent` (barcode): needs attention.
+  - `critical` (solid bar): needs attention now, and only then.
   - `factual`: numbers and status. `happy`, `excited`, `playful`: good news and fun.
-- **Outline follows the tone.** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, and `critical` the heaviest.
-  `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners.
 - **Keep text short for 42 columns.** Font A prints 42 characters per line. Long words wrap badly, so prefer short sentences.
+  Text that is too long for its tile is shortened with `...`, and the response lists the cut in `notes`.
 - **Characters outside CP437 print as `?`.** CJK and emoji do not print. Use plain ASCII where you can.
 - **Dates and times in local time**, without an offset, for `send_at`.
 - **No credentials, tokens or health details** in a ticket. Never put one person's private details on the other person's paper.
@@ -243,6 +277,7 @@ fix the request, and send it again. Do not resend the same body.
 | `unknown block type` | Use a type from `GET /api/v1/blocks` |
 | `Field required` | Add the slot named in `slot`, for example `blocks[0].slots.paragraph` |
 | `String should have at most N characters` | Shorten the text |
+| `send blocks or a preset` | Send one of them, not both and not neither |
 | `delivery at needs send_at` | Add `send_at` in local time |
 | `delivery now cannot take send_at` | Remove `send_at`, or use `delivery: "at"` |
 | `Input should be 'yannic' or 'wife'` | Use the recipient id, not a name |

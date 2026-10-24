@@ -159,17 +159,24 @@ paths:
   /tickets/compose:
     post:
       operationId: composeTicket
-      summary: "[live] Queue a strip made of ordered blocks. Every block needs a mood and slots. Supports delivery, idempotency_key and hold. Bad blocks return 422 with each problem."
+      summary: "[live] Queue a ticket made of ordered blocks, or the briefing preset (preset plus slots). Every block needs a mood and slots. Supports delivery, idempotency_key and hold. Bad blocks return 422 with each problem."
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [recipient, blocks]
+              required: [recipient]
               additionalProperties: false
               properties:
                 recipient: { $ref: "#/components/schemas/Recipient" }
+                preset:
+                  type: string
+                  enum: [briefing]
+                  description: "A fixed layout instead of blocks. Send slots with it, and do not send blocks. See SKILL.md section 3."
+                slots:
+                  type: object
+                  description: "The preset's slots: time_of_day, metrics (exactly three), graph, body, fun_fact, from."
                 blocks:
                   type: array
                   minItems: 1

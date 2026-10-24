@@ -75,11 +75,12 @@ The database holds the secrets too, so keep the data folder private, and do not 
 The database upgrades itself on start, and a copy is taken first, so an upgrade does not lose
 tickets or settings.
 
-1. Note the current image tag (the `sha-` tag, shown on the app's **Edit** page).
-2. Edit the app. Change the image tag to the new one. Use `latest` to follow main, or a
-   `sha-...` tag to pin an exact build from the GitHub Actions run.
-3. Save. TrueNAS pulls the new image and restarts the app.
-4. Check the logs and run the smoke test.
+1. Note the current build: `http://<nas-ip>:30100/healthz` shows `version` and `git_sha`.
+2. The compose file uses `ghcr.io/ourrage-cmyk/printarr:latest` with `pull_policy: always`, so a restart pulls
+   the newest build from main. To pin an exact build, edit the app and change the image to a `sha-...` tag from the
+   GitHub Actions run. Save.
+3. TrueNAS pulls the image and restarts the app.
+4. Check `/healthz` shows the new version and sha, read the logs, and run the smoke test.
 
 Every time an older database is upgraded, the app first writes
 `backups/pre-upgrade-v<n>-<time>.db` into the data folder. The last five are kept.
@@ -165,7 +166,7 @@ docker compose -f docker-compose.dev.yml up --build
 
 ## Test with the laptop standing in for the printer
 
-Until the Epson arrives, the server can talk to the printer simulator on the laptop. The
+Until the Epson TM-T88V is connected, the server can talk to the printer simulator on the laptop. The
 server's printarr container sends raw ESC/POS to the laptop on TCP 9100, exactly as it would to
 the TM-T88V. The simulator shows each receipt in a browser on the laptop.
 

@@ -37,7 +37,7 @@ Compose Yannic's morning briefing for 26 October 2026. It should print at 07:00.
 ```
 
 Hermes picks sleep score and steps (both unusual and own data), body battery (own data, for context),
-and home temperature (shared, trending). It explains each choice in step 6.
+and home temperature (shared, trending). It explains each choice in its reply.
 
 ## Payload Hermes sends
 
