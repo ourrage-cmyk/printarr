@@ -3,14 +3,28 @@
 from app.render import strips
 
 
-def test_no_two_tones_share_header_and_icon():
-    seen: dict[tuple[str, str], str] = {}
+def test_no_two_tones_look_the_same():
+    """Header, icon and title accent together identify a tone; no two tones may match on all three."""
+    seen: dict[tuple[str, str, str], str] = {}
     for mood, spec in strips.MOODS.items():
-        key = (spec["header"], spec["icon"])
-        assert key not in seen, f"{mood} and {seen[key]} share header {key[0]} and icon {key[1]}"
+        key = (spec["header"], spec["icon"], spec["accent"])
+        assert key not in seen, f"{mood} and {seen[key]} look the same: {key}"
         seen[key] = mood
 
 
-def test_pills_are_only_for_the_two_strongest_tones():
+def test_only_the_critical_tone_is_inverted():
+    """Inverted white-on-black titles are reserved for the super-urgent tone."""
     pills = sorted(mood for mood, spec in strips.MOODS.items() if spec["accent"] == "pill")
-    assert pills == ["excited", "urgent"]
+    assert pills == ["critical"]
+
+
+def test_heart_is_only_for_loving():
+    """A heart means love: it never appears on a reminder, a fact or a neutral ticket."""
+    for mood, spec in strips.MOODS.items():
+        has_heart = "heart" in (spec["header"], spec["icon"])
+        assert has_heart == (mood == "loving"), mood
+
+
+def test_urgent_has_the_barcode_border_and_gentle_has_the_zigzag():
+    assert strips.MOODS["urgent"]["header"] == "barcode"
+    assert strips.MOODS["gentle_warning"]["header"] == "dottedWave"
