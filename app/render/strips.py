@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -259,18 +260,32 @@ def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
     return lines
 
 
+PARA_GAP = 10  # the blank between two paragraphs of authored text, in dots
+
+
+def _paragraph_lines(text: str, scale: int, max_w: int) -> list[list[str]]:
+    """The wrapped lines of each paragraph. A blank line in the source starts a new paragraph."""
+    parts = [part for part in re.split(r"\n\s*\n", str(text)) if part.strip()] or [""]
+    return [wrap_lines(part, scale, max_w) for part in parts]
+
+
 def paragraph(c: Canvas, x: int, y: int, text: str, scale: int, max_w: int) -> int:
-    lines = wrap_lines(text, scale, max_w)
-    for i, line in enumerate(lines):
-        if scale == BODY:
-            c.solid(x, y + i * (7 * scale + 4), line, 21)  # body text is full-line (Inter), not dot matrix
-        else:
-            c.text(x, y + i * (7 * scale + 4), line, scale)
-    return len(lines) * (7 * scale + 4)
+    step = 7 * scale + 4
+    top = y
+    for para in _paragraph_lines(text, scale, max_w):
+        for line in para:
+            if scale == BODY:
+                c.solid(x, y, line, 21)  # body text is full-line (Inter), not dot matrix
+            else:
+                c.text(x, y, line, scale)
+            y += step
+        y += PARA_GAP
+    return y - top - PARA_GAP
 
 
 def paragraph_height(text: str, scale: int, max_w: int) -> int:
-    return len(wrap_lines(text, scale, max_w)) * (7 * scale + 4)
+    paras = _paragraph_lines(text, scale, max_w)
+    return sum(len(para) for para in paras) * (7 * scale + 4) + PARA_GAP * (len(paras) - 1)
 
 
 def line_graph(c: Canvas, x0: int, y0: int, x1: int, y1: int, values: Sequence[float]) -> None:

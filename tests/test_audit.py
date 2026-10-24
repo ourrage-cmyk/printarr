@@ -55,3 +55,9 @@ def test_metric_tiles_nest_in_the_card_that_closes_them():
     assert len(strips.split_strips(blocks)) == 1
     rows, _ = strips.layout(blocks)
     assert len(rows) == 1 and rows[0][0].block.type == "group"
+
+
+def test_blank_line_in_text_makes_a_paragraph_gap():
+    one = strips.paragraph_height("First part.\n\nSecond part.", strips.BODY, 400)
+    flat = strips.paragraph_height("First part. Second part.", strips.BODY, 400)
+    assert one > flat
