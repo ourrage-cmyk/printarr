@@ -1,8 +1,9 @@
-"""Composed tickets: an ordered list of typed blocks on one shared card shell.
+"""Composed tickets: an ordered list of typed blocks, drawn as receipt strips.
 
-A block is {type, mood, slots}. The catalogue below is the first draft from the template thread's
-summary. Mood changes only the look of a block (ornament, icon, accent), never its size, so blocks
-stack without re-layout. The text layout here is a fallback until the renderer lands.
+A block is {type, mood, span, slots}. The types, moods, spans and sizes come from the renderer
+(app/render/strips.py and app/render/system/blocks.json), so what is checked here is what gets drawn.
+The renderer is pure, so Home Assistant values are read first and filled into the slots. Text that
+runs past its card's height is shortened with "..." and reported as a note.
 """
 
 from __future__ import annotations
@@ -11,108 +12,20 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.ha import HAClient, HAError
-from app.receipt import Line, wrap
-from app.slots import PAPER_WIDTH, Metric, fetch_values, slot_lines
+from app.receipt import Line as ReceiptLine
+from app.render import strips as R
+from app.slots import fetch_values, slot_lines
 
 logger = logging.getLogger("printarr.compose")
 
-MOODS: tuple[str, ...] = (
-    "happy", "sad", "confused", "excited", "upset", "factual", "reminder",
-    "loving", "playful", "gentle", "firm", "urgent", "neutral",
-)
+MOODS: tuple[str, ...] = tuple(R.MOODS)
 AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until it does
 MAX_BLOCKS = 16
-
-
-class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class TextSlots(_Strict):
-    text: str = Field(min_length=1, max_length=400)
-
-
-class TitleSlots(_Strict):
-    text: str = Field(min_length=1, max_length=60)
-
-
-class GreetingSlots(_Strict):
-    text: str = Field(min_length=1, max_length=40)
-
-
-class TipSlots(_Strict):
-    text: str = Field(min_length=1, max_length=120)
-
-
-class MessageSlots(_Strict):
-    text: str = Field(min_length=1, max_length=400)
-    from_name: str = Field(min_length=1, max_length=20, description="The sign-off, for example Yannic.")
-
-
-class MetricTilesSlots(_Strict):
-    metrics: list[Metric] = Field(min_length=1, max_length=2)
-
-
-class MetricRowsSlots(_Strict):
-    metrics: list[Metric] = Field(min_length=1, max_length=6)
-
-
-class GraphSlots(_Strict):
-    metric: Metric
-
-
-class DogCount(_Strict):
-    label: str = Field(min_length=1, max_length=20)
-    count: int | float | str = Field(description="The number to print, as a number or text.")
-
-
-class DogCountsSlots(_Strict):
-    label: str = Field(min_length=1, max_length=20)
-    items: list[DogCount] = Field(min_length=1, max_length=6, description="Each {label, count}.")
-
-
-class ListSlots(_Strict):
-    title: str | None = Field(default=None, max_length=40)
-    items: list[str] = Field(min_length=1, max_length=10)
-
-
-class TodoItem(_Strict):
-    text: str = Field(min_length=1, max_length=120)
-    done: bool = False
-
-
-class TodoSlots(_Strict):
-    title: str | None = Field(default=None, max_length=40)
-    items: list[TodoItem] = Field(min_length=1, max_length=10, description="Each {text, done}.")
-
-
-class AlertSlots(_Strict):
-    text: str = Field(min_length=1, max_length=120)
-    level: str = Field(default="info", pattern="^(info|warning|urgent)$")
-
-
-class FunFactSlots(_Strict):
-    text: str = Field(min_length=1, max_length=200)
-
-
-BLOCKS: dict[str, tuple[type[BaseModel], str]] = {
-    "greeting": (GreetingSlots, "A line at the top, such as Good morning, Yannic."),
-    "title": (TitleSlots, "A heading."),
-    "paragraph": (TextSlots, "A paragraph of text."),
-    "message": (MessageSlots, "A message from one person, signed off."),
-    "tip": (TipSlots, "A closing tip or reminder."),
-    "metric_tiles": (MetricTilesSlots, "One or two numbers, each shown large."),
-    "metric_rows": (MetricRowsSlots, "Up to six numbers as label rows."),
-    "graph": (GraphSlots, "One number drawn as a graph over its history."),
-    "dog_counts": (DogCountsSlots, "Counts for the dogs, as label and number rows."),
-    "list": (ListSlots, "A shopping or other list."),
-    "todo": (TodoSlots, "A to-do list with done marks."),
-    "alert": (AlertSlots, "A heads-up, at info, warning or urgent level."),
-    "fun_fact": (FunFactSlots, "A short fact."),
-}
+PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
+TICKET_MARGIN = 12  # dots above and below a composed ticket
 
 
 class BlockProblem(ValueError):
@@ -121,17 +34,147 @@ class BlockProblem(ValueError):
         self.problems = problems
 
 
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class MetricRow(_Strict):
+    label: str = Field(min_length=1, max_length=40)
+    value: int | float | str | None = Field(default=None, description="The number or text to print.")
+    unit: str | None = Field(default=None, max_length=12)
+    entity_id: str | None = Field(default=None, max_length=120, description="Home Assistant entity, read at print time.")
+
+    @model_validator(mode="after")
+    def _has_value(self) -> MetricRow:
+        if self.value is None and self.entity_id is None:
+            raise ValueError("give a value or an entity_id")
+        return self
+
+
+class MetricSlots(MetricRow):
+    series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Sparkline, oldest first.")
+
+
+class MetricRowsSlots(_Strict):
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    rows: list[MetricRow] = Field(min_length=1, max_length=6)
+
+
+class GreetingSlots(_Strict):
+    greeting: str = Field(min_length=1, max_length=40, description="For example HELLO YANNIC.")
+    summary: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class GraphSlots(_Strict):
+    title: str = Field(min_length=1, max_length=40)
+    series: list[float] = Field(min_length=2, max_length=48, description="Values, oldest first.")
+    unit: str | None = Field(default=None, max_length=12)
+
+
+class Dog(_Strict):
+    name: str = Field(min_length=1, max_length=20)
+    pee: int = Field(default=0, ge=0)
+    poop: int = Field(default=0, ge=0)
+    food: int = Field(default=0, ge=0)
+    run: int = Field(default=0, ge=0)
+
+
+class DogCountsSlots(_Strict):
+    dogs: list[Dog] = Field(min_length=1, max_length=2)
+
+
+class MessageSlots(_Strict):
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    paragraph: str = Field(min_length=1, max_length=800)
+    tip: str | None = Field(default=None, min_length=1, max_length=120)
+    sign_off: str = Field(alias="from", min_length=1, max_length=20, description="The sign-off, for example Yannic.")
+
+
+class AlertSlots(_Strict):
+    label: str = Field(min_length=1, max_length=40, description="Short, for example WATER LEAK.")
+    paragraph: str = Field(min_length=1, max_length=400)
+    action: str | None = Field(default=None, min_length=1, max_length=40)
+
+
+class ChecklistItem(_Strict):
+    text: str = Field(min_length=1, max_length=120)
+    checked: bool = False
+
+
+class ChecklistSlots(_Strict):
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    items: list[ChecklistItem] = Field(min_length=1, max_length=8)
+
+
+class TipSlots(_Strict):
+    tip: str = Field(min_length=1, max_length=120)
+
+
+class FactSlots(_Strict):
+    paragraph: str = Field(min_length=1, max_length=200)
+
+
+BLOCKS: dict[str, tuple[type[BaseModel], str]] = {
+    "greeting": (GreetingSlots, "A headline at the top of a strip. A greeting always starts a new strip."),
+    "metric": (MetricSlots, "One number shown large, with an optional sparkline."),
+    "metric_rows": (MetricRowsSlots, "Up to six labelled values, with dot leaders."),
+    "graph": (GraphSlots, "A line graph over a series of values."),
+    "dog_counts": (DogCountsSlots, "Counts for one or two dogs: pee, poop, food and run."),
+    "message": (MessageSlots, "A message from one person, with an optional tip and sign-off."),
+    "alert": (AlertSlots, "A heads-up with a filled label, a paragraph and an optional action."),
+    "checklist": (ChecklistSlots, "A list with a box or a tick per item."),
+    "tip": (TipSlots, "One line of advice."),
+    "fact": (FactSlots, "A short fun fact."),
+}
+
+
+def _span_info(name: str) -> dict[str, Any]:
+    lay = R.LAYOUT[name]
+    return {
+        "default": lay["span"],
+        "min": lay["min_span"],
+        "max": 3,
+        "description": "Columns the block takes: 1, 2 or 3. Blocks sit side by side when they fit.",
+    }
+
+
+def _units_info(name: str) -> dict[str, int]:
+    lay = R.LAYOUT[name]
+    return {"min": lay["min_units"], "max": lay["max_units"]}
+
+
 def catalogue() -> list[dict[str, Any]]:
     return [
-        {"type": name, "description": text, "moods": list(MOODS) + [AUTO], "schema": f"/api/v1/blocks/{name}/schema"}
+        {
+            "type": name,
+            "description": text,
+            "span": _span_info(name),
+            "units": _units_info(name),
+            "moods": list(MOODS) + [AUTO],
+            "schema": f"/api/v1/blocks/{name}/schema",
+        }
         for name, (_, text) in BLOCKS.items()
     ]
 
 
 def block_schema(name: str) -> dict[str, Any]:
     model, text = BLOCKS[name]
-    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": name, "description": text,
-            **model.model_json_schema()}
+    return {
+        **model.model_json_schema(),
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": name,
+        "description": text,
+        "span": _span_info(name),
+        "units": _units_info(name),
+    }
+
+
+def _slot_problems(where: str, exc: ValidationError) -> list[dict[str, str]]:
+    problems = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "slots"
+        problems.append({"slot": f"{where}.slots.{location}", "problem": error["msg"]})
+    return problems
 
 
 def validate_blocks(raw_blocks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -150,17 +193,21 @@ def validate_blocks(raw_blocks: Sequence[Mapping[str, Any]]) -> list[dict[str, A
         if mood not in MOODS and mood != AUTO:
             problems.append({"slot": f"{where}.mood", "problem": f"mood must be one of {', '.join(MOODS)} or auto"})
             continue
+        lay = R.LAYOUT[name]
+        span = raw.get("span") if raw.get("span") is not None else lay["span"]
+        if span not in (1, 2, 3) or span < lay["min_span"]:
+            problems.append({"slot": f"{where}.span", "problem": f"{name} takes {lay['min_span']} to 3 columns"})
+            continue
         try:
             slots = BLOCKS[name][0].model_validate(dict(raw.get("slots") or {}))
         except ValidationError as exc:
-            for error in exc.errors():
-                location = ".".join(str(part) for part in error["loc"]) or "slots"
-                problems.append({"slot": f"{where}.slots.{location}", "problem": error["msg"]})
+            problems.extend(_slot_problems(where, exc))
             continue
         checked.append({
             "type": name,
             "mood": "neutral" if mood == AUTO else mood,  # the decision model replaces this later
-            "slots": slots.model_dump(exclude_none=True),
+            "span": span,
+            "slots": slots.model_dump(by_alias=True, exclude_none=True),
         })
     if problems:
         raise BlockProblem(problems)
@@ -171,12 +218,10 @@ def entity_ids(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
     found: list[str] = []
     for block in blocks:
         slots = block.get("slots", {})
-        metrics = list(slots.get("metrics", []))
-        if slots.get("metric"):
-            metrics.append(slots["metric"])
-        for metric in metrics:
-            if metric.get("entity_id") and metric["entity_id"] not in found:
-                found.append(metric["entity_id"])
+        for item in [slots, *slots.get("rows", [])]:
+            entity = item.get("entity_id")
+            if entity and entity not in found:
+                found.append(entity)
     return found
 
 
@@ -195,58 +240,61 @@ def fetch_entities(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
     return values
 
 
-def _metric_row(metric: Mapping[str, Any], values: Mapping[str, str | None]) -> Line:
-    if metric.get("value") is not None:
-        value = str(metric["value"])
-    elif metric.get("series"):
-        value = str(metric["series"][-1])
-    else:
-        value = values.get(metric.get("entity_id", ""), None) or "--"
-    label = str(metric["label"]).upper()
-    dots = max(2, PAPER_WIDTH - len(label) - len(value) - len(str(metric.get("unit") or "")) - 2)
-    return Line(f"{label} {'.' * dots} {value}{metric.get('unit') or ''}")
+def _filled_row(row: Mapping[str, Any], values: Mapping[str, str | None]) -> dict[str, Any]:
+    if row.get("value") is None and row.get("entity_id"):
+        return {**row, "value": values.get(row["entity_id"]) or PLACEHOLDER}
+    return dict(row)
 
 
-def compose_lines(blocks: Sequence[Mapping[str, Any]], values: Mapping[str, str | None] | None = None) -> list[Line]:
-    """Text layout of a composed ticket, block after block. Mood is not shown until the renderer lands."""
-    values = values or {}
-    lines: list[Line] = []
+def fill_values(blocks: Sequence[Mapping[str, Any]], values: Mapping[str, str | None]) -> list[dict[str, Any]]:
+    """Copies the blocks with each entity-backed value replaced by what Home Assistant gave."""
+    filled = []
     for block in blocks:
-        name = block["type"]
-        slots = block.get("slots", {})
-        if name == "greeting":
-            lines.append(Line(str(slots["text"])))
-        elif name == "title":
-            lines.append(Line(str(slots["text"]).upper(), align="center", bold=True, tall=True))
-        elif name in ("paragraph", "fun_fact", "alert"):
-            lines.extend(Line(row) for row in wrap(str(slots["text"]), PAPER_WIDTH))
-        elif name == "tip":
-            lines.append(Line("-" * PAPER_WIDTH))
-            lines.extend(Line(row) for row in wrap(f"Tip: {slots['text']}", PAPER_WIDTH))
-        elif name == "message":
-            lines.extend(Line(row) for row in wrap(str(slots["text"]), PAPER_WIDTH))
-            lines.append(Line(f"- {slots['from_name']}", align="left"))
-        elif name in ("metric_tiles", "metric_rows"):
-            lines.extend(_metric_row(m, values) for m in slots["metrics"])
-        elif name == "graph":
-            lines.append(_metric_row(slots["metric"], values))
-        elif name == "dog_counts":
-            lines.append(Line(str(slots["label"]).upper()))
-            lines.extend(_metric_row({"label": i["label"], "value": i["count"]}, values) for i in slots["items"])
-        elif name == "list":
-            if slots.get("title"):
-                lines.append(Line(str(slots["title"]).upper(), bold=True))
-            lines.extend(Line(f"- {item}") for item in slots["items"])
-        elif name == "todo":
-            if slots.get("title"):
-                lines.append(Line(str(slots["title"]).upper(), bold=True))
-            lines.extend(Line(f"[{'x' if i.get('done') else ' '}] {i['text']}") for i in slots["items"])
-    return lines
+        slots = dict(block["slots"])
+        if block["type"] == "metric":
+            slots = _filled_row(slots, values)
+        if block["type"] == "metric_rows":
+            slots["rows"] = [_filled_row(row, values) for row in slots.get("rows", [])]
+        filled.append({**block, "slots": slots})
+    return filled
 
 
-def ticket_lines(slots: Mapping[str, Any], client: HAClient | None) -> list[Line]:
+def _render_blocks(blocks: Sequence[Mapping[str, Any]]) -> list[R.Block]:
+    return [
+        R.Block(
+            type=block["type"],
+            slots=block["slots"],
+            mood=block.get("mood", R.NEUTRAL),
+            span=block.get("span") or R.LAYOUT[block["type"]]["span"],
+        )
+        for block in blocks
+    ]
+
+
+def compose_render(blocks: Sequence[Mapping[str, Any]], client: HAClient | None) -> tuple[list[ReceiptLine], list[str]]:
+    """Draws a composed ticket: one raster line per strip, plus the notes for any text that was shortened."""
+    filled = fill_values(blocks, fetch_entities(blocks, client))
+    lines: list[ReceiptLine] = []
+    notes: list[str] = []
+    for strip in R.split_strips(_render_blocks(filled)):
+        bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=TICKET_MARGIN, margin_bottom=TICKET_MARGIN)
+        lines.append(ReceiptLine("", raster=(bitmap.width // 8, bitmap.height, bitmap.bits)))
+        notes.extend(strip_notes)
+    return lines, notes
+
+
+def summary(blocks: Sequence[Mapping[str, Any]]) -> str:
+    """A short label for the ticket's log row, taken from its first block."""
+    first = blocks[0]["slots"]
+    for key in ("greeting", "label", "paragraph", "title", "tip"):
+        if first.get(key):
+            return str(first[key])
+    return "(composed)"
+
+
+def ticket_lines(slots: Mapping[str, Any], client: HAClient | None) -> list[ReceiptLine]:
     """Lay out any stored slot ticket: a composed one, or a slot template (briefing and note)."""
     if "blocks" in slots:
-        blocks = slots["blocks"]
-        return compose_lines(blocks, fetch_entities(blocks, client))
+        lines, _ = compose_render(slots["blocks"], client)
+        return lines
     return slot_lines(slots, fetch_values(slots, client))

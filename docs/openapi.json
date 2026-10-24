@@ -1106,6 +1106,7 @@
               "anyOf": [
                 {
                   "type": "integer",
+                  "maximum": 87600,
                   "minimum": 1
                 },
                 {
@@ -1204,6 +1205,7 @@
               "anyOf": [
                 {
                   "type": "integer",
+                  "maximum": 87600,
                   "minimum": 1
                 },
                 {
@@ -1296,6 +1298,7 @@
               "anyOf": [
                 {
                   "type": "integer",
+                  "maximum": 87600,
                   "minimum": 1
                 },
                 {
@@ -2922,6 +2925,14 @@
             "type": "string",
             "title": "Moods",
             "default": ""
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes",
+            "description": "What was shortened to fit, for composed tickets."
           }
         },
         "type": "object",
