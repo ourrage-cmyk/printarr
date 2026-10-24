@@ -517,6 +517,19 @@ def _shorten(block: Block, slots: dict[str, Any], x0: int, x1: int, max_h: int) 
     return trimmed
 
 
+def _widen_lone(row: list[Placed]) -> list[Placed]:
+    """A row of one card that is narrower than the page takes the full width, so it is centred on the paper."""
+    if len(row) != 1 or row[0].span >= COLS or row[0].block.span is not None:
+        return row
+    block = row[0].block
+    lay = LAYOUT[block.type]
+    x0, x1 = span_x(0, COLS)
+    slots = dict(block.slots)
+    content = _measure(block, slots, x0, x1)
+    units, _ = _units_for(content, lay)
+    return [Placed(block, 0, COLS, x0, x1, units, content, slots)]
+
+
 def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
     """Places blocks in rows, sizes each card in whole units, and reports any cut-off text."""
     rows: list[list[Placed]] = []
@@ -543,6 +556,7 @@ def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
         used += span
     if row:
         rows.append(row)
+    rows = [_widen_lone(row) for row in rows]
     return rows, notes
 
 
