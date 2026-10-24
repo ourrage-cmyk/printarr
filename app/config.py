@@ -35,6 +35,9 @@ class Settings:
     backup_keep: int = 7  # nightly copies kept
     strip_max_blocks: int = 5  # a strip is cut after this many tickets, even mid-pile
     strip_margin_dots: int = 90  # blank space at the top and bottom of a strip, 0.5 in at 180 dpi
+    # Not read from the environment on purpose: the first-run wizard gate is always on in
+    # production. Tests switch it off with an explicit Settings(setup_required=False).
+    setup_required: bool = True
 
     @property
     def tzinfo(self) -> ZoneInfo:
