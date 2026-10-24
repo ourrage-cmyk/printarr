@@ -29,6 +29,16 @@ logger = logging.getLogger("printarr.scheduler")
 
 BATCH_SIZE = 10
 SLOW_TICKET_MS = 10_000  # the target: always under 10 s
+MARK_SENT_TRIES = 3
+MARK_SENT_RETRY_S = 0.2
+
+
+class ReleaseIncomplete(PrinterError):
+    """A person's release stopped part-way. `strips` are the strips already printed and recorded."""
+
+    def __init__(self, strips: list[dict], error: str) -> None:
+        super().__init__(error)
+        self.strips = strips
 
 
 class Scheduler:
@@ -183,14 +193,32 @@ class Scheduler:
         if self.notifier:
             self.notifier.recovered("printer", "printer is reachable again")
         self.metrics.incr("tickets_printed")
-        self.store.mark_sent(ticket["id"], print_ms=round(total_ms))
+        self._mark_sent(ticket["id"], print_ms=round(total_ms))
         logger.info("ticket %s printed", ticket["id"])
+
+    def _mark_sent(self, ticket_id: str, **fields) -> None:
+        """Record a printed ticket. The paper is already out, so a database hiccup is retried, not raised.
+
+        If every try fails the ticket stays 'printing' and is failed at the next restart, rather than
+        being printed again.
+        """
+        for attempt in range(1, MARK_SENT_TRIES + 1):
+            try:
+                self.store.mark_sent(ticket_id, **fields)
+                return
+            except Exception:
+                if attempt == MARK_SENT_TRIES:
+                    logger.exception("ticket %s printed but could not be marked sent", ticket_id)
+                    self.metrics.incr("mark_sent_failures")
+                    return
+                time.sleep(MARK_SENT_RETRY_S * attempt)
 
     def print_release(self, person: str, trigger: str) -> list[dict]:
         """Print one person's pile as strips. Each strip holds only this person's tickets and is cut after it.
 
         A strip is cut after strip_max_blocks tickets. Tickets are claimed before printing, so a repeat
-        release prints nothing new. A failed print puts its claimed tickets back on hold.
+        release prints nothing new. A failed print puts its claimed tickets back on hold. If a later
+        strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
         pile = self.store.pile(person)
         size = max(1, self.settings.strip_max_blocks)
@@ -205,11 +233,11 @@ class Scheduler:
             try:
                 lines = self._strip_lines([t for t in tickets if t is not None])
                 self.transport.send(encode(lines, feed=1, raster_mode=self.settings.raster_mode))
-            except Exception:
+            except Exception as exc:
                 self.store.unclaim(won)
-                raise
+                raise ReleaseIncomplete(strips, str(exc) or type(exc).__name__) from exc
             for ticket_id in won:
-                self.store.mark_sent(ticket_id, strip_id=strip_id, strip_trigger=trigger)
+                self._mark_sent(ticket_id, strip_id=strip_id, strip_trigger=trigger)
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
             strips.append({"strip_id": strip_id, "ticket_ids": won})
         return strips

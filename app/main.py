@@ -38,7 +38,7 @@ from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket
 from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks
 from app.ha import HAClient, HAError
-from app.scheduler import Scheduler, SchedulerThread
+from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
@@ -852,8 +852,16 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Print this person's pile as strips, cutting after each. Only this person's tickets go on a strip."""
         try:
             strips = scheduler.print_release(person, body.trigger)
-        except PrinterError as exc:
-            raise HTTPException(status_code=502, detail=f"printer unreachable, pile kept: {exc}") from None
+        except ReleaseIncomplete as exc:
+            # Strips printed before the failure are already recorded; report them so nothing looks lost.
+            if exc.strips:
+                message = f"printed {len(exc.strips)} strip(s), then the printer failed; the rest of the pile is kept"
+            else:
+                message = "printer unreachable, pile kept"
+            raise HTTPException(
+                status_code=502,
+                detail={"message": f"{message}: {exc}", "trigger": body.trigger, "strips": exc.strips},
+            ) from None
         return {"person": person, "trigger": body.trigger, "strips": strips}
 
     @api.post("/holds/{hold_key}/release", response_model=list[TicketOut], tags=["tickets"])
