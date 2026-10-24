@@ -82,7 +82,7 @@ SETUP_UI = r"""<!doctype html>
     <legend>Model server (optional, Ollama)</legend>
     <div class="check"><input id="llm_enabled" type="checkbox" checked><label for="llm_enabled" style="margin:0">Use the model server to choose templates and clean up text</label></div>
     <label for="llm_base_url">OpenAI-compatible address</label>
-    <input id="llm_base_url" placeholder="http://192.168.1.231:11434/v1">
+    <input id="llm_base_url" placeholder="http://192.0.2.231:11434/v1">
     <label for="llm_model">Template model</label>
     <input id="llm_model">
     <label for="llm_text_model">Text clean-up model</label>

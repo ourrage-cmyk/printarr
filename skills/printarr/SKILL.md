@@ -8,11 +8,11 @@ description: Print receipt strips on the printarr thermal printer through its RE
 printarr queues receipt strips and prints them on an Epson TM-T88V (80 mm paper). You talk to it only
 through its REST API.
 
-- Base URL: `http://192.168.1.231:30100/api/v1`. Health and version are at `http://192.168.1.231:30100/healthz`.
+- Base URL: `http://192.0.2.231:30100/api/v1`. Health and version are at `http://192.0.2.231:30100/healthz`.
 - No authentication. The API is for the home LAN only. Never expose it to the internet.
 - Two recipients: `yannic` (Yannic) and `wife` (Allyson). Every request names one as `recipient`.
   The strip says "Allyson", but the API id is `wife`.
-- The live contract is `http://192.168.1.231:30100/docs` (or its openapi.json file). If this page and the schema
+- The live contract is `http://192.0.2.231:30100/docs` (or its openapi.json file). If this page and the schema
   disagree, the schema wins.
 
 Before anything else, check that setup is finished: `GET /api/v1/health`. Until Yannic has finished the
@@ -49,7 +49,7 @@ Use only the slots a schema lists. Do not invent entity IDs. Take them from `/in
 `POST /api/v1/tickets/compose` takes an ordered list of blocks and draws them as strips.
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
   -H 'Content-Type: application/json' \
   -d '{
     "recipient": "wife",
@@ -101,7 +101,7 @@ An `entity_id` is read from Home Assistant when the strip prints, not when you s
 `POST /api/v1/tickets` takes one plain message and picks the layout:
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets \
   -H 'Content-Type: application/json' \
   -d '{"recipient": "yannic", "sender": "hermes", "title": "Bins", "message": "Bins out tonight",
        "kind": "reminder", "tone": "reminder", "delivery": "on_release"}'
@@ -118,7 +118,7 @@ Send `preset` and `slots` to `POST /api/v1/tickets/compose` instead of `blocks`.
 and a fixed `idempotency_key`, for example `morning:yannic:2026-10-26`:
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
   -H 'Content-Type: application/json' \
   -d '{"recipient": "yannic", "sender": "hermes", "kind": "morning", "preset": "briefing",
        "delivery": "on_release", "idempotency_key": "morning:yannic:2026-10-26",
@@ -164,7 +164,7 @@ printarr never creates schedules. It holds a ticket until it is due. You decide 
 The shopping list lives in Home Assistant, and you manage it. printarr keeps no list. Send a snapshot each time:
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
   -H 'Content-Type: application/json' \
   -d '{"recipient": "yannic", "kind": "shopping", "tone": "neutral", "sender": "hermes", "delivery": "now",
        "blocks": [
@@ -181,7 +181,7 @@ For a list that prints when Yannic gets home, send it with `delivery: "at"` and 
 `POST /api/v1/notify` sends a short plain-text message to his Telegram chat:
 
 ```bash
-curl -sS -X POST http://192.168.1.231:30100/api/v1/notify \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/notify \
   -H 'Content-Type: application/json' \
   -d '{"text": "Printarr is on build 86. The next test can run."}'
 ```
@@ -201,7 +201,7 @@ what the paper showed. The newest 250 are kept.
 - `GET /api/v1/tickets/{id}/image` returns the PNG (`image/png`). Save it to a file and look at it:
 
 ```bash
-curl -sS -o ticket.png http://192.168.1.231:30100/api/v1/tickets/<id>/image
+curl -sS -o ticket.png http://192.0.2.231:30100/api/v1/tickets/<id>/image
 ```
 
 A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.

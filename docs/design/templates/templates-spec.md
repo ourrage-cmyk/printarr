@@ -43,7 +43,7 @@ Reference renders: `receipt-lab/renders5/B5-001.png` to `B5-029.png`. Source: `r
 | urgent | barcode | perforation | barcode | warn, bolt | is_urgent |
 
 ## d1 decision questions
-The d1 model is called at `POST http://192.168.1.231:11434/v1/systemone` (see `receipt-lab/notes/d1-model-api.md`). Each question is a 0 to 1 likelihood. For each message, ask all of these in one call, then pick the tone with the highest score above a threshold of 0.5, and fall back to `neutral` when none is above it:
+The d1 model is called at `POST http://192.0.2.231:11434/v1/systemone` (see `receipt-lab/notes/d1-model-api.md`). Each question is a 0 to 1 likelihood. For each message, ask all of these in one call, then pick the tone with the highest score above a threshold of 0.5, and fall back to `neutral` when none is above it:
 
 - is_loving: "Does the message express love or warm affection?"
 - is_positive: "Is the message positive or grateful?"
