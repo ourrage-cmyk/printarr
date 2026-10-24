@@ -87,7 +87,7 @@ SPRITES: dict[str, tuple[str, ...]] = {
     "heart": (".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."),
     "drop": ("..#..", ".###.", "#####", "#####", ".###."),
     "box": ("#####", "#...#", "#...#", "#...#", "#####"),
-    "check": ("....#", "...##", "#.##.", "##.#.", ".##..", "..#.."),
+    "check": ("......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."),
     "star": ("....#....", "....#....", "#########", ".#######.", "..#####..", ".##.#.##.", "##.....##", ".........", "........."),
     "warn": ("....#....", "...###...", "...###...", "..##.##..", "..##.##..", ".##...##.", ".##...##.", "#########", "........."),
     "question": (".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."),
@@ -142,6 +142,32 @@ def _dotted_wave(c: Canvas, x0: int, x1: int, y: int) -> int:
     for x in range(x0, x1, 3):
         c.set_px(x, js_round(y + amp + math.sin((x - x0) / 6) * amp))
     return amp * 2 + 2
+
+
+def _star_row(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Small plus-shaped stars along the width: playful."""
+    for x in range(x0 + 4, x1 - 4, 14):
+        c.fill_rect(x, y + 4, 7, 2)
+        c.fill_rect(x + 2, y + 1, 2, 8)
+    return 10
+
+
+def _burst(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Tall and short strokes alternating, like a cheer: excited."""
+    for k, x in enumerate(range(x0, x1, 6)):
+        c.fill_rect(x, y + (0 if k % 2 == 0 else 5), 2, 12 if k % 2 == 0 else 4)
+    return 12
+
+
+def _dot_dash(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Dot, dot, dash: confused."""
+    x = x0
+    while x < x1:
+        c.fill_rect(x, y + 3, 2, 2)
+        c.fill_rect(x + 6, y + 3, 2, 2)
+        c.fill_rect(x + 14, y + 3, 8, 2)
+        x += 30
+    return 8
 
 
 def _barcode(c: Canvas, x0: int, x1: int, y: int) -> int:
@@ -199,6 +225,9 @@ def _warn(c: Canvas, x0: int, _x1: int, y: int) -> int:
 ORNAMENTS: dict[str, Callable[[Canvas, int, int, int], int]] = {
     "sunStrip": _sun_strip,
     "dottedWave": _dotted_wave,
+    "starRow": _star_row,
+    "burst": _burst,
+    "dotDash": _dot_dash,
     "barcode": _barcode,
     "tapeTicks": _tape_ticks,
     "perforation": _perforation,
@@ -425,20 +454,29 @@ EDGE_GAP = 10  # the least clear space between a line of text and the card borde
 
 
 def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -> int:
-    """A label with its value at the right: on one line when the two fit with an edge gap and some leaders,
-    else the value goes under the label, left aligned and wrapped, so nothing runs into the border.
-    Returns its height."""
-    from app.render.canvas import solid_width
-
-    width = x1 - EDGE_GAP - (x0 + indent)
-    if solid_width(label, 21) + solid_width(value, 21) + 8 + 14 <= width:
-        c.row_solid(x0 + indent, x1 - EDGE_GAP, c.y, label, value, 21)
+    """A label, dot leaders, the value right-aligned: one rhythm for every row. When they do not fit on one line
+    a long label wraps on the left, or a long value wraps on the right; the leaders and the right edge stay.
+    Returns the row's height."""
+    left, right = x0 + indent, x1 - EDGE_GAP
+    width = right - left
+    lw, vw = solid_width(label, 21), solid_width(value, 21)
+    if lw + vw + 22 <= width:
+        c.row_solid(left, right, c.y, label, value, 21)
         return ROW
-    c.solid(x0 + indent, c.y, label, 21)
-    lines = solid_wrap(value, width)
-    for i, line in enumerate(lines):
-        c.solid(x0 + indent, c.y + (i + 1) * ROW, line, 21)
-    return (1 + len(lines)) * ROW
+    if lw > vw:  # a long label: it wraps on the left and the value closes the last line
+        lines = solid_wrap(label, max(60, width - vw - 22)) or [label]
+        for i, line in enumerate(lines[:-1]):
+            c.solid(left, c.y + i * ROW, line, 21)
+        c.y += (len(lines) - 1) * ROW
+        c.row_solid(left, right, c.y, lines[-1], value, 21)
+        c.y -= (len(lines) - 1) * ROW
+        return len(lines) * ROW
+    # a long value: the first line shares the label's row, the rest are right-aligned under it
+    lines = solid_wrap(value, max(60, width - lw - 22)) or [value]
+    c.row_solid(left, right, c.y, label, lines[0], 21)
+    for i, line in enumerate(lines[1:], start=1):
+        c.solid(right - solid_width(line, 21), c.y + i * ROW, line, 21)
+    return len(lines) * ROW
 
 
 def _heading(c: Canvas, x: int, text: str, x1: int = OUTER_R) -> None:
@@ -512,9 +550,8 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if s.get("title"):
         _heading(c, x0, _label(s["title"]), x1)
     for r in list(s.get("rows", []))[:12]:
-        card.icon(x0, c.y)
         unit = f" {r['unit']}" if r.get("unit") else ""
-        c.y += _row(c, x0, x1, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", indent=28)
+        c.y += _row(c, x0, x1, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}")
 
 
 AXIS_CAP = 14  # chart labels: the smallest full-line size, so they stay quiet under the line
@@ -587,7 +624,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
     clear = _kind_mark(card, "alert", x1)
-    _title_line(card, x0, x1 - clear + 5, str(s.get("label", "")))
+    _title_line(card, x0, x1 - clear, str(s.get("label", "")))
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
@@ -616,7 +653,8 @@ def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     """One line of advice. On its own card it is centred between the tone icon and the kind mark and the card
     centres it vertically; inside a bigger card it leads with its icon like the rest of the text."""
     c = card.c
-    clear = _kind_mark(card, "tip", x1)
+    icon_is_mark = MOODS[card.mood]["icon"] == KIND_MARKS["tip"]  # a reminder's clock is the kind mark already
+    clear = 0 if icon_is_mark else _kind_mark(card, "tip", x1)
     card.icon(x0, c.y)
     if card.in_group:
         c.y += paragraph(c, x0 + 34, c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2
@@ -899,14 +937,14 @@ def spill(blocks: Sequence[Block]) -> list[Block]:
             slots[key] = text
             if not first:
                 base = str(block.slots.get(head_key) or "")
-                slots[head_key] = f"{base} CONT." if 0 < len(base) <= 8 else "CONT."  # a long title is not repeated
+                slots[head_key] = _cont_title(base)
                 slots["_cont"] = True
             return Block(block.type, slots, mood=block.mood, span=block.span)
 
         text, pieces = "", []
         for chunk, sep in units:
             trial = f"{text}{sep}{chunk}" if text else chunk
-            if text and _overflows(piece(trial, not pieces, False)):
+            if text and _overflows(piece(trial, not pieces, True)):  # fit with the signature, so the last card never overflows
                 pieces.append(text)
                 text = chunk
             else:
@@ -914,6 +952,20 @@ def spill(blocks: Sequence[Block]) -> list[Block]:
         pieces.append(text)
         out.extend(piece(t, i == 0, i == len(pieces) - 1) for i, t in enumerate(pieces))
     return out
+
+
+def _cont_title(base: str) -> str:
+    """The original title with CONT. after it, with words dropped from the title until it fits two lines."""
+    words = base.upper().split()
+    while words:
+        text = " ".join(words) + " CONT."
+        scale, lines = title_lines(text, 380)
+        if scale == NUMERAL and len(lines) <= MAX_TITLE_LINES and not lines[-1].endswith("."):
+            return text
+        if scale == NUMERAL and len(lines) <= MAX_TITLE_LINES and text_width(lines[-1], NUMERAL) <= 380 and " ".join(lines) == text:
+            return text
+        words.pop()
+    return "CONT."
 
 
 def _hard_words(sentence: str, longest: int = 400) -> list[str]:

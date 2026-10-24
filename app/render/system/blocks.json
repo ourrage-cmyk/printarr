@@ -207,7 +207,7 @@
       "sprite_set": "bright"
     },
     "excited": {
-      "header": "sunStrip",
+      "header": "burst",
       "divider": "tapeTicks",
       "footer": "dottedWave",
       "icon": "star",
@@ -223,7 +223,7 @@
       "sprite_set": "soft"
     },
     "playful": {
-      "header": "dottedWave",
+      "header": "starRow",
       "divider": "tapeTicks",
       "footer": "dottedWave",
       "icon": "bone",
@@ -255,7 +255,7 @@
       "sprite_set": "soft"
     },
     "confused": {
-      "header": "dashedRule",
+      "header": "dotDash",
       "divider": "dashedRule",
       "footer": "hairline",
       "icon": "question",

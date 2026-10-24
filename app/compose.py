@@ -352,11 +352,14 @@ def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[st
 def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None) -> list[dict[str, Any]]:
     """A briefing (template 101) as blocks: a greeting, one metric card per number, and a tip."""
     blocks: list[dict[str, Any]] = []
-    head = slots.get("greeting") or slots.get("title")
-    if head or slots.get("paragraph"):
+    head = slots.get("title") or slots.get("greeting")  # a title, when sent, is the headline; the greeting leads the text
+    text = slots.get("paragraph")
+    if slots.get("title") and slots.get("greeting"):
+        text = f"{slots['greeting']}. {text}" if text else slots["greeting"]
+    if head or text:
         greeting: dict[str, Any] = {"greeting": head or "TODAY"}
-        if slots.get("paragraph"):
-            greeting["summary"] = slots["paragraph"]  # the renderer shortens it if it runs long
+        if text:
+            greeting["summary"] = text  # the renderer shortens it if it runs long
         blocks.append({"type": "greeting", "mood": "neutral", "span": 3, "slots": greeting})
     blocks.extend(_metric_block(metric, client) for metric in slots.get("metrics", []))
     if slots.get("tip"):
