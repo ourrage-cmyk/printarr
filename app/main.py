@@ -44,6 +44,7 @@ from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
+    plain_message,
     BLOCKS as compose_blocks,
     BlockProblem,
     catalogue as compose_catalogue,
@@ -1261,9 +1262,17 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
+        sentences = []
+        for error in exc.errors():
+            field = ".".join(str(part) for part in error["loc"][1:]) or "the request"
+            if error["type"] == "literal_error":
+                sentences.append(f"{field} must be one of {error['ctx']['expected']}.")
+            else:
+                sentences.append(f"{field}: {plain_message(error['msg'])}.")
+        hint = " ".join([*sentences, VALIDATION_HINT])
         return JSONResponse(
             status_code=422,
-            content={"detail": jsonable_encoder(exc.errors()), "hint": VALIDATION_HINT},
+            content={"detail": jsonable_encoder(exc.errors()), "hint": hint},
         )
 
     app.include_router(api)

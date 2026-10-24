@@ -54,3 +54,29 @@ def test_slot_ticket_on_a_non_slot_template_names_the_slot_templates(settings):
     assert response.status_code == 422
     assert "101" in response.json()["hint"] and "102" in response.json()["hint"]
 
+
+
+def test_unknown_slot_template_points_at_the_slot_template_list(settings):
+    with _client(settings) as client:
+        response = client.post("/api/v1/tickets/slots", json={"recipient": "yannic", "template": 999, "slots": {}})
+    assert response.status_code == 422
+    assert "GET /api/v1/slot-templates" in response.json()["hint"]
+
+
+def test_unknown_recipient_names_the_valid_values_in_plain_words(settings):
+    with _client(settings) as client:
+        response = client.post("/api/v1/tickets", json={"recipient": "dad", "message": "hi", "delivery": "now"})
+    assert response.status_code == 422
+    assert "yannic" in response.json()["hint"] and "wife" in response.json()["hint"]
+    assert "Input should be" not in response.json()["hint"]
+
+
+def test_metric_row_without_value_says_what_to_send_without_pydantic_wording(settings):
+    body = {"recipient": "yannic", "blocks": [
+        {"type": "metric_rows", "mood": "factual", "slots": {"rows": [{"label": "Steps"}]}}]}
+    with _client(settings) as client:
+        response = client.post("/api/v1/tickets/compose", json=body)
+    text = response.text
+    assert response.status_code == 422
+    assert "Value error" not in text
+    assert "entity_id" in text and "value" in text
