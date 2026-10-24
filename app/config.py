@@ -34,7 +34,7 @@ class Settings:
     backup_hour: int = 3  # local hour for the nightly copy
     backup_keep: int = 7  # nightly copies kept
     strip_max_blocks: int = 5  # a strip is cut after this many tickets, even mid-pile
-    strip_margin_dots: int = 90  # blank space at the top and bottom of a strip, 0.5 in at 180 dpi
+    strip_margin_dots: int = 0  # extra blank per strip; the shell margins in blocks.json already give the blank
     # Not read from the environment on purpose: the first-run wizard gate is always on in
     # production. Tests switch it off with an explicit Settings(setup_required=False).
     setup_required: bool = True
@@ -72,7 +72,7 @@ def load_settings() -> Settings:
         backup_hour=int(_env("BACKUP_HOUR", "3")),
         backup_keep=int(_env("BACKUP_KEEP", "7")),
         strip_max_blocks=int(_env("STRIP_MAX_BLOCKS", "5")),
-        strip_margin_dots=int(_env("STRIP_MARGIN_DOTS", "90")),
+        strip_margin_dots=int(_env("STRIP_MARGIN_DOTS", "0")),
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")

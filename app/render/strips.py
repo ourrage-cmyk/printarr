@@ -585,5 +585,6 @@ def render_strip_with_notes(
     c.y = margin_top
     for row in rows:
         _draw_row(c, row)
+    c.y -= GAP_V  # the gap after the last row is not part of the strip: the bottom margin replaces it
     c.y += margin_bottom
     return c.crop(0), notes

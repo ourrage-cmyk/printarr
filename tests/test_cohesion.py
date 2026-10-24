@@ -64,7 +64,7 @@ def test_strip_has_the_same_top_and_bottom_margins(block):
     bitmap = strips.render_strip([block])
     top, bottom = _ink_rows(bitmap)
     assert top == MARGIN_TOP
-    assert bitmap.height - 1 - bottom >= MARGIN_BOTTOM
+    assert bitmap.height - 1 - bottom >= MARGIN_BOTTOM - 1
 
 
 def test_long_metric_unit_never_runs_past_the_tile():
@@ -79,3 +79,22 @@ def test_long_message_stays_inside_the_card():
     bitmap = strips.render_strip([block])
     left, right = _ink_columns(bitmap)
     assert left >= OUTER_L and right <= OUTER_R
+
+
+@pytest.mark.parametrize("block", list(_cases()))
+def test_no_wasted_paper_at_the_end_of_a_strip(block):
+    """The blank under the last card is the shell's bottom margin, and nothing else."""
+    bitmap = strips.render_strip([block])
+    _, bottom = _ink_rows(bitmap)
+    # The card's stroke ends one dot past its box, so the blank can differ from the margin by one dot.
+    assert abs((bitmap.height - 1 - bottom) - MARGIN_BOTTOM) <= 1
+
+
+FULL_WIDTH = ("greeting", "metric_rows", "graph", "dog_counts", "message", "alert", "checklist", "tip", "fact")
+
+
+@pytest.mark.parametrize("name", FULL_WIDTH)
+def test_full_width_cards_are_centred_with_equal_gutters(name):
+    left, right = _ink_columns(strips.render_strip([Block(name, SAMPLES[name])]))
+    assert left == OUTER_L
+    assert PAPER_DOTS - 1 - right == PAPER_DOTS - OUTER_R - 1

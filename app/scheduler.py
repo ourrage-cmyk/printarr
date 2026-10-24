@@ -274,7 +274,7 @@ class Scheduler:
         return chunks
 
     def _strip_lines(self, tickets: list[dict]) -> list[Line]:
-        """The tickets one after another, with a blank margin at the top and bottom of the strip."""
+        """The tickets one after another. Blank space around each strip comes from the shell, not from here."""
         margin = self.settings.strip_margin_dots
         blank = Line("", raster=(64, margin, bytes(64 * margin))) if margin > 0 else None
         lines: list[Line] = [blank] if blank else []
