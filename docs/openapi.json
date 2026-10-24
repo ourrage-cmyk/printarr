@@ -2671,7 +2671,7 @@
             "maxLength": 40,
             "minLength": 1,
             "title": "Wife Name",
-            "default": "the second person"
+            "default": "Allyson"
           },
           "clear": {
             "items": {
