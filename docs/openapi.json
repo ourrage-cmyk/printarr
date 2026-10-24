@@ -3450,7 +3450,19 @@
             },
             "type": "array",
             "title": "Notes",
-            "description": "What was shortened to fit, for composed tickets."
+            "description": "What was shortened to fit."
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "True when some of the text did not fit and was shortened. Read notes for what.",
+            "default": false
+          },
+          "strip_count": {
+            "type": "integer",
+            "title": "Strip Count",
+            "description": "How many strips the ticket prints as.",
+            "default": 1
           }
         },
         "type": "object",

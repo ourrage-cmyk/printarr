@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -259,18 +260,32 @@ def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
     return lines
 
 
+PARA_GAP = 10  # the blank between two paragraphs of authored text, in dots
+
+
+def _paragraph_lines(text: str, scale: int, max_w: int) -> list[list[str]]:
+    """The wrapped lines of each paragraph. A blank line in the source starts a new paragraph."""
+    parts = [part for part in re.split(r"\n\s*\n", str(text)) if part.strip()] or [""]
+    return [wrap_lines(part, scale, max_w) for part in parts]
+
+
 def paragraph(c: Canvas, x: int, y: int, text: str, scale: int, max_w: int) -> int:
-    lines = wrap_lines(text, scale, max_w)
-    for i, line in enumerate(lines):
-        if scale == BODY:
-            c.solid(x, y + i * (7 * scale + 4), line, 21)  # body text is full-line (Inter), not dot matrix
-        else:
-            c.text(x, y + i * (7 * scale + 4), line, scale)
-    return len(lines) * (7 * scale + 4)
+    step = 7 * scale + 4
+    top = y
+    for para in _paragraph_lines(text, scale, max_w):
+        for line in para:
+            if scale == BODY:
+                c.solid(x, y, line, 21)  # body text is full-line (Inter), not dot matrix
+            else:
+                c.text(x, y, line, scale)
+            y += step
+        y += PARA_GAP
+    return y - top - PARA_GAP
 
 
 def paragraph_height(text: str, scale: int, max_w: int) -> int:
-    return len(wrap_lines(text, scale, max_w)) * (7 * scale + 4)
+    paras = _paragraph_lines(text, scale, max_w)
+    return sum(len(para) for para in paras) * (7 * scale + 4) + PARA_GAP * (len(paras) - 1)
 
 
 def line_graph(c: Canvas, x0: int, y0: int, x1: int, y1: int, values: Sequence[float]) -> None:
@@ -637,11 +652,11 @@ class Placed:
 
 
 def validate(block: Block) -> None:
-    if block.type not in RENDERERS:
+    if block.type not in DRAW:
         raise ValueError(f"unknown block type: {block.type}")
     if block.mood not in MOODS:
         raise ValueError(f"unknown mood: {block.mood}")
-    lay = LAYOUT[block.type]
+    lay = LAYOUTS[block.type]
     span = block.span or lay["span"]
     if span not in (1, 2, 3):
         raise ValueError(f"span must be 1, 2 or 3, not {span}")
@@ -649,9 +664,10 @@ def validate(block: Block) -> None:
         raise ValueError(f"{block.type} needs at least {lay['min_span']} columns")
 
 
-def span_x(col: int, span: int) -> tuple[int, int]:
-    x0 = OUTER_L + col * (CELL_W + COL_GAP)
-    return x0, x0 + span * CELL_W + (span - 1) * COL_GAP
+def span_x(col: int, span: int, left: int = OUTER_L, right: int = OUTER_R) -> tuple[int, int]:
+    cell = (right - left - (COLS - 1) * COL_GAP) // COLS
+    x0 = left + col * (cell + COL_GAP)
+    return x0, x0 + span * cell + (span - 1) * COL_GAP
 
 
 def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[list[Block]]:
@@ -660,6 +676,7 @@ def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[
     cur: list[Block] = []
     for block in blocks:
         validate(block)
+    for block in group(fuse(blocks)):  # a headline, its tiles and the closing line are one card, so one block
         if cur and (len(cur) >= max_blocks or block.type == "greeting"):
             strips.append(cur)
             cur = []
@@ -674,7 +691,7 @@ def _measure(block: Block, slots: Mapping[str, Any], x0: int, x1: int, plot_h: i
     scratch = Canvas()
     scratch.y = 0
     card = Card(scratch, block.mood, plot_h=plot_h)
-    RENDERERS[block.type](card, slots, x0 + PAD_H, x1 - PAD_H)
+    DRAW[block.type](card, slots, x0 + PAD_H, x1 - PAD_H)
     return scratch.y
 
 
@@ -718,34 +735,81 @@ def fuse(blocks: Sequence[Block]) -> list[Block]:
         nxt = items[i + 1] if i + 1 < len(items) else None
         if block.type == "greeting" and not block.slots.get("summary") and nxt is not None and nxt.type != "greeting":
             heading = str(block.slots.get("greeting", ""))
-            if nxt.type in TITLED and not _is_salutation(heading):
-                key = "label" if nxt.type == "alert" else "title"
-                nxt = Block(nxt.type, {**nxt.slots, key: heading}, mood=nxt.mood, span=nxt.span)
-            items[i + 1] = nxt
-            i += 1
-            continue
+            if nxt.type in TITLED or nxt.type == "alert":
+                if not _is_salutation(heading):
+                    key = "label" if nxt.type == "alert" else "title"
+                    nxt = Block(nxt.type, {**nxt.slots, key: heading}, mood=nxt.mood, span=nxt.span)
+                items[i + 1] = nxt
+                i += 1
+                continue
         out.append(block)
         i += 1
     return out
 
 
+GROUP_TAILS = ("tip", "message")
+
+
+def group(blocks: Sequence[Block]) -> list[Block]:
+    """Metric tiles are content of the card that follows them, not siblings above it: a headline (if any), the
+    tiles and the closing tip or note become one card with the tiles nested inside."""
+    out: list[Block] = []
+    items = list(blocks)
+    i = 0
+    while i < len(items):
+        start = i
+        head = items[i] if items[i].type == "greeting" else None
+        j = i + 1 if head else i
+        metrics: list[Block] = []
+        while j < len(items) and items[j].type == "metric":
+            metrics.append(items[j])
+            j += 1
+        if metrics and j < len(items) and items[j].type in GROUP_TAILS:
+            tail = items[j]
+            out.append(Block("group", {"head": head, "metrics": metrics, "tail": tail}, mood=tail.mood, span=COLS))
+            i = j + 1
+        else:
+            out.append(items[start])
+            i = start + 1
+    return out
+
+
+def _group(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
+    """Draws the headline, the nested tiles and the closing line inside one card."""
+    c = card.c
+    head, tail = s.get("head"), s["tail"]
+    if head is not None:
+        _greeting(card, head.slots, x0, x1)
+        c.y += 4
+    else:
+        card.ornament("header", x0, x1)
+    rows, _ = layout(s["metrics"], x0, x1, grouped=True)
+    for row in rows:
+        _draw_row(c, row)
+    DRAW[tail.type](card, tail.slots, x0, x1)
+
+
+LAYOUTS = {**LAYOUT, "group": {"span": 3, "min_span": 3, "min_units": 2, "max_units": 18}}
+DRAW = {**RENDERERS, "group": _group}  # RENDERERS is the catalogue; a group is made by the layout, never sent
+
+
 def _place(block: Block, slots: dict[str, Any], x0: int, x1: int, col: int = 0, span: int = COLS) -> Placed:
     content = _measure(block, slots, x0, x1)
-    units, _ = _units_for(content, LAYOUT[block.type])
+    units, _ = _units_for(content, LAYOUTS[block.type])
     return Placed(block, col, span, x0, x1, units, content, slots)
 
 
-def _equalise(row: list[Placed]) -> list[Placed]:
+def _equalise(row: list[Placed], left: int = OUTER_L, right: int = OUTER_R) -> list[Placed]:
     """A row that does not fill the page is split evenly across it, so no row has a gap. Metric tiles in one row
     share one numeral size, so their numbers, charts and axes line up."""
     used = sum(p.span for p in row)
     if used < COLS:
         n = len(row)
-        width = (OUTER_R - OUTER_L - (n - 1) * COL_GAP) // n
+        width = (right - left - (n - 1) * COL_GAP) // n
         placed = []
         for k, p in enumerate(row):
-            x0 = OUTER_L + k * (width + COL_GAP)
-            x1 = OUTER_R if k == n - 1 else x0 + width
+            x0 = left + k * (width + COL_GAP)
+            x1 = right if k == n - 1 else x0 + width
             placed.append(_place(p.block, dict(p.slots), x0, x1, p.col, p.span))
         row = placed
     metrics = [p for p in row if p.block.type == "metric"]
@@ -761,20 +825,20 @@ def _equalise(row: list[Placed]) -> list[Placed]:
     return row
 
 
-def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
+def layout(blocks: Sequence[Block], left: int = OUTER_L, right: int = OUTER_R, grouped: bool = False) -> tuple[list[list[Placed]], list[str]]:
     """Places blocks in rows, sizes each card in whole units, and reports any cut-off text."""
     rows: list[list[Placed]] = []
     notes: list[str] = []
     row: list[Placed] = []
     used = 0
-    for block in fuse(blocks):
+    for block in (list(blocks) if grouped else group(fuse(blocks))):
         validate(block)
-        lay = LAYOUT[block.type]
+        lay = LAYOUTS[block.type]
         span = block.span or lay["span"]
         if used + span > COLS:
             rows.append(row)
             row, used = [], 0
-        x0, x1 = span_x(used, span)
+        x0, x1 = span_x(used, span, left, right)
         slots = dict(block.slots)
         content = _measure(block, slots, x0, x1)
         units, overflow = _units_for(content, lay)
@@ -787,7 +851,7 @@ def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
         used += span
     if row:
         rows.append(row)
-    rows = [_equalise(row) for row in rows]
+    rows = [_equalise(row, left, right) for row in rows]
     return rows, notes
 
 
@@ -801,7 +865,7 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
         c.y = top + PAD_V
         if p.block.type == "tip" or (p.block.type == "greeting" and not p.slots.get("summary")):
             c.y = top + max(PAD_V, (height - p.content_h) // 2)  # one line or one title: centred in its card
-        RENDERERS[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
+        DRAW[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
         mood = p.block.mood
         c.round_box(p.x0, top, p.x1, top + height, RADIUS_BY_MOOD.get(mood, RADIUS), STROKE_BY_MOOD.get(mood, STROKE))
     c.y = top + row_units * UNIT_H

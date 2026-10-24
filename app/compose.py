@@ -370,10 +370,15 @@ def message_blocks(paragraph: str, sender: str | None, title: str | None = None,
     return [{"type": "message", "mood": "neutral", "span": 3, "slots": slots}]
 
 
+def note_card_render(message: str, sender: str | None, title: str | None = None) -> tuple[list[ReceiptLine], list[str]]:
+    """A plain note drawn as a message card, with the notes for any text that was shortened to fit."""
+    lines, notes = compose_render(message_blocks(message, sender, title=title), None)
+    return [ReceiptLine(message, raster=line.raster) for line in lines], notes  # the caption keeps the text for the log
+
+
 def note_card_lines(message: str, sender: str | None, title: str | None = None) -> list[ReceiptLine]:
     """A plain note (from the /tickets API) drawn as a message card, in the shared shell."""
-    lines, _ = compose_render(message_blocks(message, sender, title=title), None)
-    return [ReceiptLine(message, raster=line.raster) for line in lines]  # the caption keeps the text for the log
+    return note_card_render(message, sender, title)[0]
 
 
 def _signed(block: Mapping[str, Any], sender: str | None) -> Mapping[str, Any]:

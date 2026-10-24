@@ -41,3 +41,23 @@ def test_titles_use_the_heavy_face_when_every_word_fits():
 
 def test_firm_complaint_has_a_barcode():
     assert strips.MOODS["firm_complaint"]["header"] == "barcode"
+
+
+def test_metric_tiles_nest_in_the_card_that_closes_them():
+    blocks = [
+        Block("greeting", {"greeting": "TODAY", "summary": "Fine."}),
+        Block("metric", {"label": "A", "value": 1}, span=1),
+        Block("metric", {"label": "B", "value": 2}, span=1),
+        Block("metric", {"label": "C", "value": 3}, span=1),
+        Block("metric", {"label": "D", "value": 4}, span=1),
+        Block("tip", {"tip": "Leave early."}, mood="reminder"),
+    ]
+    assert len(strips.split_strips(blocks)) == 1
+    rows, _ = strips.layout(blocks)
+    assert len(rows) == 1 and rows[0][0].block.type == "group"
+
+
+def test_blank_line_in_text_makes_a_paragraph_gap():
+    one = strips.paragraph_height("First part.\n\nSecond part.", strips.BODY, 400)
+    flat = strips.paragraph_height("First part. Second part.", strips.BODY, 400)
+    assert one > flat
