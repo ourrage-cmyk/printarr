@@ -79,7 +79,7 @@ SPRITES: dict[str, tuple[str, ...]] = {
     "heart": (".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."),
     "drop": ("..#..", ".###.", "#####", "#####", ".###."),
     "box": ("#####", "#...#", "#...#", "#...#", "#####"),
-    "check": (".....#", "....##", "#..##.", "##.#..", ".##...", "..#..."),
+    "check": ("....#", "...##", "#.##.", "##.#.", ".##..", "..#.."),
     "star": ("....#....", "....#....", "#########", ".#######.", "..#####..", ".##.#.##.", "##.....##", ".........", "........."),
     "warn": ("....#....", "...###...", "...###...", "..##.##..", "..##.##..", ".##...##.", ".##...##.", "#########", "........."),
     "question": (".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."),
@@ -334,7 +334,7 @@ def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
 
 
 def _heading(c: Canvas, x: int, text: str, scale: int = BODY) -> None:
-    c.text(x, c.y, text, scale)
+    c.text(x, c.y, text, scale)  # a title: dot matrix
     c.y += 7 * scale + 8
 
 
@@ -450,7 +450,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     if s.get("title"):
-        _heading(c, x0, _label(s["title"]))
+        _heading(c, x0, _label(s["title"]), NUMERAL if len(_label(s["title"])) * 6 * NUMERAL <= x1 - x0 else BODY)
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
         c.solid(x0 + 26, c.y + 2, _label(item.get("text", "")), 21)
