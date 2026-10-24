@@ -136,6 +136,18 @@ def _model_timeout_45(conn: sqlite3.Connection) -> None:
     )
 
 
+def _add_render_report_columns(conn: sqlite3.Connection) -> None:
+    """Version 9: what the renderer reported when the ticket was drawn: text shortened, and how many strips."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    for name, definition in (
+        ("truncated", "INTEGER NOT NULL DEFAULT 0"),
+        ("strip_count", "INTEGER NOT NULL DEFAULT 1"),
+        ("render_notes", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        if name not in have:
+            conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
@@ -145,6 +157,7 @@ MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _add_moods_column,  # version 6
     _raise_model_timeout,  # version 7
     _model_timeout_45,  # version 8
+    _add_render_report_columns,  # version 9
 )
 
 LATEST_VERSION = len(MIGRATIONS)

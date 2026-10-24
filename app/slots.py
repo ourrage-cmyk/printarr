@@ -66,6 +66,8 @@ class Metric(BaseModel):
     )
     unit: str | None = Field(default=None, max_length=8, examples=["%"])
     hours: int | None = Field(default=None, ge=1, le=168, description="Hours of history to graph, for entities.")
+    scope: Literal["inside", "outside"] | None = Field(default=None, description="Where the reading is taken. Printed as IN or OUT after the label.")
+    as_of: str | None = Field(default=None, max_length=16, description="When the reading was taken, for example 08:15. Printed as AS OF 08:15.")
 
     @model_validator(mode="after")
     def one_source(self) -> Metric:
@@ -86,6 +88,7 @@ class BriefingSlots(BaseModel):
     paragraph: str | None = Field(default=None, max_length=400, description="The briefing text.")
     formatted: bool = Field(default=True, description="False when the text is raw speech to clean up.")
     tip: str | None = Field(default=None, max_length=120, examples=["Leave five minutes early."])
+    sign_off: str | None = Field(default=None, alias="from", max_length=20, description="Who the briefing is from. Printed under the tip; the ticket's sender is used when omitted.")
 
 
 class NoteSlots(BaseModel):

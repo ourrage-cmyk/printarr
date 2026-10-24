@@ -53,7 +53,7 @@ def test_metric_tiles_nest_in_the_card_that_closes_them():
         Block("tip", {"tip": "Leave early."}, mood="reminder"),
     ]
     assert len(strips.split_strips(blocks)) == 1
-    rows, _ = strips.layout(blocks)
+    rows, _ = strips.layout(strips.prepare(blocks))
     assert len(rows) == 1 and rows[0][0].block.type == "group"
 
 
@@ -61,3 +61,57 @@ def test_blank_line_in_text_makes_a_paragraph_gap():
     one = strips.paragraph_height("First part.\n\nSecond part.", strips.BODY, 400)
     flat = strips.paragraph_height("First part. Second part.", strips.BODY, 400)
     assert one > flat
+
+
+STORY = " ".join(f"Sentence number {i} says something about the dogs." for i in range(60))
+
+
+def test_long_text_continues_on_the_next_card_and_nothing_is_cut():
+    blocks = strips.spill([Block("message", {"paragraph": STORY, "from": "Hermes"})])
+    assert len(blocks) > 1
+    assert "".join(b.slots["paragraph"] for b in blocks).replace(" ", "") == STORY.replace(" ", "")
+    assert [bool(b.slots.get("from")) for b in blocks] == [False] * (len(blocks) - 1) + [True]  # one signature
+    assert all(b.slots.get("_cont") for b in blocks[1:])
+    assert len(strips.split_strips([Block("message", {"paragraph": STORY, "from": "Hermes"})])) == len(blocks)
+
+
+def test_a_url_wider_than_the_card_breaks_by_character():
+    lines = strips.solid_wrap("https://example.com/a/very/long/path/that/keeps/going/and/going/forever", 300)
+    assert len(lines) > 1 and all(strips.solid_width(line, 21) <= 300 for line in lines)
+
+
+def test_a_title_is_at_most_two_lines():
+    scale, lines = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 400)
+    assert scale == strips.NUMERAL and len(lines) <= 2
+
+
+def test_emoji_print_as_a_question_mark_not_a_block():
+    from app.render.canvas import printable
+
+    assert printable("Love you \U0001F600 你好 done") == "Love you ? ? done"
+
+
+def test_a_soft_alert_is_not_urgent_and_urgent_differs_from_firm():
+    assert strips.MOODS["urgent"] != strips.MOODS["firm_complaint"]
+    assert strips.STROKE_BY_MOOD["urgent"] != strips.STROKE_BY_MOOD["firm_complaint"]
+    assert "gentle_warning" not in strips.URGENT_MOODS
+
+
+def test_briefing_template_takes_scope_as_of_and_a_sign_off():
+    from app.compose import briefing_blocks
+    from app.slots import BriefingSlots
+
+    slots = BriefingSlots.model_validate({"tip": "Leave early.", "from": "Allyson", "metrics": [{"label": "Temp", "value": 17.1, "scope": "outside", "as_of": "08:15"}]})
+    blocks = briefing_blocks(slots.model_dump(exclude_none=True), None)
+    assert blocks[0]["slots"]["scope"] == "outside" and blocks[0]["slots"]["as_of"] == "08:15"
+    assert blocks[-1]["slots"]["from"] == "Allyson"
+
+
+def test_truncated_and_strip_count_are_stored(tmp_path):
+    from app.store import TicketStore
+
+    store = TicketStore(str(tmp_path / "t.db"))
+    store.init()
+    ticket = store.create(recipient="yannic", message="x", send_at_ms=0, template_id=103, decorations=(), selection="explicit", notes=["message shortened"], strip_count=3)
+    again = store.get(ticket["id"])
+    assert again["truncated"] is True and again["strip_count"] == 3 and again["notes"] == ["message shortened"]
