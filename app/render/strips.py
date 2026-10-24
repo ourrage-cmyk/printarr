@@ -346,22 +346,22 @@ def _label(text: object) -> str:
     return str(text).upper().replace("_", " ")
 
 
-def solid_wrap(text: str, max_w: int) -> list[str]:
+def solid_wrap(text: str, max_w: int, cap: int = 21) -> list[str]:
     """Word-wrap full-line body text by its real width in Inter, so no line runs past the card."""
     from app.render.canvas import solid_width
 
     lines: list[str] = []
     cur = ""
     for word in text.split():
-        while solid_width(word, 21) > max_w and len(word) > 1:  # a URL or code wider than the line breaks by character
-            cut = max(1, next((i for i in range(len(word), 0, -1) if solid_width(word[:i], 21) <= max_w), 1))
+        while solid_width(word, cap) > max_w and len(word) > 1:  # a URL or code wider than the line breaks by character
+            cut = max(1, next((i for i in range(len(word), 0, -1) if solid_width(word[:i], cap) <= max_w), 1))
             if cur:
                 lines.append(cur)
                 cur = ""
             lines.append(word[:cut])
             word = word[cut:]
         trial = f"{cur} {word}" if cur else word
-        if cur and solid_width(trial, 21) > max_w:
+        if cur and solid_width(trial, cap) > max_w:
             lines.append(cur)
             cur = word
         else:
@@ -636,9 +636,12 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     # The label wraps inside the tile, so a long label never runs over the border.
     scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(s.get("scope") or "").strip().upper(), "")
     label = _label(s.get("label", "")) + (f" {scope}" if scope else "")
-    for line in wrap_lines(label, BODY, x1 - x0) or [""]:
-        c.solid(x0, c.y, line, 21)
-        c.y += 7 * BODY + 4
+    from app.render.canvas import solid_width
+
+    label_cap = 21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP  # a word that does not fit the tile steps down, it never splits
+    for line in solid_wrap(label, x1 - x0, label_cap) or [""]:
+        c.solid(x0, c.y, line, label_cap)
+        c.y += 7 * BODY + 4 if label_cap == 21 else label_cap + 8
     c.y += 4
     # Numerals are display size (cap 42) when the value and its unit fit the tile, else body size.
     from app.render.canvas import solid_width
