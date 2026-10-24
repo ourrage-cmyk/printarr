@@ -4,6 +4,7 @@
 # Status of each operation:
 #   [live]     exists on main today
 #   [gap]      works today, but a field Hermes needs is not accepted yet (see SKILL.md)
+# Composed strips (/blocks, /tickets/compose) are the preferred way to print. SKILL.md has the details.
 
 openapi: 3.1.0
 info:
@@ -137,6 +138,62 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
       responses:
         "200": { description: Tickets, oldest first. }
+
+  /blocks:
+    get:
+      operationId: listBlocks
+      summary: "[live] Composable block types, their moods, span and unit limits. Read this before composing."
+      responses:
+        "200": { description: Block types with a schema link for each. }
+
+  /blocks/{name}/schema:
+    get:
+      operationId: getBlockSchema
+      summary: "[live] JSON Schema of one block's slots, with limits and descriptions"
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: JSON Schema. }
+        "404": { description: Unknown block type. }
+
+  /tickets/compose:
+    post:
+      operationId: composeTicket
+      summary: "[live] Queue a strip made of ordered blocks. Every block needs a mood and slots. Supports delivery, idempotency_key and hold. Bad blocks return 422 with each problem."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient, blocks]
+              additionalProperties: false
+              properties:
+                recipient: { $ref: "#/components/schemas/Recipient" }
+                blocks:
+                  type: array
+                  minItems: 1
+                  maxItems: 16
+                  items:
+                    type: object
+                    required: [type, mood, slots]
+                    properties:
+                      type: { type: string }
+                      mood: { type: string }
+                      slots: { type: object }
+                kind: { $ref: "#/components/schemas/Kind" }
+                tone: { $ref: "#/components/schemas/Tone" }
+                from_user: { $ref: "#/components/schemas/Recipient" }
+                to_user: { $ref: "#/components/schemas/Recipient" }
+                sender: { type: string, maxLength: 40 }
+                delivery: { type: string, enum: [now, at, on_release] }
+                send_at: { type: string, format: date-time }
+                hold: { type: boolean, default: false }
+                hold_key: { type: string, maxLength: 40 }
+                idempotency_key: { type: string, maxLength: 120 }
+      responses:
+        "201": { description: The queued ticket. }
+        "422": { description: "Block problems, as a list of {slot, problem}, or a message for the request as a whole." }
 
 components:
   schemas:
