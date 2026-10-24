@@ -60,7 +60,7 @@ def test_templates_endpoint_lists_groups(settings):
     with TestClient(create_app(settings)) as client:
         templates = client.get("/api/v1/templates").json()
         assert {t["recipient"] for t in templates} == {"yannic", "wife"}
-        assert len(templates) == 7  # six text templates and the Morning image design
+        assert len(templates) == 12  # six per recipient, including the Morning image design
 
 
 def test_scheduler_prints_and_serves_escpos(settings):

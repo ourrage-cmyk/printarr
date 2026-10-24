@@ -37,16 +37,22 @@ class Template:
     default: tuple[str, ...]  # decorations the rule-based path uses
     design: str | None = None  # an image design (app/render/registry.py) instead of text
     feed: int = 4  # lines fed before the cut; image tickets use 1
+    kind: str = "note"  # what the ticket is for: alert, morning, evening, list, note or plain
 
 
 TEMPLATES: tuple[Template, ...] = (
-    Template(1, "Classic", "yannic", True, "center", "-", ("footer",), ()),
-    Template(2, "Memo", "yannic", True, "left", "=", ("footer",), ("footer",)),
-    Template(3, "Celebration", "yannic", True, "center", "*", ("stars", "frame"), ("stars",)),
-    Template(4, "Note", "wife", True, "left", "-", ("footer", "stars"), ()),
-    Template(5, "Bold", "wife", True, "center", "#", ("frame",), ("frame",)),
-    Template(6, "Plain", "wife", False, "left", "-", ("footer",), ()),
-    Template(7, "Morning", "yannic", False, "left", "-", (), (), design="morning", feed=1),
+    Template(1, "Classic", "yannic", True, "center", "-", ("footer",), (), kind="evening"),
+    Template(2, "Memo", "yannic", True, "left", "=", ("footer",), ("footer",), kind="list"),
+    Template(3, "Celebration", "yannic", True, "center", "*", ("stars", "frame"), ("stars",), kind="note"),
+    Template(4, "Note", "wife", True, "left", "-", ("footer", "stars"), (), kind="note"),
+    Template(5, "Bold", "wife", True, "center", "#", ("frame",), ("frame",), kind="alert"),
+    Template(6, "Plain", "wife", False, "left", "-", ("footer",), (), kind="plain"),
+    Template(7, "Morning", "yannic", False, "left", "-", (), (), design="morning", feed=1, kind="morning"),
+    Template(8, "Alert", "yannic", True, "center", "#", ("frame",), ("frame",), kind="alert"),
+    Template(9, "Plain", "yannic", False, "left", "-", ("footer",), (), kind="plain"),
+    Template(10, "Briefing", "wife", True, "left", "=", ("footer",), (), kind="morning"),
+    Template(11, "Evening", "wife", True, "center", "-", ("footer",), (), kind="evening"),
+    Template(12, "List", "wife", False, "left", "-", ("footer",), (), kind="list"),
 )
 
 _BY_ID = {template.id: template for template in TEMPLATES}
@@ -174,13 +180,15 @@ QUESTIONS: dict[str, str] = {
 
 # Which questions speak for each template. A template scores the highest of its questions.
 # Edit this table to change the mapping; the template ids are in TEMPLATES above.
-TEMPLATE_QUESTIONS: dict[int, tuple[str, ...]] = {
-    1: ("is_morning_briefing", "is_evening_briefing"),  # Classic
-    2: ("is_list", "has_numbers_or_stats", "is_short_note"),  # Memo
-    3: ("is_personal",),  # Celebration
-    4: ("is_short_note", "is_personal"),  # Note
-    5: ("is_alert", "is_urgent"),  # Bold
-    6: ("is_list", "has_numbers_or_stats"),  # Plain
+# Kinds in priority order. The first kind whose questions reach MIN_SCORE decides the kind, and
+# the recipient's template of that kind is used. Every group has all six kinds, so a model
+# decision always has a template to map to. Edit this table to change the mapping.
+KIND_QUESTIONS: dict[str, tuple[str, ...]] = {
+    "alert": ("is_alert", "is_urgent"),
+    "morning": ("is_morning_briefing",),
+    "evening": ("is_evening_briefing",),
+    "list": ("is_list", "has_numbers_or_stats"),
+    "note": ("is_short_note", "is_personal"),
 }
 MIN_SCORE = 0.5  # below this, no template is trusted and the rules choose
 
@@ -232,13 +240,11 @@ class SystemOneModel:
         self, options: Sequence[Template], recipient: str, title: str | None, message: str
     ) -> tuple[int, list[str]]:
         scores = self.scores(recipient, title, message)
-        best_id, best_score = None, -1.0
-        for template in options:
-            score = max((scores[q] for q in TEMPLATE_QUESTIONS.get(template.id, ())), default=0.0)
-            if score > best_score:
-                best_id, best_score = template.id, score
-        if best_id is None or best_score < MIN_SCORE:
-            raise ValueError(f"no template scored at least {MIN_SCORE}")
-        # The template's own default decorations; resolve_choice keeps the ones it allows.
-        chosen = next(t for t in options if t.id == best_id)
-        return best_id, list(chosen.default)
+        for kind, questions in KIND_QUESTIONS.items():
+            if max(scores[q] for q in questions) >= MIN_SCORE:
+                chosen = next((t for t in options if t.kind == kind), None)
+                if chosen is None:
+                    raise ValueError(f"no {kind} template for this recipient")
+                # The template's own default decorations; resolve_choice keeps the ones it allows.
+                return chosen.id, list(chosen.default)
+        raise ValueError(f"no kind scored at least {MIN_SCORE}")
