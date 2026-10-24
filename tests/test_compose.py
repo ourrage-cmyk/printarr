@@ -35,7 +35,7 @@ def test_catalogue_and_schema_list_span(settings):
         types = {b["type"] for b in client.get("/api/v1/blocks").json()}
         assert {"greeting", "metric", "graph", "message", "checklist", "alert"} <= types
         schema = client.get("/api/v1/blocks/alert/schema").json()
-        assert schema["span"]["default"] == 3 and schema["span"]["min"] == 2
+        assert schema["span"]["default"] == 3 and schema["span"]["min"] == 1
         assert schema["properties"]["label"]["maxLength"] == 40
         assert client.get("/api/v1/blocks/nope/schema").status_code == 404
 
@@ -74,8 +74,7 @@ def test_bad_blocks_return_422_with_their_position(settings):
 
 def test_span_is_checked_against_the_block_minimum():
     with pytest.raises(BlockProblem) as exc:
-        validate_blocks([{"type": "alert", "mood": "urgent", "span": 1,
-                          "slots": {"label": "LEAK", "paragraph": "Under the sink."}}])
+        validate_blocks([{"type": "greeting", "mood": "neutral", "span": 1, "slots": {"greeting": "HI"}}])
     assert exc.value.problems[0]["slot"] == "blocks[0].span"
     with pytest.raises(BlockProblem):
         validate_blocks([{"type": "tip", "mood": "neutral", "span": 4, "slots": {"tip": "x"}}])

@@ -65,14 +65,14 @@ RADIUS_BY_MOOD: dict[str, int] = {"urgent": 2, "critical": 2, "upset": 2, "firm_
 LAYOUT: dict[str, dict[str, int]] = {
     "greeting": {"span": 3, "min_span": 3, "min_units": 1, "max_units": 6},
     "metric": {"span": 1, "min_span": 1, "min_units": 2, "max_units": 5},
-    "metric_rows": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
-    "graph": {"span": 3, "min_span": 2, "min_units": 3, "max_units": 8},
-    "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
-    "message": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 16},
-    "alert": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
-    "checklist": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 10},
-    "tip": {"span": 3, "min_span": 2, "min_units": 1, "max_units": 6},
-    "fact": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
+    "metric_rows": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 8},
+    "graph": {"span": 3, "min_span": 1, "min_units": 3, "max_units": 8},
+    "dog_counts": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 6},
+    "message": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 16},
+    "alert": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 8},
+    "checklist": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 10},
+    "tip": {"span": 3, "min_span": 1, "min_units": 1, "max_units": 6},
+    "fact": {"span": 3, "min_span": 1, "min_units": 2, "max_units": 6},
 }
 
 # ---- icon sprites, 3 dots per sprite pixel (copied from receipt-lab/lib/raster.js) ----------
@@ -988,8 +988,8 @@ def _overflows(block: Block) -> bool:
 
 
 def group(blocks: Sequence[Block]) -> list[Block]:
-    """One strip, one card: a headline and the blocks after it are regions of one card, not boxes stacked on
-    each other. A new headline, or a card that would be taller than the strip allows, starts the next card."""
+    """A briefing (a greeting marked _group) and the blocks after it are regions of one nested card. Every other
+    block stays its own box. A new greeting, or a card taller than the strip allows, starts the next card."""
     out: list[Block] = []
     run: list[Block] = []
 
@@ -1004,6 +1004,9 @@ def group(blocks: Sequence[Block]) -> list[Block]:
         if block.type == "group":
             flush()
             out.append(block)
+            continue
+        if not run and not block.slots.get("_group"):
+            out.append(block)  # every other block is its own card on the grid
             continue
         if block.type == "greeting" and run:
             flush()
