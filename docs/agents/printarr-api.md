@@ -98,6 +98,23 @@ Printarr keeps a PNG of every ticket as it reached the printer: each printed tic
 
 To diagnose a ticket that looks wrong: find its id in the log or the ticket list, fetch the image, and compare it with the template and the blocks in `GET /api/v1/tickets/{id}`.
 
+## Telling Yannic on Telegram
+
+`POST /api/v1/notify` sends a short message to his Telegram chat, through the bot already set up on the server. Use it when a thread needs him to act, such as restarting the app onto a new build so the next test run can start.
+
+- Body: `{"text": "..."}`, plain text, 1 to 1000 characters. Control characters are removed. Unknown fields are rejected.
+- One message per caller every 60 seconds. A caller is the address the request comes from, so threads on the same machine share the limit. A second message inside the minute returns 429 with a `Retry-After` header.
+- 400 means Telegram is not set up: save the bot token and chat ID with `PUT /api/v1/settings/alerts`.
+- 502 means Telegram did not accept the message. The reply never includes the bot token, and the log records only the kind of error.
+
+```
+curl -sS -X POST http://192.0.2.231:30100/api/v1/notify \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "Please restart printarr onto build 79 so the next test can run."}'
+```
+
+Send only when someone needs to act. A routine update is not a reason to message him.
+
 ## Settings
 
 - Home Assistant: `GET` and `PUT /api/v1/settings/ha`, then `POST /api/v1/settings/ha/test`. The token is stored in the database, never in an environment variable.
