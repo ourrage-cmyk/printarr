@@ -1,6 +1,6 @@
 # Printarr API: how an agent uses it
 
-Printarr prints receipt tickets on an Epson TM-T88V. Everything talks to its REST API under `/api/v1`. There is no API key yet, so run it on a trusted network only. The full schema is at `/openapi.json`, and `/docs` shows it interactively.
+Printarr prints receipt tickets on an Epson TM-T88V. Everything talks to its REST API under `/api/v1`. The API is LAN-only and has no API key by decision: it is reachable only on Yannic's own network. If the web UI is ever exposed, Yannic puts his own authentication portal in front of it. The full schema is at `/openapi.json`, and `/docs` shows it interactively.
 
 ## Start here, in this order
 
@@ -93,4 +93,4 @@ For the simulator on a laptop, point the printer at the laptop's address on TCP 
 - Voice intake (`POST /api/v1/intake`): proposed in draft PR #44 (`docs/design/voice-button.md`), not built.
 - Graphs from Home Assistant history: graphs take a `series` list for now.
 - The decision model choosing block type and mood: `auto` resolves to `neutral` until it is built.
-- Shopping list and a Hermes integration: undecided, see the outstanding questions.
+- Shopping list: decided. It lives in Home Assistant and is managed by Hermes. printarr prints it on request or on arrival. The intake route for it is not built yet.
