@@ -16,9 +16,8 @@ class PrinterError(Exception):
     """The printer could not be reached or did not accept the job."""
 
 
-# Real-time status requests (DLE EOT n). Answers are one byte each.
-# Bit layouts for these requests are in the Command Reference (dle_eot). Checked on the real unit still pending.
-STATUS_REQUESTS = (2, 3, 4)  # offline/cover, error/cutter, paper sensor
+# Real-time status requests (DLE EOT n). Answers are one byte each. Bit layouts are in app/status.py.
+STATUS_REQUESTS = (1, 2, 3, 4)  # printer status, offline cause, error cause, paper sensor
 
 
 class Transport(Protocol):
