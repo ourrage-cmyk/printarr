@@ -150,7 +150,7 @@ def test_title_slot_of_the_briefing_is_the_headline():
     from app.compose import briefing_blocks
 
     blocks = briefing_blocks({"greeting": "GOOD MORNING", "title": "MONDAY", "paragraph": "Short day."}, None)
-    assert blocks[0]["slots"]["greeting"] == "MONDAY" and blocks[0]["slots"]["summary"] == "GOOD MORNING. Short day."
+    assert blocks[0]["slots"]["greeting"] == "MONDAY" and blocks[0]["slots"]["summary"] == "Short day."  # with a title and text the greeting is dropped
 
 
 def test_moods_draw_different_bands():
