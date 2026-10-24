@@ -222,7 +222,85 @@ def _warn(c: Canvas, x0: int, _x1: int, y: int) -> int:
     return 24
 
 
+BAND_H = 20  # a mood band is tall enough to read at a glance, before a word is read
+
+
+def _band_dots(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Warm family: two rows of sparse round dots, offset like a soft pattern."""
+    for row, yy in enumerate((y + 4, y + 12)):
+        for x in range(x0 + 4 + (6 if row else 0), x1 - 4, 12):
+            c.fill_rect(x, yy, 4, 4)
+    return BAND_H
+
+
+def _band_zigzag(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Energetic family: a bold zigzag."""
+    prev = None
+    for x in range(x0, x1):
+        phase = (x - x0) % 16
+        yy = y + 2 + (phase if phase < 8 else 16 - phase) * 2
+        for dy in range(0, 4):
+            c.set_px(x, min(y + BAND_H - 1, yy + dy))
+        if prev is not None:
+            for t in range(min(yy, prev), max(yy, prev) + 1):
+                c.set_px(x, t)
+        prev = yy
+    return BAND_H
+
+
+def _band_ticks(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Prompt family: evenly spaced upright ticks, a pause cue."""
+    for x in range(x0 + 2, x1 - 2, 8):
+        c.fill_rect(x, y + 2, 3, BAND_H - 4)
+    return BAND_H
+
+
+def _band_fill(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Critical: a solid black bar."""
+    c.fill_rect(x0, y, x1 - x0, BAND_H)
+    return BAND_H
+
+
+def _band_stipple(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Heavy family: a dense stippled bar, the most ink after the barcode."""
+    for yy in range(y, y + BAND_H, 4):
+        for x in range(x0 + (yy - y) % 8 // 2, x1 - 1, 4):
+            c.fill_rect(x, yy, 2, 2)
+    return BAND_H
+
+
+def _band_hatch(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Caution family: diagonal hatching between two rules."""
+    c.fill_rect(x0, y, x1 - x0, 2)
+    c.fill_rect(x0, y + BAND_H - 2, x1 - x0, 2)
+    for x in range(x0, x1):
+        for yy in range(y + 3, y + BAND_H - 3):
+            if (x - x0 + (yy - y)) % 10 < 3:
+                c.set_px(x, yy)
+    return BAND_H
+
+
+def _band_barcode(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Urgent family: a tall barcode."""
+    widths = [2, 1, 3, 1, 1, 2, 4, 1, 2, 1, 3, 2, 1, 1, 2, 3, 1, 2]
+    x = x0
+    i = 0
+    while x < x1:
+        w = min(widths[i % len(widths)], x1 - x)
+        i += 1
+        c.fill_rect(x, y, w, BAND_H)
+        x += w + 2
+    return BAND_H
+
+
 ORNAMENTS: dict[str, Callable[[Canvas, int, int, int], int]] = {
+    "bandDots": _band_dots,
+    "bandZigzag": _band_zigzag,
+    "bandTicks": _band_ticks,
+    "bandFill": _band_fill,
+    "bandStipple": _band_stipple,
+    "bandHatch": _band_hatch,
+    "bandBarcode": _band_barcode,
     "sunStrip": _sun_strip,
     "dottedWave": _dotted_wave,
     "starRow": _star_row,
@@ -369,8 +447,8 @@ class Card:
     marked: set[str] = field(default_factory=set)  # kind marks already stamped: one of each per card
 
     def ornament(self, slot: str, x0: int, x1: int) -> None:
-        if self.ornamented:
-            return
+        if self.ornamented or (slot != "header" and MOODS[self.mood]["header"].startswith("band")):
+            return  # a banded mood has its band at the top only
         name = MOODS[self.mood][slot]
         piece = SYSTEM_PIECES.get(name)
         if piece is not None and ornament(piece).width <= x1 - x0:
@@ -383,7 +461,7 @@ class Card:
             if draw is None:
                 return
             h = draw(self.c, x0, x1, self.c.y) or 4
-        self.c.y += h + 6
+        self.c.y += h + (10 if name.startswith("band") else 6)
         self.ornamented = True
 
     def icon(self, x: int, y: int) -> None:
@@ -393,7 +471,7 @@ class Card:
 
 
 # Moods whose header ornament already is the icon (a heart over the title, a sun over it): no second one at the left.
-HEADER_IS_ICON = {"loving", "happy"}
+HEADER_IS_ICON: set[str] = set()
 
 
 def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
@@ -754,14 +832,10 @@ def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[
     return strips
 
 
-FOOTER_MOODS = {"urgent", "critical"}  # a second barcode closes the card, so urgent never looks like a firm complaint
 
 
 def _draw_block(card: Card, block_type: str, slots: Mapping[str, Any], x0: int, x1: int) -> None:
     DRAW[block_type](card, slots, x0, x1)
-    if card.mood in FOOTER_MOODS:
-        card.c.y += 6
-        card.c.y += _barcode(card.c, x0, x1, card.c.y) + 2
 
 
 def _measure(block: Block, slots: Mapping[str, Any], x0: int, x1: int, plot_h: int = 56) -> int:
