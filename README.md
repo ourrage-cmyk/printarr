@@ -141,35 +141,8 @@ guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide
 ## Configuration
 
 Settings are entered in the setup wizard (the web page at `/`) and saved in the data folder. Secrets such as the
-Home Assistant and Telegram tokens are stored there and are never returned by the API. Environment variables with
-the `PRINTARR_` prefix only set defaults, and a saved value wins. The compose files set no secrets.
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PRINTARR_PRINTER_MODE` | `tcp` | `tcp` sends to the printer. `file` writes `.bin` files to `PRINTARR_OUTPUT_DIR`. |
-| `PRINTARR_PRINTER_HOST` | _(empty)_ | Printer IP or hostname in `tcp` mode. |
-| `PRINTARR_PRINTER_PORT` | `9100` | Raw TCP port. |
-| `PRINTARR_PRINTER_TIMEOUT` | `5` | Seconds to wait for connect and send. |
-| `PRINTARR_RASTER_MODE` | `gs_l` | Image command. `gs_l` is GS ( L function 112. `gs_v0` is for a unit that rejects it. |
-| `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. |
-| `PRINTARR_TIMEZONE` | `Europe/London` | Used for `send_at` without an offset, and for the date on the receipt. |
-| `PRINTARR_DB_PATH` | `/data/printarr.db` | SQLite database file. |
-| `PRINTARR_OUTPUT_DIR` | `/data/output` | Where `file` mode writes jobs. |
-| `PRINTARR_SCHEDULER` | `on` | Set to `off` to disable the background printing worker. |
-| `PRINTARR_POLL_INTERVAL` | `5` | Seconds between scheduler checks. |
-| `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is `failed`. |
-| `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
-| `PRINTARR_STRIP_MAX_BLOCKS` | `5` | Blocks per strip. A composed ticket with more prints as several strips. |
-| `PRINTARR_STRIP_MARGIN_DOTS` | `90` | Margin above and below a strip, in dots. |
-| `PRINTARR_LLM_ENABLED` | `on` | Set to `off` to use the fixed rules only. |
-| `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Used on first start only. |
-| `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model that scores templates. |
-| `PRINTARR_LLM_TEXT_MODEL` | `granite4.2:3b` | Text model that tidies unformatted text. |
-| `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
-| `PRINTARR_BACKUP` | `on` | Nightly copy of the database to `backups/` next to it. |
-| `PRINTARR_BACKUP_HOUR` | `3` | Local hour (0 to 23) for the nightly copy. |
-| `PRINTARR_BACKUP_KEEP` | `7` | Nightly copies kept. |
-| `PRINTARR_LOG_LEVEL` | `INFO` | Python log level. |
+Home Assistant and Telegram tokens are stored there and are never returned by the API. Change them later at
+`/setup` with the setup code from the log. The compose files hold only the image, memory, CPUs, ports and storage.
 
 ## Monitoring and alerts
 
@@ -193,7 +166,7 @@ the `PRINTARR_` prefix only set defaults, and a saved value wins. The compose fi
 - 80 mm paper, 512 printable dots, Font A at 42 columns. Text is CP437. Characters outside it print as `?`.
 - Commands verified against the ESC/POS Command Reference: `GS !`, `GS V 1`, `GS ( L` function 112 and 50, and `DLE EOT` status 1 to 4.
 - Still to check on the real unit: the USB ID, tone levels for multi-tone images, and a status round trip.
-- The simulator is a TCP target too. Point `PRINTARR_PRINTER_HOST` at it, and send the sample jobs with
+- The simulator is a TCP target too. Enter its address as the printer in the setup wizard, and send the sample jobs with
   `python -m app.send_sample <host> 9100`.
 
 ## Development
