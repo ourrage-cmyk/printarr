@@ -55,6 +55,11 @@ MARGIN_TOP = SHELL["margins"]["top_dots"]
 MARGIN_BOTTOM = SHELL["margins"]["bottom_dots"]
 NEUTRAL = "neutral"
 
+# The card outline says the tone before a word is read: urgent tones draw a heavier, squarer outline,
+# soft tones a rounder one. Tones not listed use the shell's own stroke and radius.
+STROKE_BY_MOOD: dict[str, int] = {"urgent": 4, "critical": 5, "upset": 4, "firm_complaint": 4}
+RADIUS_BY_MOOD: dict[str, int] = {"urgent": 2, "critical": 2, "upset": 2, "firm_complaint": 2, "loving": 12, "gentle_warning": 12, "playful": 12, "happy": 8}
+
 # Layout per block type: span in columns and height in units. Text is fluid; metric tiles are fluid up to 3.
 LAYOUT: dict[str, dict[str, int]] = {
     "greeting": {"span": 3, "min_span": 3, "min_units": 1, "max_units": 6},
@@ -721,7 +726,8 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
         card = Card(c, p.block.mood, plot_h=GRAPH_PLOT)
         c.y = top + PAD_V
         RENDERERS[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
-        c.round_box(p.x0, top, p.x1, top + height, RADIUS, STROKE)
+        mood = p.block.mood
+        c.round_box(p.x0, top, p.x1, top + height, RADIUS_BY_MOOD.get(mood, RADIUS), STROKE_BY_MOOD.get(mood, STROKE))
     c.y = top + row_units * UNIT_H
 
 
