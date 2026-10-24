@@ -411,19 +411,44 @@ class TicketStore:
                 (status, retry_at_ms, error[:MAX_ERROR_LENGTH], now, ticket_id),
             )
 
-    def recover_interrupted(self, at_ms: int | None = None) -> int:
-        """Re-queue tickets left in 'printing' by a crash or restart."""
-        now = now_ms() if at_ms is None else at_ms
+    def count_due(self, at_ms: int) -> int:
         with closing(self._connect()) as conn:
-            cursor = conn.execute(
-                """
-                UPDATE tickets
-                SET status = 'pending', next_attempt_ms = ?, updated_at_ms = ?
-                WHERE status = 'printing'
-                """,
-                (now, now),
-            )
-            return cursor.rowcount
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM tickets WHERE status = 'pending' AND next_attempt_ms <= ?",
+                (at_ms,),
+            ).fetchone()
+        return int(row["n"])
+
+    def fail_interrupted(self, at_ms: int | None = None) -> list[str]:
+        """Mark tickets left in 'printing' by a crash or restart as failed. Returns their ids.
+
+        They are not re-queued automatically. The crash may have happened after the bytes
+        reached the printer, so printing again could give a duplicate. Use requeue() to
+        print one again on purpose.
+        """
+        now = now_ms() if at_ms is None else at_ms
+        error = "interrupted by a restart while printing; not reprinted automatically"
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                ids = [
+                    row["id"]
+                    for row in conn.execute("SELECT id FROM tickets WHERE status = 'printing'").fetchall()
+                ]
+                for ticket_id in ids:
+                    conn.execute(
+                        """
+                        UPDATE tickets
+                        SET status = 'failed', last_error = ?, next_attempt_ms = ?, updated_at_ms = ?
+                        WHERE id = ?
+                        """,
+                        (error, now, now, ticket_id),
+                    )
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
+        return ids
 
     def _guarded_update(
         self,
