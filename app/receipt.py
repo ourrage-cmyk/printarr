@@ -88,6 +88,8 @@ def render_ticket_lines(
     `extra` is the live data (Home Assistant values and graphs), fetched just before printing.
     """
     template = template_by_id(int(ticket["template_id"]))  # type: ignore[arg-type]
+    if template.design:
+        return list(extra)  # the image is the whole ticket; its live lines are the bitmap
     decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
     return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
 
@@ -153,3 +155,8 @@ def render_lines(
     else:
         lines.append(rule)
     return lines
+
+
+def ticket_feed(ticket: Mapping[str, object]) -> int:
+    """Lines fed before the cut for this ticket's template."""
+    return template_by_id(int(ticket["template_id"])).feed  # type: ignore[arg-type]
