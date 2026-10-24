@@ -220,7 +220,7 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 
 - **Say the headline once.** Use `title` or the block's heading, and do not repeat it in the body.
 - **Title plus a short body.** One message in one box. Do not split a single message across two blocks.
-- **Greetings belong to briefings.** A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- **Greetings belong to briefings, and nothing you send is ever dropped.** Any greeting or title prints exactly as sent (HELLO, GOOD MORNING, YANNIC EVENING, anything). A greeting is not required: a briefing sent without one is headed by the addressee, the name and time of day (`YANNIC MORNING`, `ALLYSON EVENING`), and the briefing preset appends the recipient's name (`GOOD MORNING YANNIC`). Only briefings get this; a single-topic ticket (bins, a reminder, a note) has no greeting block and is never given one. A greeting before a card that has no title of its own becomes that card's title; a card with its own title keeps it and the greeting stays a separate tile.
 - **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
