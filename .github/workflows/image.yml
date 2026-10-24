@@ -55,7 +55,9 @@ jobs:
           context: .
           load: true
           tags: printarr:ci
-          build-args: VERSION=${{ github.sha }}
+          build-args: |
+            VERSION=${{ github.sha }}
+            PRINTARR_VERSION=0.2.${{ github.run_number }}
       - name: Smoke test the image
         run: |
           mkdir -p "$RUNNER_TEMP/data" && sudo chown 568:568 "$RUNNER_TEMP/data"
@@ -84,6 +86,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ github.sha }}
+          build-args: |
+            VERSION=${{ github.sha }}
+            PRINTARR_VERSION=0.2.${{ github.run_number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
