@@ -15,7 +15,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.ha import HAClient, HAError
-from app.receipt import Line, wrap
+from app.receipt import Line, format_number, wrap
 
 logger = logging.getLogger("printarr.slots")
 
@@ -151,7 +151,7 @@ def autofill(template_id: int, slots: Mapping[str, Any], recipient: str, when: d
 
 
 def _number(value: float) -> str:
-    return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+    return format_number(value)
 
 
 def literal_text(metric: Mapping[str, Any]) -> str | None:
@@ -198,7 +198,8 @@ def slot_lines(slots: Mapping[str, Any], fetched: Sequence[str | None] | None = 
         if value is None:
             value = fetched[index] if index < len(fetched) and fetched[index] else NO_VALUE
         unit = metric.get("unit") or ""
-        lines.append(_row(str(metric["label"]).upper(), f"{value}{unit}"))
+        spaced = f" {unit}" if unit[:1].isalpha() else unit
+        lines.append(_row(str(metric["label"]).upper(), f"{value}{spaced}"))
     if slots.get("paragraph"):
         lines.extend(Line(row) for row in wrap(str(slots["paragraph"]), PAPER_WIDTH))
     if slots.get("tip"):
