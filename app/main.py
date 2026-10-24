@@ -964,7 +964,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     @api.post("/tickets/compose", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_composed_ticket(body: ComposeCreate) -> dict[str, Any]:
-        """Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first."""
+        """Queue a composed ticket: blocks as separate cards on a three-column grid. Blocks are checked first."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
             raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})

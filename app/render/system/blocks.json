@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Block catalogue for composable receipt strips. A strip is an ordered list of blocks that share one card shell. Moods change only the look (ornament, icon, accent), never the size or the grid. Slot names reuse printarr's slot names where they exist (greeting, title, metrics, paragraph, tip).",
+  "note": "Block catalogue for composable receipt strips. A strip is an ordered list of blocks; each block is its own bordered card on a three-column grid and small blocks share rows. Moods change only the look (ornament, icon, accent), never the size or the grid. Slot names reuse printarr's slot names where they exist (greeting, title, metrics, paragraph, tip).",
   "shell": {
     "width_dots": 512,
     "side_margin_dots": 14,
