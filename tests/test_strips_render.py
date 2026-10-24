@@ -13,11 +13,12 @@ def tip(text="Leave early."):
     return Block("tip", {"tip": text})
 
 
-def test_split_holds_at_most_five_blocks():
-    blocks = [tip(str(i)) for i in range(7)]
+def test_split_cuts_by_height_not_by_count():
+    assert len(split_strips([tip(str(i)) for i in range(7)])) == 1  # seven short tiles fit one strip
+    blocks = [tip(str(i)) for i in range(40)]
     strips_out = split_strips(blocks)
-    assert all(len(s) <= 5 for s in strips_out)
-    assert sum(len(b.slots.get("parts", [b])) for s in strips_out for b in s) == 7  # nothing is dropped
+    assert len(strips_out) > 1
+    assert sum(len(b.slots.get("parts", [b])) for s in strips_out for b in s) == 40  # nothing is dropped
 
 
 def test_greeting_always_starts_a_new_strip():
@@ -73,9 +74,9 @@ def test_unknown_block_type_and_mood_are_refused():
         render_strip([Block("tip", {"tip": "x"}, mood="sparkly")])
 
 
-def test_a_strip_over_five_blocks_is_refused():
+def test_a_strip_with_far_too_many_blocks_is_refused():
     with pytest.raises(ValueError):
-        render_strip([tip(str(i)) for i in range(6)])
+        render_strip([tip(str(i)) for i in range(16)])
 
 
 def test_renderers_cover_the_catalogue():
