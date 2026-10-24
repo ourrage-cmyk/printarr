@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from app.render import system
 from app.render.canvas import Bitmap, Canvas
+from app.render.strips import BODY, OUTER_L, OUTER_R, RADIUS, ROW
 
 LEFT = 14  # card edges, 14 dots from the paper edges
 RIGHT = 498
@@ -24,6 +25,9 @@ class Variant:
     radius: int = 4  # Material 3 corner scale: 4, 8 or 12 dots
     scale: int = 2  # body text scale; the title uses scale + 1
     gap: int = 12  # space between cards
+    row: int = 24  # space between rows of text
+    head: int = 22  # space between the TODAY heading and the first row
+    bar: int = 22  # from a segmented bar's label to the bar
 
 
 @dataclass(frozen=True)
@@ -73,36 +77,36 @@ def _or_no_data(value: object) -> str:
 def hello(c: Canvas, v: Variant, summary: str, x0: int, x1: int) -> None:
     c.text(x0, c.y, "HELLO YANNIC", v.scale + 1)
     c.y += 7 * (v.scale + 1) + 8
-    c.y += paragraph(c, x0, c.y, summary, 2, x1 - x0) + 2
+    c.y += paragraph(c, x0, c.y, summary, v.scale, x1 - x0) + 2
 
 
-def rows(c: Canvas, m: Morning, x0: int, x1: int) -> None:
-    c.text(x0, c.y, "TODAY", 2)
-    c.y += 22
+def rows(c: Canvas, m: Morning, x0: int, x1: int, v: Variant = Variant()) -> None:
+    c.text(x0, c.y, "TODAY", v.scale)
+    c.y += v.head
     bb = m.body_battery
-    c.row(x0, x1, c.y, "BODY BATTERY", NO_DATA if bb is None else f"{bb}/100", 2)
-    c.y += 24
-    c.row(x0, x1, c.y, "STRESS AVG", _or_no_data(m.stress), 2)
-    c.y += 24
-    c.row(x0, x1, c.y, "STEPS", NO_DATA if m.steps is None else f"{m.steps:,}", 2)
-    c.y += 24
+    c.row(x0, x1, c.y, "BODY BATTERY", NO_DATA if bb is None else f"{bb}/100", v.scale)
+    c.y += v.row
+    c.row(x0, x1, c.y, "STRESS AVG", _or_no_data(m.stress), v.scale)
+    c.y += v.row
+    c.row(x0, x1, c.y, "STEPS", NO_DATA if m.steps is None else f"{m.steps:,}", v.scale)
+    c.y += v.row
 
 
-def segbar(c: Canvas, m: Morning, x0: int, x1: int) -> None:
+def segbar(c: Canvas, m: Morning, x0: int, x1: int, v: Variant = Variant()) -> None:
     items = [
         ("BODY BATTERY", m.body_battery, "%"),
         ("CPU", m.cpu, "%"),
         ("RAM", m.ram, "%"),
     ]
     for label, percent, unit in items:
-        c.text(x0, c.y, label, 2)
-        c.text_right(x1, c.y, NO_DATA if percent is None else f"{percent}{unit}", 2)
+        c.text(x0, c.y, label, v.scale)
+        c.text_right(x1, c.y, NO_DATA if percent is None else f"{percent}{unit}", v.scale)
         # Same call as the Node renderer: bar height 10, 20 segments. The handoff spec says
         # 10 segments, 20 dots tall. Kept as rendered until the spec is confirmed. A missing
         # value draws an empty bar, so the card keeps its shape.
         fraction = 0 if percent is None else percent / 100
-        c.seg_bar(x0, x1, c.y + 22, 10, fraction, 20)
-        c.y += 42
+        c.seg_bar(x0, x1, c.y + v.bar, 10, fraction, 20)
+        c.y += v.bar + 20
 
 
 def system_card(
@@ -131,13 +135,14 @@ def system_card(
 
 def morning_system(m: Morning) -> Bitmap:
     """The morning design under the receipt system: card radius and ornaments from app/render/system."""
-    v = Variant(radius=system.card_radius(), gap=system.spacing("m"))
+    # Same card shell as the blocks: radius 4 and stroke 2 (app/render/system/blocks.json), body at scale 3.
+    v = Variant(radius=RADIUS, scale=BODY, gap=system.spacing("m"), row=ROW, head=ROW, bar=7 * BODY + 5)
     cards = system.decorations().get("morning", {})
     c = Canvas()
     c.y = TOP
-    system_card(c, v, "hello", cards.get("hello"), lambda x0, x1: hello(c, v, m.summary, x0, x1))
-    system_card(c, v, "rows", cards.get("rows"), lambda x0, x1: rows(c, m, x0, x1))
-    system_card(c, v, "segbar", cards.get("segbar"), lambda x0, x1: segbar(c, m, x0, x1))
+    system_card(c, v, "hello", cards.get("hello"), lambda x0, x1: hello(c, v, m.summary, x0, x1), x0=OUTER_L, x1=OUTER_R)
+    system_card(c, v, "rows", cards.get("rows"), lambda x0, x1: rows(c, m, x0, x1, v), x0=OUTER_L, x1=OUTER_R)
+    system_card(c, v, "segbar", cards.get("segbar"), lambda x0, x1: segbar(c, m, x0, x1, v), x0=OUTER_L, x1=OUTER_R)
     return c.crop(12)
 
 
