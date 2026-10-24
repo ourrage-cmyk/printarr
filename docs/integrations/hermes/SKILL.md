@@ -77,7 +77,7 @@ Top-level fields: `recipient` (required), `blocks` (required, 1 to 16), `kind`, 
   `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints `neutral`.
 - Kind marks: a small mark sits at the top-right of a card for five block types: `message` (envelope), `alert` (bolt),
   `tip` (clock), `fact` (bulb) and `checklist` (cart). The mark follows the block, so pick the block type that fits.
-- A greeting always starts a new strip. A strip holds at most 5 blocks.
+- A release prints one piece of paper, cut once at the end: the ticket with a greeting (the briefing) goes on top and the other queued tickets follow in order with no cut gap. A second ticket with a greeting starts a new strip. A strip is cut by height, not by block count. The blank before the cut is fed with the cut command, never drawn in a ticket. A metric label is at most 20 characters; characters the printer cannot draw print as `?` and the response lists them under `warnings`.
 
 ### Block types
 

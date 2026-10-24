@@ -452,7 +452,6 @@ class Card:
     ornamented: bool = False
     plot_h: int = 56  # graph height, set from the card's height
     in_group: bool = False  # the card holds several regions: a tip leads with its icon instead of centring
-    fact_labeled: bool = False
     marked: set[str] = field(default_factory=set)  # kind marks already stamped: one of each per card
 
     def ornament(self, slot: str, x0: int, x1: int) -> None:
@@ -648,6 +647,8 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
     # Numbers are full-line text (Inter): display size (cap 42) when the value fits the tile, else body size.
     cap = int(s.get("_cap") or (42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21))
+    while cap > AXIS_CAP and solid_width(value, cap) > x1 - x0:
+        cap = 21 if cap > 21 else AXIS_CAP  # a number wider than its tile steps down, it never runs over the border
     scale = cap
     c.solid(x0, c.y, value, cap)
     unit_x = x0 + text_width(value, scale) + 6
@@ -812,10 +813,6 @@ def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     clear = _kind_mark(card, "fact", x1)
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 4
     card.ornament("divider", x0, x1)
-    if not card.fact_labeled and not card.in_group:
-        card.fact_labeled = True
-        c.solid(x0, c.y, "FUN FACT", 21)
-        c.y += ROW
 
 
 RENDERERS: dict[str, Callable[[Card, Mapping[str, Any], int, int], None]] = {

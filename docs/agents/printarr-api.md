@@ -85,7 +85,7 @@ Writing tickets, for agents:
 
 ### A briefing preset
 
-`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
+`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. A metric label is at most 20 characters. Text with characters the printer cannot draw (emoji, CJK) still prints, each as `?`, and the response lists them under `warnings`. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
 
 ### A slot ticket
 
