@@ -24,9 +24,9 @@
       "label": "dot5x7 scale 2, uppercase"
     },
     "margins": {
-      "top_dots": 90,
-      "bottom_dots": 90,
-      "note": "About half an inch at 180 dpi. Configurable per printer. Gives a clean cut with no wasted paper."
+      "top_dots": 60,
+      "bottom_dots": 60,
+      "note": "Visible blank above and below a strip, 60 dots (about 0.33 in at 180 dpi). With the one-line cutter feed after it, the blank at the end is about half an inch. The strip has no other blank."
     },
     "strip_rules": {
       "max_blocks": 5,
