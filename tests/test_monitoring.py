@@ -139,3 +139,24 @@ def test_missing_status_answer_raises_no_alert(settings, monkeypatch):
         configure_telegram(client)
         app.state.watch_printer()
         assert not any("paper" in text or "cover" in text for text in sent)
+
+
+def test_telegram_errors_never_show_the_bot_token(monkeypatch):
+    import urllib.request
+
+    from app.alerts import send_telegram
+
+    token = "123456:SECRET-TOKEN-VALUE"
+
+    def broken(request, timeout):
+        raise OSError(f"cannot reach {request.full_url}")
+
+    monkeypatch.setattr(urllib.request, "urlopen", broken)
+    try:
+        send_telegram(token, "42", "hi")
+    except RuntimeError as exc:
+        assert token not in str(exc)
+        assert "<token>" in str(exc)
+        assert exc.__cause__ is None and exc.__suppress_context__
+    else:
+        raise AssertionError("expected a RuntimeError")
