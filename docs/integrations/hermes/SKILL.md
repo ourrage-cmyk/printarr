@@ -1,44 +1,54 @@
 # printarr: how Hermes prints a receipt
 
 printarr is the receipt printer for Yannic (`yannic`) and Allyson (`wife`). Talk to it only through
-its REST API at `http://PRINTARR_URL/api/v1`. Tool definition: `openapi.yaml`. Example briefing: `example-morning-briefing.md`.
+its REST API at `http://PRINTARR_URL/api/v1`. Tool definition: `openapi.yaml`. Worked example: `example-morning-briefing.md`.
 
 ## Which operation to use
 
 | Want to | Call |
 |---|---|
-| Print something now, or at a time | `createTicket` with `send_at` or no time |
-| Prepare a briefing that prints on a trigger | `createTicket` with `hold: true` and a `hold_key` |
-| See what fits a briefing | `listInsightEntities` for the person |
-| Undo something not yet printed | `cancelTicket` on a `pending` ticket |
-| Check what was printed before | `readHistory` |
-| Check what is waiting | `listTickets` with `status=pending` or `status=held` |
+| A morning or evening briefing | `GET /templates/101/schema`, then `POST /tickets/slots` with `template: 101` |
+| A note or message between the two people | `POST /tickets/slots` with `template: 102`, or `POST /tickets` with plain `message` |
+| Choose graph candidates for a briefing | `GET /insights/entities?person=...` |
+| Cancel a pending ticket | `POST /tickets/{id}/cancel` |
+| Read what was printed | `GET /log` |
+| Check what is waiting | `GET /tickets?status=pending` or `?status=held` |
 
 ## Rules
 
-1. Always set `idempotency_key` for a briefing, for example `morning:yannic:2026-10-26`. A retry then
-   returns the first ticket and prints nothing new.
-2. Set `sender` to `hermes`.
-3. Use `recipient` `yannic` or `wife`. Never use "Allyson" in the API; the name only appears on the ticket.
-4. Use `hold_key` per person and day, for example `morning-yannic-2026-10-26`. Home Assistant releases it when the phone is unplugged.
-5. Do not combine `hold` with `send_at`.
-6. Keep `message` plain text, up to 2000 characters. For briefings, prefer the slot fields once API-core ships them.
-7. Before a briefing: call `listInsightEntities` and choose from its list. Do not invent entity IDs.
-8. If a call fails, read the error. A 422 means the request is wrong, so fix it and do not retry as is. A 5xx or timeout means retry with the same `idempotency_key`.
+1. Set `sender` to `hermes`.
+2. Use `recipient` `yannic` or `wife`. The name "Allyson" only appears on the ticket.
+3. Fetch the schema for a slot template before filling it, and fill only the slots it lists.
+4. For a briefing, call `GET /insights/entities` first and choose the metrics from that list. Do not invent entity IDs.
+5. Keep text inside the limits in the schema. Briefing paragraph is 400 characters, tip is 120, metric label is 20.
+6. Use `send_at` to print at a time (local time, no offset, is the server timezone). Leave it out to print when queued.
+7. If a call returns 422, read the problems list, fix the slots, and send again. Do not resend unchanged.
+
+## Gaps to know about (not live yet)
+
+The following are needed for the morning flow Home Assistant triggers, and are requested from the API thread:
+
+- `hold`, `hold_key` and `idempotency_key` on `POST /tickets/slots`. Today only `POST /tickets` has them.
+- `blocks` on slot tickets, for graphs read from Home Assistant at print time.
+
+Until they land, a briefing Hermes creates with `/tickets/slots` prints at once or at `send_at`. For a morning
+ticket that must wait for the phone to unplug, use `POST /tickets` with `hold`, `hold_key` and `idempotency_key`,
+and a plain paragraph in `message`.
 
 ## Briefing shape
 
 A morning briefing has four parts, in this order:
 
-1. **Greeting**: by the local time. Morning before 12:00, afternoon before 17:00, evening after that. One short line.
-2. **Four metrics**: four entities from `listInsightEntities`, each with a label and unit. The printer draws each as a graph. Choose the ones that are unusual (`z_score` far from 0), trending (`trend` not `flat`), or most relevant to this person (`relevance` 3). Say briefly why each one was chosen.
-3. **Paragraph**: a few sentences in plain English, covering the four metrics and anything else worth knowing today. No markdown.
-4. **Tip**: one line at the end. A useful tip, a reminder, or a light joke.
+1. **Greeting**: by local time. Left out, printarr writes "Good morning, Yannic". Write your own only if it adds something.
+2. **Up to four metrics**: each from `/insights/entities`, with a short label and unit. Choose the ones
+   that are unusual (`z_score` above 2 or below -2), trending (`trend` not `flat`), or most relevant (`relevance` 3).
+3. **Paragraph**: a few plain sentences covering the metrics and anything else worth knowing today. No markdown.
+4. **Tip**: one line at the end. A useful tip, a reminder, or a light note.
 
-Tone: keep the paragraph calm and factual. Use the tone field for a message from one person to the other, not for briefings.
+Keep the paragraph calm and factual. Use `tone` for messages between the two people, not for briefings.
 
 ## Things not to do
 
-- Do not print a second briefing for the same person and day. Use the key.
-- Do not send private health detail to the other person's ticket. Each briefing is for its own recipient only.
-- Do not use HA entities that are not in the insights list without checking they exist.
+- Do not send one person's health detail to the other person's ticket.
+- Do not create two briefings for the same person and day.
+- Do not use entity IDs that are not in the insights list without checking they exist.
