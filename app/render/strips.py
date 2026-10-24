@@ -58,7 +58,7 @@ NEUTRAL = "neutral"
 # Layout per block type: span in columns and height in units. Text is fluid; metric tiles are fluid up to 3.
 LAYOUT: dict[str, dict[str, int]] = {
     "greeting": {"span": 3, "min_span": 3, "min_units": 1, "max_units": 6},
-    "metric": {"span": 1, "min_span": 1, "min_units": 2, "max_units": 4},
+    "metric": {"span": 1, "min_span": 1, "min_units": 2, "max_units": 5},
     "metric_rows": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
     "graph": {"span": 3, "min_span": 2, "min_units": 3, "max_units": 8},
     "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 5},
@@ -85,7 +85,17 @@ SPRITES: dict[str, tuple[str, ...]] = {
     "star": ("....#....", "....#....", "#########", ".#######.", "..#####..", ".##.#.##.", "##.....##", ".........", "........."),
     "warn": ("....#....", "...###...", "...###...", "..##.##..", "..##.##..", ".##...##.", ".##...##.", "#########", "........."),
     "question": (".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."),
+    # kind marks: one per kind of ticket, stamped at the card's top-right corner
+    "cart": ("##.......", ".#.......", ".#######.", ".#.#.#.#.", "..#####..", "..#...#..", "..##.##.."),
+    "clock": ("..#####..", ".#.....#.", "#...#...#", "#...#...#", "#...###.#", "#.......#", ".#.....#.", "..#####.."),
+    "bulb": ("..###..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###..", "..###..", "..###.."),
+    "envelope": ("#########", "##.....##", "#.#...#.#", "#..###..#", "#.......#", "#########"),
 }
+
+# The mark each block type wears, so a note, an alert, a reminder, a fun fact and a shopping list
+# are told apart at a glance by something other than their words. Tones change the header and the
+# icon; the kind mark is separate and sits at the top-right.
+KIND_MARKS: dict[str, str] = {"message": "envelope", "alert": "bolt", "checklist": "cart", "tip": "clock", "fact": "bulb"}
 
 
 def stamp_sprite(c: Canvas, x: int, y: int, name: str, scale: int = 3) -> None:
@@ -93,6 +103,16 @@ def stamp_sprite(c: Canvas, x: int, y: int, name: str, scale: int = 3) -> None:
         for col, ch in enumerate(row):
             if ch == "#":
                 c.fill_rect(x + col * scale, y + r * scale, scale, scale)
+
+
+def _kind_mark(card: "Card", kind: str, x1: int) -> int:
+    """Stamps the kind mark at the card's top-right corner. Returns the width the text beside it must leave."""
+    name = KIND_MARKS.get(kind)
+    if name is None:
+        return 0
+    width = len(SPRITES[name][0]) * 3
+    stamp_sprite(card.c, x1 - width, card.c.y, name)
+    return width + 8
 
 
 # ---- ornaments: each draws across x0..x1 at y and returns the height it used ------------------
@@ -476,9 +496,11 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
+    clear = _kind_mark(card, "message", x1)
     if s.get("title"):
-        _title_line(card, x0, x1, str(s["title"]))
-    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0) + 6
+        _title_line(card, x0, x1 - clear, str(s["title"]))
+        clear = 0  # the title line is as tall as the mark, so the body below has the full width
+    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 6
     if s.get("tip"):
         c.y += paragraph(c, x0, c.y, str(s["tip"]), BODY, x1 - x0) + 4
     card.ornament("divider", x0, x1)
@@ -490,7 +512,8 @@ def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
-    _title_line(card, x0, x1, str(s.get("label", "")))
+    clear = _kind_mark(card, "alert", x1)
+    _title_line(card, x0, x1 - clear, str(s.get("label", "")))
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
@@ -500,8 +523,11 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
+    card.ornament("header", x0, x1)  # the tone shows on a shopping list as it does on a note
+    clear = _kind_mark(card, "checklist", x1)
     if s.get("title"):
-        _heading(c, x0, _label(s["title"]), x1)
+        _heading(c, x0, _label(s["title"]), x1 - clear)
+        clear = 0
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
         c.solid(x0 + 26, c.y + 2, _label(item.get("text", "")), 21)
@@ -509,14 +535,17 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 
 def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
+    clear = _kind_mark(card, "tip", x1)
     card.icon(x0, card.c.y)
-    card.c.y += paragraph(card.c, x0 + 28, card.c.y, str(s.get("tip", "")), BODY, x1 - x0 - 28) + 2
+    # The tone icon is up to 27 dots wide, so the text starts 7 dots clear of it.
+    card.c.y += paragraph(card.c, x0 + 34, card.c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2
 
 
 def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
-    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0) + 4
+    clear = _kind_mark(card, "fact", x1)
+    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 4
     card.ornament("divider", x0, x1)
     c.solid(x0, c.y, "FUN FACT", 21)
     c.y += ROW
