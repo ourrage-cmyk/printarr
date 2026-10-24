@@ -39,7 +39,7 @@ class Template:
     allowed: tuple[str, ...]  # decorations the model may pick from
     default: tuple[str, ...]  # decorations the rule-based path uses
     design: str | None = None  # an image design (app/render/registry.py) instead of text
-    feed: int = 4  # lines fed before the cut; image tickets use 1
+    feed: int = 1  # lines fed before the cut: the card shell margin is the rest of the blank
     kind: str = "note"  # what the ticket is for: alert, morning, evening, list, note or plain
 
 
