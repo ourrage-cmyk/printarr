@@ -111,6 +111,7 @@ def test_truncated_and_strip_count_are_stored(tmp_path):
     from app.store import TicketStore
 
     store = TicketStore(str(tmp_path / "t.db"))
+    store.init()
     ticket = store.create(recipient="yannic", message="x", send_at_ms=0, template_id=103, decorations=(), selection="explicit", notes=["message shortened"], strip_count=3)
     again = store.get(ticket["id"])
     assert again["truncated"] is True and again["strip_count"] == 3 and again["notes"] == ["message shortened"]
