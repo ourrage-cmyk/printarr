@@ -92,6 +92,23 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_LLM_ENABLED` | `on` | The decision model is used when a base URL is set. Set to `off` to disable it. |
 | `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
 | `PRINTARR_SCHEDULER` | `on` | Set to `off` to disable the background printing worker. |
+| `PRINTARR_BACKUP` | `on` | Nightly copy of the database to `backups/` next to it. |
+| `PRINTARR_BACKUP_HOUR` | `3` | Local hour (0 to 23) for the nightly copy. |
+| `PRINTARR_BACKUP_KEEP` | `7` | Nightly copies kept. Older ones are deleted. |
+
+## Data, upgrades and backups
+
+- The database schema is versioned (SQLite `user_version`). Each start applies only the steps the
+  database has not had yet, and never drops data. Before an upgrade of an existing database, a copy
+  is written to `backups/pre-upgrade-v<n>-<time>.db` (the last five are kept).
+- A database from a newer version is refused, so an older image cannot damage it. To go back to an
+  older image, restore a backup taken by that version.
+- Nightly copies go to `backups/nightly-<date>-<time>.db`.
+- Download a copy at any time: `GET /api/v1/backup/export`.
+- Replace the database from a copy: `POST /api/v1/backup/import?confirm=replace` with the file as
+  the raw body. The current database is first kept as `backups/pre-import-*.db`.
+- With the API stopped, restore from a file inside the container:
+  `python -m app.backup restore /data/backups/<file>.db`
 
 ## API
 

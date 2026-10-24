@@ -17,13 +17,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
 
 from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
+from app.backup import BackupError, NightlyBackup, NightlyThread, import_bytes
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
@@ -270,6 +272,7 @@ def _choice_out(choice: Choice) -> ChoiceOut:
     )
 
 
+MAX_IMPORT_BYTES = 200 * 1024 * 1024  # a database larger than this is refused
 PAPER_WARN_LINES = 20  # a receipt longer than this uses a lot of paper; warn, do not block
 
 
@@ -303,6 +306,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     notifier = Notifier(read_alert_settings)
     scheduler = Scheduler(store, transport, settings, notifier=notifier)
+    nightly = NightlyBackup(
+        settings.db_path, store.backup_dir, settings.tzinfo, settings.backup_hour, settings.backup_keep
+    )
 
     def read_model_settings() -> ModelSettings:
         """Stored settings win. Environment values only seed the first start."""
@@ -395,10 +401,15 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         runtime["scheduler"] = worker is not None
         heartbeat = HeartbeatThread(watch_printer)
         heartbeat.start()
+        backups = NightlyThread(nightly) if settings.backup_enabled else None
+        if backups:
+            backups.start()
         try:
             yield
         finally:
             heartbeat.stop()
+            if backups:
+                backups.stop()
             if worker:
                 worker.stop()
 
@@ -603,6 +614,39 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             media_type="application/json",
             status_code=200 if up else 503,
         )
+
+    @api.get("/backup/export", tags=["backup"], response_class=Response)
+    def export_backup() -> Response:
+        """Download a consistent copy of the whole database (tickets and settings) as an .db file."""
+        data = store.export_bytes()
+        name = f"printarr-{datetime.now(settings.tzinfo):%Y%m%d-%H%M%S}.db"
+        return Response(
+            content=data,
+            media_type="application/vnd.sqlite3",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    @api.post("/backup/import", tags=["backup"], responses={422: {"description": "Not a printarr database"}})
+    async def import_backup(
+        request: Request,
+        confirm: str = Query("", description="Must be 'replace'"),
+    ) -> dict[str, Any]:
+        """Replace the database with a file from /backup/export. Send the raw file as the body.
+
+        The current database is kept first as backups/pre-import-*.db. Any schema upgrade runs
+        after the copy. Use confirm=replace so a stray request cannot wipe the data by accident.
+        """
+        if confirm != "replace":
+            raise HTTPException(status_code=400, detail="add ?confirm=replace to replace the database")
+        data = await request.body()
+        if len(data) > MAX_IMPORT_BYTES:
+            raise HTTPException(status_code=413, detail="file is larger than 200 MB")
+        try:
+            return await run_in_threadpool(
+                import_bytes, data, settings.db_path, store.backup_dir, datetime.now(settings.tzinfo)
+            )
+        except BackupError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
     @api.get("/settings/alerts", response_model=AlertSettingsOut, tags=["settings"])
     def get_alert_settings() -> AlertSettingsOut:
