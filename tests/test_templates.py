@@ -169,3 +169,25 @@ def test_alert_wins_over_briefing_when_both_score(monkeypatch):
     model = templates.SystemOneModel("http://h:11434", "d1", 5)
     choice = resolve_choice("yannic", None, "Smoke alarm in the hall", model=model)
     assert choice.template.kind == "alert" and choice.template.id == 8
+
+
+def test_the_model_never_chooses_the_morning_stats_card():
+    from app.templates import resolve_choice
+
+    seen = {}
+
+    class Model:
+        def choose(self, options, recipient, title, message, **kwargs):
+            seen["ids"] = [t.id for t in options]
+            return seen["ids"][0], []
+
+    resolve_choice("yannic", None, "Remember the milk", model=Model())
+    assert 7 not in seen["ids"]
+
+
+def test_rules_never_pick_the_morning_stats_card():
+    from app.templates import rule_choice, templates_for
+
+    for recipient in ("yannic", "wife"):
+        assert rule_choice(recipient, None).template.design is None
+        assert rule_choice(recipient, "Hello").template.design is None
