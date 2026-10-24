@@ -27,7 +27,7 @@ AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until
 MAX_BLOCKS = 16
 PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
 TICKET_MARGIN = 24  # dots above a composed ticket
-TICKET_MARGIN_BOTTOM = 90  # and below it: about half an inch of paper before the cut
+TICKET_MARGIN_BOTTOM = 66  # plus the one-line cutter feed (about 24 dots): the blank before the cut is about 90 dots
 CARD_CAPTION = "[card]"  # what a text preview shows in place of a drawn card
 HISTORY_POINTS = 48  # sparkline points: the renderer draws at most this many
 
