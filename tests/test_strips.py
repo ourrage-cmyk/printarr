@@ -267,15 +267,6 @@ def test_every_ticket_in_a_piece_recalls_the_whole_piece(settings):
         single = client.get(f"/api/v1/tickets/{alone['id']}/image").content
         assert len(one.content) > len(single)  # the piece holds both notes
 
-
-def test_a_bare_time_of_day_title_is_not_dropped_but_a_hello_is():
-    from app.render import strips
-    assert not strips._is_salutation("MORNING")
-    assert not strips._is_salutation("MORNING BRIEFING")
-    assert strips._is_salutation("HELLO LOVE")
-    assert strips._is_salutation("GOOD MORNING")
-
-
 def test_the_cut_space_carries_print_time_and_code_that_the_api_resolves(settings):
     app, transport = make(settings)
     with TestClient(app) as client:

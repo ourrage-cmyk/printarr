@@ -188,7 +188,7 @@ class Scheduler:
             client = client_from_store(self.store)
         except HAError:
             client = None
-        lines = ticket_lines(slots, client, template_id=int(ticket["template_id"]), sender=sender_label(ticket))
+        lines = ticket_lines(slots, client, template_id=int(ticket["template_id"]), sender=sender_label(ticket), recipient=ticket.get("recipient"))
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return lines

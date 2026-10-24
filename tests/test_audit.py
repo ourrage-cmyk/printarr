@@ -5,12 +5,33 @@ from app.render import strips
 from app.render.strips import Block
 
 
-def test_salutation_headline_is_dropped_and_a_plain_headline_titles_the_next_card():
+def test_a_headline_titles_the_next_card_whatever_it_says():
     note = Block("message", {"paragraph": "Rain later.", "from": "Allyson"})
-    rows, _ = strips.layout([Block("greeting", {"greeting": "HELLO LOVE"}), note])
-    assert len(rows) == 1 and rows[0][0].block.type == "message" and "title" not in rows[0][0].slots
+    for word in ("HELLO LOVE", "HI YANNIC", "HEY", "GOOD MORNING", "GOOD EVENING", "GOOD AFTERNOON", "GOOD NIGHT", "MORNING YANNIC"):
+        rows, _ = strips.layout([Block("greeting", {"greeting": word}), note])
+        assert len(rows) == 1 and rows[0][0].slots["title"] == word, word
     rows, _ = strips.layout([Block("greeting", {"greeting": "SHOPPING"}), Block("checklist", {"items": [{"text": "Milk"}]})])
     assert len(rows) == 1 and rows[0][0].slots["title"] == "SHOPPING"
+
+
+def test_a_headline_next_to_a_titled_card_keeps_both():
+    rows, _ = strips.layout([Block("greeting", {"greeting": "GOOD MORNING"}), Block("message", {"paragraph": "x", "title": "NOTE"})])
+    assert [p.slots.get("greeting") or p.slots.get("title") for row in rows for p in row] == ["GOOD MORNING", "NOTE"]
+
+
+def test_a_briefing_without_a_greeting_is_headed_by_the_addressee_and_other_cards_are_not():
+    from app import compose
+    slots = {"metrics": [{"label": "Steps", "value": 1}]}
+    head = compose.briefing_blocks(slots, None, None, "wife")[0]["slots"]["greeting"]
+    assert head.startswith("ALLYSON ") and head.split()[1] in ("MORNING", "AFTERNOON", "EVENING")
+    assert compose.briefing_blocks(slots, None, None, "yannic")[0]["slots"]["greeting"].startswith("YANNIC ")
+    assert compose.briefing_blocks({**slots, "greeting": "HELLO"}, None, None, "wife")[0]["slots"]["greeting"] == "HELLO"
+    assert compose.briefing_blocks(slots, None)[0]["type"] != "greeting"  # unknown addressee: nothing invented
+    assert compose.message_blocks("Rain later.", "Allyson")[0]["type"] == "message"
+    preset = compose.briefing_preset_blocks(
+        {"time_of_day": "morning", "metrics": [{"label": "A", "value": 1}] * 3,
+         "graph": {"title": "G", "series": [1, 2, 3]}, "body": "Hi.", "fun_fact": "Bees."}, None, None, "yannic")
+    assert preset[0]["slots"]["greeting"] == "GOOD MORNING YANNIC"
 
 
 def test_rows_never_leave_a_gap():

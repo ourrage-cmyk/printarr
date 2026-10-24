@@ -1035,7 +1035,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 return existing
         try:
             if body.preset == PRESET_BRIEFING:
-                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender)
+                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender, body.recipient)
                 checked = compose_validate(raw_blocks)
             else:
                 checked = compose_validate(body.blocks or [])
