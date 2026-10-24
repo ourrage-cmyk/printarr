@@ -29,18 +29,18 @@ install it from one YAML file. There is no env file and no second file.
 4. Save. Wait until the app shows **Running**.
 5. Open the app's **Logs**. Find the line that starts `printarr setup: open this printarr's web page`.
    It ends with a **setup code**. Copy it.
-6. Open `http://<nas-ip>:8000/` in a browser. The setup wizard opens. Enter the setup code, then fill
+6. Open `http://<nas-ip>:30100/` in a browser. The setup wizard opens. Enter the setup code, then fill
    in the printer's IP address, and Home Assistant, the model server and Telegram if you use them.
    Press **Test** on each one. **Finish setup** checks everything again and saves it into the data folder.
    Nothing is saved until every check passes.
-7. Check the printer with `curl -X POST http://<nas-ip>:8000/api/v1/printer/test`. It returns 502 if
+7. Check the printer with `curl -X POST http://<nas-ip>:30100/api/v1/printer/test`. It returns 502 if
    the printer is unreachable.
 
 **Secrets never go in the YAML or in environment variables.** The Home Assistant token and the
 Telegram bot token are typed into the wizard and stored in the database in the data folder. No
 endpoint returns them. Until setup is finished, the API answers 503, except health and the wizard.
 The setup code changes at every start. Once setup is finished, the same code opens the wizard at
-`http://<nas-ip>:8000/setup`, where you can change any value later, including the printer's IP
+`http://<nas-ip>:30100/setup`, where you can change any value later, including the printer's IP
 address. Each service is checked before anything is saved. A blank token keeps the saved one. Tick
 "Remove the saved token" to clear it.
 
@@ -60,11 +60,15 @@ The database holds the secrets too, so keep the data folder private, and do not 
   and port are in use.
 - **Smoke test** from any machine on the LAN, with the repository checked out:
   ```sh
-  sh scripts/smoke-test.sh http://<nas-ip>:8000
+  sh scripts/smoke-test.sh http://<nas-ip>:30100
   ```
   It creates one held ticket (it never prints), reads it back, and checks the backup export.
-- **Health for Uptime Kuma:** `http://<nas-ip>:8000/api/v1/health`. It returns 200 when the
+- **Health for Uptime Kuma:** `http://<nas-ip>:30100/api/v1/health`. It returns 200 when the
   database and printer are fine, and 503 when the printer is unplugged.
+- **Build:** `http://<nas-ip>:30100/healthz` returns `version` and `git_sha`. The same build is shown in Settings.
+  A local build says `dev`. Check it after each upgrade to confirm the new image is running.
+- **Telegram test:** `curl -X POST http://<nas-ip>:30100/api/v1/alerts/test` sends a test message once Telegram is saved.
+  Threads ping Yannic with `POST /api/v1/notify`, which returns 400 until Telegram is set up.
 
 ## Upgrade
 
@@ -100,7 +104,7 @@ Backups live in `<data folder>/backups/`:
 **Option A: restore through the API** (the app is running; no shell needed):
 
 ```sh
-curl -X POST "http://<nas-ip>:8000/api/v1/backup/import?confirm=replace" \
+curl -X POST "http://<nas-ip>:30100/api/v1/backup/import?confirm=replace" \
      --data-binary @printarr-backup.db
 ```
 
@@ -124,7 +128,7 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 ## Settings and the printer
 
 - Every setting is saved by the setup wizard in the data folder: the printer, Home Assistant,
-  the model server, Telegram, names and timezone. Change them later at `http://<nas-ip>:8000/setup`
+  the model server, Telegram, names and timezone. Change them later at `http://<nas-ip>:30100/setup`
   with the setup code from the log. They survive upgrades and rebuilds.
 - The YAML holds no settings, so there is nothing to edit there for the printer. To move from the
   simulator to the real printer, change the printer address at `/setup`.
@@ -199,15 +203,13 @@ laptop's LAN address as the printer's IP address and `9100` as the port, then pr
 **Finish setup**. Then check it, from any machine on the LAN:
 
 ```sh
-curl http://<nas-ip>:8000/api/v1/printer                  # reachable: true
-curl -X POST http://<nas-ip>:8000/api/v1/printer/test      # prints a test receipt
+curl http://<nas-ip>:30100/api/v1/printer                  # reachable: true
+curl -X POST http://<nas-ip>:30100/api/v1/printer/test      # prints a test receipt
 ```
 
 The receipt appears in the simulator at `http://localhost:8080` on the laptop. For the full
-check, run `sh scripts/smoke-test.sh http://<nas-ip>:8000` as well.
+check, run `sh scripts/smoke-test.sh http://<nas-ip>:30100` as well.
 
-**Monday, switch to the real printer.** The printer address saved by the wizard wins over the YAML, and there is no
-screen yet to change it after setup (known gap). Until that exists, the simplest route is to keep the
-printer's address stable: give the TM-T88V the address the wizard was given, or run the wizard again
-on a fresh data folder. Tickets, settings and
-backups stay as they are.
+**Switch to the real printer.** Open `http://<nas-ip>:30100/setup` with the setup code from the log, change
+**Printer IP address** to the TM-T88V's address, press **Test**, then **Save settings**. The printer switches at once,
+with no restart. Tickets, settings and backups stay as they are.

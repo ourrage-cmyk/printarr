@@ -26,7 +26,9 @@ waiting items in their own pile, and prints on the right moment.
   not when it is queued.
 - **Simple text too.** Plain messages go through `POST /tickets`, and the layout is picked for you.
 - **Web page** at `/` to write tickets, preview them, watch the inbox and history, and change settings.
-- **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md) teaches an agent the whole API.
+- **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) teaches an agent (Hermes) the whole API.
+- **Telegram pings** for threads that need Yannic to act: `POST /api/v1/notify`, one message a minute per caller.
+- **Look at what printed.** Each ticket that reached the printer keeps a PNG, so a bad print can be checked from the API.
 - **Safe for the paper.** A ticket interrupted by a crash is marked `failed` rather than printed twice. The queue
   pauses while the printer reports a fault, and held items wait until you release them.
 
@@ -85,7 +87,7 @@ The one-file install, the upgrade steps and the rollback steps are in
    `chown -R 568:568 /mnt/ssd/apps/printarr`.
 2. In `docker-compose.yml`, change only the data folder. The file holds the image, memory, ports and storage, and nothing secret.
 3. In TrueNAS, go to Apps, Install Custom App, and paste the file.
-4. Open `http://<nas-ip>:8000/`. The setup wizard asks for the printer, Home Assistant, the model server, Telegram,
+4. Open `http://<nas-ip>:30100/`. The setup wizard asks for the printer, Home Assistant, the model server, Telegram,
    names and timezone. Each service has a Test button. Finishing setup saves everything in the data folder.
    The setup code is printed in the container log, and the API stays closed until setup is finished.
 
@@ -97,7 +99,7 @@ without a login.
 
 - **Home Assistant:** create a long-lived access token, paste it into the setup wizard or the settings page, and press Test.
   The setup steps and the example automations are in [`docs/integrations/`](docs/integrations/SETUP-CHECKLIST.md).
-- **Hermes:** give the agent [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md) as its instructions and
+- **Hermes:** give the agent [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) as its instructions and
   [`docs/integrations/hermes/openapi.yaml`](docs/integrations/hermes/openapi.yaml) as its tool definition.
   [`docs/integrations/hermes/example-morning-briefing.md`](docs/integrations/hermes/example-morning-briefing.md)
   shows one briefing from start to finish.
@@ -123,7 +125,9 @@ The main routes:
 | `GET` / `PUT` | `/api/v1/settings/ha`, `/settings/model`, `/settings/alerts` | Settings (tokens are never returned in full) |
 | `POST` | `/api/v1/settings/ha/test`, `/alerts/test`, `/printer/test` | Check Home Assistant, Telegram and the printer |
 | `GET` | `/api/v1/printer`, `/printer/self-check` | Printer status (the self-check prints nothing) |
-| `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, and liveness |
+| `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, liveness, and the build (`version`, `git_sha`) |
+| `POST` | `/api/v1/notify` | Send a Telegram message to Yannic (one a minute per caller) |
+| `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs, and the PNG of one ticket as sent to the printer |
 | `GET` / `POST` | `/api/v1/backup/export`, `/backup/import` | Download or restore the database |
 
 Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
@@ -132,8 +136,18 @@ Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 
 ## Design language
 
-Every strip uses the same shell: outlined cards, a dot-matrix main font (5x7), and a secondary font
-(IBM Plex Mono, Inter or DM Sans) at 18 to 22 points. Ornaments are chosen per block and per mood.
+Every strip uses the same shell: outlined cards, light weight, and a full-line font for text and numbers.
+The dot-matrix font (5x7) is used only for titles and headlines, never for body text or numbers.
+
+The tone sets the feeling at a glance, with one ornament and one icon per tone:
+
+- **Heart:** `loving`. The only tone with a heart.
+- **Zigzag:** `gentle_warning`. A soft heads-up.
+- **Barcode border:** `urgent`. Needs attention.
+- **White on black title:** `critical`. The only inverted title, for things that need attention now.
+
+Each kind (`morning`, `evening`, `note`, `shopping`, `todo`, `alert`, `fun`, `reminder`) has its own look on the paper,
+and each block's mood changes how it looks. Printed tickets never print the tone name.
 The rules and the reasons behind them are in [`docs/design/README.md`](docs/design/README.md), the
 design tokens are in [`docs/design/system/tokens.json`](docs/design/system/tokens.json), and the taste
 guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide/taste-guide.html).
