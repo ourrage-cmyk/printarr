@@ -9,7 +9,7 @@ Caveat: each family in rounds 2 and 3 has only 5 ratings, and round 1 traits hav
 - **Hello header**: +1.00 (n=8). A greeting line works.
 - **Server bars, alerts and energy**: family server +1.00 (n=5), alert +1.00 (n=5), energy +0.60 (n=5). Segmented bars and pill alerts are wanted.
 - **Sparklines and line charts**: body spark +0.56 (n=9). Line graphs over text-only sparklines.
-- **Rows and comparisons**: body rows +0.56 (n=18), compare +0.50 (n=8). Dot-leader rows and Yannic vs Allyson columns.
+- **Rows and comparisons**: body rows +0.56 (n=18), compare +0.50 (n=8). Dot-leader rows and Yannic vs the second person columns.
 - **Round 2 overall**: +0.40 (n=40). Round 2 is the strongest round, and its raster cards are preferred over round 1 text.
 
 ## What he dislikes
@@ -32,6 +32,6 @@ Caveat: each family in rounds 2 and 3 has only 5 ratings, and round 1 traits hav
 ## Implications for round 4
 1. Outlined cards only. No fills, no elevation.
 2. Hello header with a summary line.
-3. Modules: server-style segmented bars, energy with a line graph, alerts as outlined pills, rows and Yannic-vs-Allyson comparisons.
+3. Modules: server-style segmented bars, energy with a line graph, alerts as outlined pills, rows and Yannic-vs-the second person comparisons.
 4. Numbers at moderate size, not huge. Normal font, not Font B.
 5. No expressive shapes, sparkText, frames, wordmarks or big numerals.

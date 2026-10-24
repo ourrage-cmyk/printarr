@@ -77,9 +77,9 @@ python tools/simulate/hermes_sim.py --api http://SERVER_IP:8000 --out tools/simu
 
 It does this, in order:
 
-1. Morning: a briefing for you and one for Allyson, then the morning release for each person.
+1. Morning: a briefing for you and one for the second person, then the morning release for each person.
    Home Assistant would send these on the phone unplug.
-2. Day: messages between you and Allyson in several moods, one raw speech message, a shopping
+2. Day: messages between you and the second person in several moods, one raw speech message, a shopping
    list (printed at once), a reminder for 18:00, a water leak alert (printed at once), a fun fact,
    and a note.
 3. Evening: the evening rundown is queued, then your arrival release prints your pile.

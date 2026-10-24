@@ -43,12 +43,12 @@ Renders use sample values. Live values come from HA at print time.
 | Yannic steps | `sensor.total_steps` | steps |
 | Yannic resting heart rate | `sensor.resting_heart_rate` | bpm |
 | Yannic phone battery | `sensor.yannic_pixel_battery_level` | % |
-| Allyson body battery | `sensor.body_battery_most_recent_2` | % |
-| Allyson sleep score | `sensor.sleep_score_2` | score |
-| Allyson stress average | `sensor.avg_stress_level_2` | level |
-| Allyson steps | `sensor.total_steps_2` | steps |
-| Allyson resting heart rate | `sensor.resting_heart_rate_2` | bpm |
-| Allyson HRV last night | `sensor.garmin_connect_hrv_last_night_average_2` | ms |
+| the second person body battery | `sensor.body_battery_most_recent_2` | % |
+| the second person sleep score | `sensor.sleep_score_2` | score |
+| the second person stress average | `sensor.avg_stress_level_2` | level |
+| the second person steps | `sensor.total_steps_2` | steps |
+| the second person resting heart rate | `sensor.resting_heart_rate_2` | bpm |
+| the second person HRV last night | `sensor.garmin_connect_hrv_last_night_average_2` | ms |
 | Electricity now | `sensor.octopus_energy_electricity_<meter>_current_rate` | GBP/kWh |
 | Electricity next half-hour | `sensor.octopus_energy_electricity_<meter>_next_rate` | GBP/kWh |
 | Electricity cost per hour | `sensor.realtime_energy_cost` | GBP/h |
@@ -88,10 +88,10 @@ Not usable: `switch.heating` (unavailable), `sensor.plants_humidity` (unavailabl
 - Card 3: segmented bars: BODY BATTERY, CPU, RAM. CPU is `sensor.truenas_cpu_usage`, RAM is `sensor.system_monitor_memory_usage` (HA host, not the NAS).
 - Summary sentence: outdoor temperature, and rain chance when the forecast call is wired up.
 
-### 2. Morning, Allyson (derived from B4-014 with her fields) — derived
+### 2. Morning, the second person (derived from B4-014 with her fields) — derived
 - Greeting "HELLO ALLYSON".
 - Card 2 rows: SLEEP SCORE, STRESS AVG, STEPS, from the `_2` sensors.
-- Card 3: segmented bar for her sleep score (out of 100), and a comparison card (Yannic vs Allyson, as in B4-007) when wanted.
+- Card 3: segmented bar for her sleep score (out of 100), and a comparison card (Yannic vs the second person, as in B4-007) when wanted.
 
 ### 3. Evening, Yannic (based on B4-003: Hello + Energy + Segbar, r12, scale 2) — rendered
 - Card 1: greeting and summary.
@@ -100,7 +100,7 @@ Not usable: `switch.heating` (unavailable), `sensor.plants_humidity` (unavailabl
 
 ### 4. Evening, dogs (based on B4-010: Hello + Compare + Dogs, r12, scale 3) — rendered
 - Card 1: greeting.
-- Card 2: Yannic vs Allyson comparison (steps, stress).
+- Card 2: Yannic vs the second person comparison (steps, stress).
 - Card 3: DOGS TODAY, one row per dog: P (peed), O (poop), F (food), R (runs), from the counter entities above.
 
 ### 5. Alert (based on B4-012: Hello + Segbar + Alert, r8, scale 3) — rendered

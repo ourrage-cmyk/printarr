@@ -580,10 +580,10 @@ The d1 model scored all 200 designs on 13 questions, twice each. Answers are det
 
 - Morning, Yannic: B4-014. Hello, rows, segmented bars, outlined radius 4.
 - Evening, Yannic: B4-003. Hello, energy rows and line graph, segmented bars.
-- Evening, dogs: B4-010. Hello, Yannic vs Allyson comparison, dog rows.
+- Evening, dogs: B4-010. Hello, Yannic vs the second person comparison, dog rows.
 - Alert: B4-012. Hello, filled alert pill, segmented bar.
 - Shopping list: B2-031. Checkbox rows in an outlined card.
-- Morning, Allyson: not rendered yet. Not rendered yet. Same as B4-014 with her fields (see handoff).
+- Morning, the second person: not rendered yet. Not rendered yet. Same as B4-014 with her fields (see handoff).
 
 ## 8. How to regenerate this guide
 

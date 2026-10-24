@@ -19,7 +19,7 @@ The rest of this document describes the option space for later. The decisions ab
 
 A button sits next to the printer in the living room. Press and hold, speak, release. The speech becomes one of two things:
 
-- "Leave a message for my wife: thank you for the cookies, I love you." Prints on Allyson's next strip, as a message from Yannic.
+- "Leave a message for my wife: thank you for the cookies, I love you." Prints on the second person's next strip, as a message from Yannic.
 - "Add oat milk to the shopping list." Adds oat milk to the shopping list, and the list can be printed on request or at a time.
 
 The shape is a tape recorder. Nothing is typed, and the printer does not need to understand speech itself.
@@ -56,7 +56,7 @@ Recommendation: **B** for the real button, **C** to test the flow this week. **A
 
 Recommendation: faster-whisper, `small` model, on the same box as HA. Measure latency before choosing a larger model.
 
-Names matter: "Allyson" should be recognised. Add it to the Whisper initial prompt or to HA's custom sentences so the recipient is not misheard as "Alison" or "Ellison".
+Names matter: "the second person" should be recognised. Add it to the Whisper initial prompt or to HA's custom sentences so the recipient is not misheard as "Alison" or "Ellison".
 
 ## From transcript to structured input
 
@@ -64,7 +64,7 @@ The printarr API already takes the shape it needs. The voice path only has to fi
 
 | Field | Source |
 |---|---|
-| `recipient` (`yannic` / `wife`) | Parsed from "for my wife", "for Allyson", "for Yannic", or the sender is the other person. |
+| `recipient` (`yannic` / `wife`) | Parsed from "for my wife", "for the second person", "for Yannic", or the sender is the other person. |
 | `from_user` | The speaker. First version: set by which satellite heard it, so one satellite per person, or one shared satellite that asks. |
 | `message` | The text after the colon, or the whole phrase after the verb. |
 | `kind` | `note` for a message, `shopping` for a list item. |
@@ -197,7 +197,7 @@ Not built here. Adding the route touches `app/main.py`, which other threads are 
 1. Which hardware: Voice Preview Edition (buy), ESP32-S3 (build), or the phone first?
 2. One satellite that asks who is speaking, or one per person?
 3. Should a message to the other person ever print at once instead of on their next strip? The doc assumes on their next strip.
-4. Shopping list: is the HA `todo.shopping_list` the right list, or do you want a separate one for Allyson?
+4. Shopping list: is the HA `todo.shopping_list` the right list, or do you want a separate one for the second person?
 5. Is "Ask Home Assistant" available on your Google account, and do you want it at all?
 6. Is it OK for the printed message to be the cleaned-up version from Granite, or should it be exactly what was said?
 

@@ -1,6 +1,6 @@
 ---
 name: printarr
-description: Print receipt strips on the printarr thermal printer through its REST API. Use to queue notes, shopping lists, reminders, briefings, alerts and messages between Yannic and Allyson, to schedule or cancel a print, to release a person's waiting strips, to check the queue or printer, to look at a printed ticket image, or to ping Yannic on Telegram.
+description: Print receipt strips on the printarr thermal printer through its REST API. Use to queue notes, shopping lists, reminders, briefings, alerts and messages between Yannic and the second person, to schedule or cancel a print, to release a person's waiting strips, to check the queue or printer, to look at a printed ticket image, or to ping Yannic on Telegram.
 ---
 
 # printarr: print strips through the API
@@ -10,8 +10,8 @@ through its REST API.
 
 - Base URL: `http://192.0.2.231:30100/api/v1`. Health and version are at `http://192.0.2.231:30100/healthz`.
 - No authentication. The API is for the home LAN only. Never expose it to the internet.
-- Two recipients: `yannic` (Yannic) and `wife` (Allyson). Every request names one as `recipient`.
-  The strip says "Allyson", but the API id is `wife`.
+- Two recipients: `yannic` (Yannic) and `wife` (the second person). Every request names one as `recipient`.
+  The strip shows the name set for that person, but the API id is `wife`.
 - The live contract is `http://192.0.2.231:30100/docs` (or its openapi.json file). If this page and the schema
   disagree, the schema wins.
 
@@ -145,7 +145,7 @@ printarr never creates schedules. It holds a ticket until it is due. You decide 
 
 | `delivery` | When it prints | Use it for |
 |---|---|---|
-| `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and Allyson |
+| `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and the second person |
 | `at` | At `send_at` (local time, no offset, for example `2026-10-25T18:00:00`) as its own strip | "Remind me at 18:00", a shopping list for when Yannic gets home |
 | `now` | Straight away, as its own strip | Shopping lists on request, alerts |
 
@@ -218,7 +218,7 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 - **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
-  - `loving` (heart ornament): messages between Yannic and Allyson.
+  - `loving` (heart ornament): messages between Yannic and the second person.
   - `reminder` (tape ornament): times and to-dos.
   - `gentle_warning` (zigzag): a soft heads-up.
   - `urgent` (barcode border): needs attention.

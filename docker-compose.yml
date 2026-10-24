@@ -16,7 +16,7 @@ services:
     mem_limit: 512m
     cpus: 1.0
     ports:
-      - "30100:8000"                              # web page and API at http://<nas-ip>:30100/ (port 8000 is taken on this NAS; use "8000:8000" if it is free)
+      - "30100:8000"                              # web page and API at http://<nas-ip>:30100/ (use "8000:8000" if port 8000 is free)
     volumes:
       # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 568
       # (chown -R 568:568 /mnt/pool/printarr). The app refuses to start otherwise, and says so in the logs.
