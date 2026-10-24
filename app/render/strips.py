@@ -36,6 +36,8 @@ BODY = 3  # body and label scale: cap 21 (conformance, font arena tier B)
 ROW = 7 * BODY + 9  # one row of text: cap 21 with the tokens' body leading of 9 dots
 CAPTION = 2  # caption scale: cap 14, the minimum
 NUMERAL = 6  # display numerals: cap 42, used when the value fits the tile
+TITLE = 4  # titles that do not fit one line at NUMERAL: cap 28, still larger than body (cap 21)
+GRAPH_PLOT = 56  # a graph is 56 dots tall, as the catalogue says, so its height does not depend on the card
 
 UNIT_H = GRID["unit_h"]  # one unit of height, in dots
 GAP_V = GRID["gap_v"]  # space between rows of cards
@@ -311,17 +313,22 @@ def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
     label = _label(text)
     c = card.c
     if MOODS[card.mood]["accent"] == "pill":
-        w = min(text_width(label, BODY) + 28, x1 - x0)
-        h = 7 * BODY + 14
+        # The pill label is one line at the largest title size that fits beside its padding.
+        pill = next((s for s in (NUMERAL, TITLE, BODY) if text_width(label, s) + 28 <= x1 - x0), BODY)
+        w = min(text_width(label, pill) + 28, x1 - x0)
+        h = 7 * pill + 14
         c.round_box(x0, c.y, x0 + w, c.y + h, h // 2, 2)
         c.fill(x0 + 4, c.y + 4, x0 + w - 4, c.y + h - 4)
-        c.text(x0 + 14, c.y + 7, label, BODY)
-        _erase_glyphs(c, x0 + 14, c.y + 7, label, BODY)
+        c.text(x0 + 14, c.y + 7, label, pill)
+        _erase_glyphs(c, x0 + 14, c.y + 7, label, pill)
         c.y += h + 8
     else:
         card.icon(x0, c.y)
-        c.text(x0 + 36, c.y + 2, label, BODY)
-        c.y += 7 * BODY + 9
+        scale, lines = title_lines(label, x1 - x0 - 36)
+        step = 7 * scale + 6
+        for i, line in enumerate(lines):
+            c.text(x0 + 36, c.y + i * step, line, scale)
+        c.y += len(lines) * step + 2
 
 
 def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
@@ -333,16 +340,27 @@ def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
                     c.bits[yy * 64 + (xx >> 3)] &= (~(0x80 >> (xx & 7))) & 0xFF
 
 
-def _heading(c: Canvas, x: int, text: str, scale: int = BODY) -> None:
-    c.text(x, c.y, text, scale)  # a title: dot matrix
-    c.y += 7 * scale + 8
+def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
+    """A title in the dot font, larger than body text: NUMERAL on one line when it fits, else TITLE, wrapped."""
+    label = str(text)
+    if text_width(label, NUMERAL) <= max_w:
+        return NUMERAL, [label]
+    return TITLE, wrap_lines(label, TITLE, max_w)
+
+
+def _heading(c: Canvas, x: int, text: str, x1: int = OUTER_R) -> None:
+    """A title: the dot font at a size larger than body text. Long titles wrap onto more lines."""
+    scale, lines = title_lines(text, x1 - x)
+    step = 7 * scale + 6
+    for i, line in enumerate(lines):
+        c.text(x, c.y + i * step, line, scale)
+    c.y += len(lines) * step + 2
 
 
 # ---- block renderers: draw inside x0..x1 starting at card.c.y, advancing it -----------------
 def _greeting(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
-    card.c.text(x0, card.c.y, str(s.get("greeting", "")).upper(), 3)
-    card.c.y += 21 + 8
+    _heading(card.c, x0, str(s.get("greeting", "")).upper(), x1)
     if s.get("summary"):
         card.c.y += paragraph(card.c, x0, card.c.y, str(s["summary"]), BODY, x1 - x0) + 2
 
@@ -394,7 +412,7 @@ def _span(s: Mapping[str, Any]) -> str:
 def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     if s.get("title"):
-        _heading(c, x0, _label(s["title"]))
+        _heading(c, x0, _label(s["title"]), x1)
     for r in list(s.get("rows", []))[:12]:
         card.icon(x0, c.y)
         unit = f" {r['unit']}" if r.get("unit") else ""
@@ -414,7 +432,7 @@ def _time_axis(c: Canvas, x0: int, x1: int, span: str) -> None:
 
 def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
-    _heading(c, x0, _label(s.get("title", "")))
+    _heading(c, x0, _label(s.get("title", "")), x1)
     series = list(s.get("series", []))
     if len(series) > 1:
         unit = f" {s['unit']}" if s.get("unit") else ""
@@ -430,7 +448,7 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
-    _heading(c, x0, "DOGS TODAY")
+    _heading(c, x0, "DOGS TODAY", x1)
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
@@ -469,7 +487,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     if s.get("title"):
-        _heading(c, x0, _label(s["title"]), NUMERAL if len(_label(s["title"])) * 6 * NUMERAL <= x1 - x0 else BODY)
+        _heading(c, x0, _label(s["title"]), x1)
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
         c.solid(x0 + 26, c.y + 2, _label(item.get("text", "")), 21)
@@ -657,7 +675,7 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
     height = row_units * UNIT_H - GAP_V
     for p in row:
         # A graph takes the spare height of its card: the card height less padding, heading and footer.
-        card = Card(c, p.block.mood, plot_h=max(36, height - 2 * PAD_V - 80))
+        card = Card(c, p.block.mood, plot_h=GRAPH_PLOT)
         c.y = top + PAD_V
         RENDERERS[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
         c.round_box(p.x0, top, p.x1, top + height, RADIUS, STROKE)
