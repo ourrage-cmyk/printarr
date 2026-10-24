@@ -152,3 +152,51 @@ def test_a_retried_pile_ticket_goes_back_to_its_pile(settings):
         assert retried["status"] == "held" and retried["delivery"] == "on_release"
         assert app.state.scheduler.run_once() == 0
         assert transport.payloads == []
+
+
+class FailAfter(Recorder):
+    """Prints the first `ok` jobs, then the printer goes off."""
+
+    def __init__(self, ok):
+        super().__init__()
+        self.ok = ok
+
+    def send(self, data):
+        if len(self.payloads) >= self.ok:
+            raise PrinterError("printer went off")
+        super().send(data)
+
+
+def test_a_release_that_fails_part_way_reports_the_strips_already_printed(settings):
+    app, transport = make(settings, FailAfter(ok=1), strip_max_blocks=2)
+    with TestClient(app) as client:
+        for i in range(4):
+            queue(client, "wife", f"note {i}", delivery="on_release")
+        response = client.post("/api/v1/people/wife/release", json={"trigger": "evening"})
+        assert response.status_code == 502
+        detail = response.json()["detail"]
+        assert len(detail["strips"]) == 1 and len(detail["strips"][0]["ticket_ids"]) == 2
+        assert "printed 1 strip(s)" in detail["message"]
+        # the printed strip is recorded, the rest of the pile is still waiting
+        assert len(app.state.scheduler.store.pile("wife")) == 2
+
+
+def test_a_database_hiccup_after_printing_does_not_strand_the_ticket(settings, monkeypatch):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        ticket = queue(client, "yannic", "printed once")
+        store = app.state.scheduler.store
+        real = store.mark_sent
+        calls = {"n": 0}
+
+        def flaky(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("database is locked")
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(store, "mark_sent", flaky)
+        monkeypatch.setattr("app.scheduler.MARK_SENT_RETRY_S", 0)
+        assert app.state.scheduler.run_once() == 1
+        assert store.get(ticket["id"])["status"] == "sent"
+        assert len(transport.payloads) == 1
