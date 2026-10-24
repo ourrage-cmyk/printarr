@@ -3495,6 +3495,14 @@
             "title": "Strip Count",
             "description": "How many strips the ticket prints as.",
             "default": 1
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "description": "Things to check on a composed ticket, for example characters that print as '?'."
           }
         },
         "type": "object",

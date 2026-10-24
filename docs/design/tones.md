@@ -26,8 +26,8 @@ Rules:
   `urgent` and `critical` share the barcode border and warn icon; only the inverted title tells them apart.
 - The inverted (pill) title is used only by `critical`.
 - A heart appears only for `loving`.
-- Fun facts use the playful tone, not reminders, and never print "Did you know" as a lead-in on
-  reminders or notes.
+- Fun facts use the playful tone, not reminders. A fun fact prints its text alone: no "Did you know" heading
+  and no "FUN FACT" label is added. The words may appear in the sender's own text.
 - Printed tickets never print the tone name.
 
 Outline weight: the card outline also carries the tone. `urgent`, `upset` and `firm_complaint`

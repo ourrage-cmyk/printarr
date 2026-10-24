@@ -64,7 +64,7 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 Writing tickets, for agents:
 - Say the headline once. Use `title` or the block's heading, and do not repeat it in the body text.
 - Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
-- "Did you know" is only for a `fun` fact (the `fact` block, mood `playful`). Never use it on a reminder, a note or an alert.
+- A fun fact is a `fact` block with mood `playful`. It prints its text alone: no "Did you know" and no "FUN FACT" label is added. Do not use a `fact` block for a reminder, a note or an alert.
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
 
@@ -85,7 +85,7 @@ Writing tickets, for agents:
 
 ### A briefing preset
 
-`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
+`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. A metric label is at most 20 characters. Text with characters the printer cannot draw (emoji, CJK) still prints, each as `?`, and the response lists them under `warnings`. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
 
 ### A slot ticket
 
