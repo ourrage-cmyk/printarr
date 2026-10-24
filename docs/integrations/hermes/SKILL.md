@@ -10,8 +10,8 @@ through its REST API.
 
 - Base URL: `http://192.0.2.231:30100/api/v1`. Health and version are at `http://192.0.2.231:30100/healthz`.
 - No authentication. The API is for the home LAN only. Never expose it to the internet.
-- Two recipients: `yannic` (Yannic) and `wife` (Allyson). Every request names one as `recipient`.
-  The strip says "Allyson", but the API id is `wife`.
+- Two recipients: `yannic` (Yannic) and `wife` (the second person). Every request names one as `recipient`.
+  The strip shows the name set for that person, but the API id is `wife`.
 - The live contract is `http://192.0.2.231:30100/docs` (or its openapi.json file). If this page and the schema
   disagree, the schema wins.
 
@@ -218,7 +218,7 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 - **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
-  - `loving` (heart ornament): messages between Yannic and Allyson.
+  - `loving` (heart ornament): messages between Yannic and the second person.
   - `reminder` (tape ornament): times and to-dos.
   - `gentle_warning` (zigzag): a soft heads-up.
   - `urgent` (barcode border): needs attention.
