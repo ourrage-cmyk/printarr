@@ -10,17 +10,21 @@ RUN pip wheel --wheel-dir /wheels -r requirements.txt
 
 FROM python:3.13-slim AS runtime
 ARG VERSION=dev
+# Build number for the running version (CI passes 0.2.<run number>). Local builds show the package version.
+ARG PRINTARR_VERSION=0.2.0
 LABEL org.opencontainers.image.title="printarr" \
       org.opencontainers.image.description="Receipt printer API and web UI for the Epson TM-T88V" \
       org.opencontainers.image.source="https://github.com/ourrage-cmyk/printarr" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${PRINTARR_VERSION}" \
+      org.opencontainers.image.revision="${VERSION}"
 
-# The git commit the image was built from. Shown in the web UI and /healthz. CI passes the sha.
+# The version and git commit the image was built from. Shown in the web UI, /healthz and the startup log.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PRINTARR_DB_PATH=/data/printarr.db \
     PRINTARR_OUTPUT_DIR=/data/output \
-    PRINTARR_BUILD_SHA=${VERSION}
+    PRINTARR_BUILD_SHA=${VERSION} \
+    PRINTARR_BUILD_VERSION=${PRINTARR_VERSION}
 
 # tini is PID 1: it forwards SIGTERM to uvicorn and reaps children.
 RUN apt-get update \
