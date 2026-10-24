@@ -12,7 +12,8 @@ install it from one YAML file. There is no env file and no second file.
    chown -R 1000:1000 /mnt/ssd/apps/printarr
    ```
    If the folder is not writable, the app stops at once and writes a message to its logs.
-3. **Know the printer's IP address** (the Epson TM-T88V on the LAN, port 9100).
+3. **Know the printer's IP address** (the Epson TM-T88V on the LAN, port 9100). Have the Home Assistant
+   long-lived access token ready too, if you use Home Assistant.
 4. **Make sure the image is public** on GitHub (`ghcr.io/ourrage-cmyk/printarr`), so TrueNAS can
    pull it without a login.
 
@@ -21,14 +22,28 @@ install it from one YAML file. There is no env file and no second file.
 1. In TrueNAS, go to **Apps > Discover Apps > Custom App** (on older releases,
    **Install Custom App**), and choose **Install via YAML**.
 2. Paste the whole of [`docker-compose.yml`](../../docker-compose.yml) from the repository.
-3. Change the two lines marked `<- change`: the printer's IP address, and the data folder if
-   yours is different.
+3. Change the line marked `<- change` if your data folder is different from the default.
 4. Save. Wait until the app shows **Running**.
-5. Open `http://<nas-ip>:8000/` to write a ticket. To check the printer, print a test receipt with
-   `curl -X POST http://<nas-ip>:8000/api/v1/printer/test`. It returns 502 if the printer is unreachable.
+5. Open the app's **Logs**. Find the line that starts `printarr setup: open this printarr's web page`.
+   It ends with a **setup code**. Copy it.
+6. Open `http://<nas-ip>:8000/` in a browser. The setup wizard opens. Enter the setup code, then fill
+   in the printer's IP address, and Home Assistant, the model server and Telegram if you use them.
+   Press **Test** on each one. **Finish setup** checks everything again and saves it into the data folder.
+   Nothing is saved until every check passes.
+7. Check the printer with `curl -X POST http://<nas-ip>:8000/api/v1/printer/test`. It returns 502 if
+   the printer is unreachable.
 
-The data folder holds everything the app keeps: tickets, the saved settings (decision model,
-Home Assistant, Telegram), the database and the backups. Keep it when you upgrade or remove the app.
+**Secrets never go in the YAML or in environment variables.** The Home Assistant token and the
+Telegram bot token are typed into the wizard and stored in the database in the data folder. No
+endpoint returns them. Until setup is finished, the API answers 503, except health and the wizard.
+The setup code changes at every start until setup is finished. Once setup is finished, the code is
+gone and the wizard closes. Change settings later in the web page.
+
+If the timezone changes in the wizard, restart the app once so it takes effect.
+
+The data folder holds everything the app keeps: tickets, the saved settings (printer, decision
+model, Home Assistant, Telegram), the database and the backups. Keep it when you upgrade or remove the app.
+The database holds the secrets too, so keep the data folder private, and do not share backup files.
 
 ## Check that it is healthy
 

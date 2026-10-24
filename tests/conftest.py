@@ -11,4 +11,5 @@ def settings(tmp_path):
         timezone="Europe/London",
         printer_mode="file",
         scheduler_enabled=False,
+        setup_required=False,  # the wizard has its own tests in test_setup.py
     )

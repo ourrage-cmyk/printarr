@@ -150,6 +150,29 @@ class UnbuiltTransport:
         return {}  # not reached
 
 
+class SwitchableTransport:
+    """Sends every call to the current transport. The wizard swaps the printer without a restart."""
+
+    def __init__(self, inner: Transport) -> None:
+        self._inner = inner
+
+    @property
+    def target(self) -> str:
+        return self._inner.target
+
+    def swap(self, inner: Transport) -> None:
+        self._inner = inner  # a single assignment, so a job in progress keeps its old transport
+
+    def send(self, data: bytes) -> None:
+        self._inner.send(data)
+
+    def check(self) -> None:
+        self._inner.check()
+
+    def read_status(self) -> dict[int, int | None]:
+        return self._inner.read_status()
+
+
 def build_transport(settings: Settings) -> Transport:
     if settings.printer_mode == "file":
         return FileTransport(settings.output_dir)
