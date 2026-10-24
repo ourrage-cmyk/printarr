@@ -41,6 +41,14 @@ from app.ha import HAClient, HAError
 from app.scheduler import Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
+from app.compose import (
+    BLOCKS as compose_blocks,
+    BlockProblem,
+    catalogue as compose_catalogue,
+    block_schema as compose_block_schema,
+    compose_lines,
+    validate_blocks as compose_validate,
+)
 from app.slots import (
     BRIEFING,
     SLOT_NAMES,
@@ -86,6 +94,27 @@ Template choice: pass `template` to pick one explicitly from that recipient's gr
 If you leave it out, a local decision model picks one when it is configured. Otherwise
 a fixed rule picks one.
 """
+
+
+class ComposeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    recipient: Recipient
+    blocks: list[dict[str, Any]] = Field(
+        min_length=1,
+        max_length=16,
+        description="Ordered blocks, each {type, mood, slots}. See GET /api/v1/blocks for types and moods.",
+    )
+    kind: Literal[KINDS] | None = None  # type: ignore[valid-type]
+    tone: Literal[TONES] | None = None  # type: ignore[valid-type]
+    from_user: Recipient | None = None
+    to_user: Recipient | None = None
+    sender: str | None = Field(default=None, max_length=40)
+    send_at: datetime | None = None
+    delivery: Literal["now", "at", "on_release"] | None = None
+    hold: bool = False
+    hold_key: str | None = Field(default=None, max_length=40)
+    idempotency_key: str | None = Field(default=None, max_length=120)
 
 
 class PersonRelease(BaseModel):
@@ -261,6 +290,7 @@ class TicketOut(BaseModel):
     delivery: str = "now"
     strip_id: str | None = None
     strip_trigger: str | None = None
+    moods: str = ""
 
 
 class ChoiceOut(BaseModel):
@@ -756,6 +786,64 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Release a held ticket. It prints within seconds, since its template is already chosen."""
         return guarded(store.release, ticket_id)
 
+    @api.get("/blocks", tags=["templates"])
+    def list_blocks() -> list[dict[str, Any]]:
+        """The block catalogue: each type, what it is for, its moods and where its slot schema is."""
+        return compose_catalogue()
+
+    @api.get("/blocks/{name}/schema", tags=["templates"])
+    def block_schema_route(name: str) -> dict[str, Any]:
+        """The slots of one block type as JSON Schema."""
+        if name not in compose_blocks:
+            raise HTTPException(status_code=404, detail=f"unknown block type {name!r}; see GET /api/v1/blocks")
+        return compose_block_schema(name)
+
+    @api.post("/tickets/compose", status_code=201, response_model=TicketOut, tags=["tickets"])
+    def create_composed_ticket(body: ComposeCreate) -> dict[str, Any]:
+        """Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first."""
+        held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
+        if body.hold_key and not held:
+            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+        if body.idempotency_key:
+            existing = store.get_by_key(body.idempotency_key)
+            if existing is not None:
+                return existing
+        try:
+            checked = compose_validate(body.blocks)
+        except BlockProblem as exc:
+            raise HTTPException(status_code=422, detail=exc.problems) from None
+        render_started = time.perf_counter()
+        try:  # check the layout now, so a queued ticket always prints
+            encode(compose_lines(checked), feed=template_by_id(103).feed, raster_mode=settings.raster_mode)
+        except Exception as exc:
+            logger.exception("composed rendering failed; ticket not queued")
+            raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
+        render_ms = round((time.perf_counter() - render_started) * 1000)
+        first = checked[0]["slots"]
+        summary = str(first.get("text") or first.get("label") or "(composed)")
+        return store.create(
+            kind=body.kind or "note",
+            tone=body.tone or DEFAULT_TONE,
+            from_user=body.from_user,
+            to_user=body.to_user,
+            recipient=body.recipient,
+            message=summary,
+            sender=body.sender,
+            title=None,
+            send_at_ms=_resolve_send_at(body.send_at, settings.tzinfo),
+            template_id=103,
+            decorations=(),
+            selection="explicit",
+            choice_source="explicit",
+            render_ms=render_ms,
+            slots_json=json.dumps({"blocks": checked}, default=str),
+            held=held,
+            delivery=delivery,
+            hold_key=body.hold_key,
+            idempotency_key=body.idempotency_key,
+            moods=",".join(block["mood"] for block in checked),
+        )
+
     @api.post("/people/{person}/release", tags=["tickets"])
     def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:
         """Print this person's pile as strips, cutting after each. Only this person's tickets go on a strip."""
@@ -985,7 +1073,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         columns = [
             "id", "created_at", "recipient", "from_user", "to_user", "kind", "tone", "template_id",
             "choice_source", "selection", "decorations", "status", "inbox_state", "render_ms",
-            "print_ms", "printed_at", "title", "sender", "message",
+            "print_ms", "printed_at", "title", "sender", "message", "moods", "strip_id", "strip_trigger",
         ]
         buffer = io.StringIO()
         writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")

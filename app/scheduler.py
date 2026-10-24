@@ -117,14 +117,14 @@ class Scheduler:
 
     def slot_lines_live(self, ticket: dict) -> list[Line]:
         """Lay out a slot ticket, reading its Home Assistant metrics now. Missing values print --."""
-        from app.slots import fetch_values, slot_lines  # imported here: app.slots imports app.receipt
+        from app.compose import ticket_lines  # imported here: app.compose imports app.receipt
 
         slots = json.loads(ticket.get("slots_json") or "{}")
         try:
             client = client_from_store(self.store)
         except HAError:
             client = None
-        lines = slot_lines(slots, fetch_values(slots, client))
+        lines = ticket_lines(slots, client)
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return lines

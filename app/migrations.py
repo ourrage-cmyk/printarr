@@ -117,12 +117,20 @@ def _add_delivery_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
 
 
+def _add_moods_column(conn: sqlite3.Connection) -> None:
+    """Version 6: the moods of a composed ticket's blocks, comma separated, for the log."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "moods" not in have:
+        conn.execute("ALTER TABLE tickets ADD COLUMN moods TEXT NOT NULL DEFAULT ''")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
     _add_idempotency_index,  # version 3
     _add_slots_column,  # version 4
     _add_delivery_columns,  # version 5
+    _add_moods_column,  # version 6
 )
 
 LATEST_VERSION = len(MIGRATIONS)
