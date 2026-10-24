@@ -119,3 +119,36 @@ def test_the_strip_has_blank_margins_at_top_and_bottom(settings):
         client.post("/api/v1/people/yannic/release", json={})
     assert len(transport.payloads) == 1
     assert transport.payloads[0].count(b"\x00" * 64 * 90) >= 2  # top and bottom margins
+
+
+def test_a_pile_ticket_cannot_be_released_alone(settings):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        ticket = queue(client, "wife", "in the pile", delivery="on_release")
+        refused = client.post(f"/api/v1/tickets/{ticket['id']}/release")
+        assert refused.status_code == 409
+        assert app.state.scheduler.run_once() == 0
+        assert transport.payloads == []
+
+
+def test_a_hold_key_release_leaves_the_pile_alone(settings):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        queue(client, "wife", "in the pile", delivery="on_release", hold=True, hold_key="user-home")
+        assert client.post("/api/v1/holds/user-home/release").json() == []
+        assert app.state.scheduler.run_once() == 0
+        strips = client.post("/api/v1/people/wife/release", json={}).json()["strips"]
+        assert len(strips) == 1 and transport.payloads
+
+
+def test_a_retried_pile_ticket_goes_back_to_its_pile(settings):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        ticket = queue(client, "wife", "retry me", delivery="on_release")
+        store = app.state.scheduler.store
+        store.claim([ticket["id"]])
+        store.record_failure(ticket["id"], "printer off", retry_at_ms=None)
+        retried = client.post(f"/api/v1/tickets/{ticket['id']}/retry").json()
+        assert retried["status"] == "held" and retried["delivery"] == "on_release"
+        assert app.state.scheduler.run_once() == 0
+        assert transport.payloads == []
