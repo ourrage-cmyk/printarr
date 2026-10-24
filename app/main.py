@@ -802,6 +802,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def create_composed_ticket(body: ComposeCreate) -> dict[str, Any]:
         """Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
+        if body.hold and body.send_at is not None:
+            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
         if body.hold_key and not held:
             raise HTTPException(status_code=422, detail="hold_key needs hold: true")
         if body.idempotency_key:
