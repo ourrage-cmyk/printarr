@@ -1037,7 +1037,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         try:
             if body.preset == PRESET_BRIEFING:
                 # Checked without Home Assistant: the values are read when the ticket prints, not when it is queued.
-                raw_blocks = briefing_preset_blocks(body.slots or {}, None, body.sender)
+                raw_blocks = briefing_preset_blocks(body.slots or {}, None, body.sender, body.recipient)
                 checked = compose_validate(raw_blocks)
             else:
                 checked = compose_validate(body.blocks or [])

@@ -63,7 +63,7 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 
 Writing tickets, for agents:
 - Say the headline once. Use `title` or the block's heading, and do not repeat it in the body text.
-- Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- Nothing a greeting or title says is dropped: HELLO, GOOD MORNING and the rest all print. A greeting is optional; a briefing sent without one is headed by the addressee (`YANNIC MORNING`), and the preset appends the recipient's name (`GOOD MORNING YANNIC`). Only briefings get an automatic greeting. Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
 - A fun fact is a `fact` block with mood `playful`. It prints its text alone: no "Did you know" and no "FUN FACT" label is added. Do not use a `fact` block for a reminder, a note or an alert.
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
