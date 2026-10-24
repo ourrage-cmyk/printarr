@@ -21,9 +21,10 @@ from typing import Any, Literal, TypeVar
 import threading
 
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from starlette.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.web import WEB_UI
@@ -102,6 +103,51 @@ If you leave it out, a local decision model picks one when it is configured. Oth
 a fixed rule picks one.
 """
 
+
+class ApiProblem(Exception):
+    """A 4xx that tells the caller, and an agent reading the reply, how to fix the request.
+
+    The reply is {detail, hint, example}: detail says what is wrong, hint says what to do, and example
+    shows a request that works.
+    """
+
+    def __init__(self, status_code: int, detail: Any, hint: str, example: Any = None) -> None:
+        super().__init__(str(detail))
+        self.status_code = status_code
+        self.detail = detail
+        self.hint = hint
+        self.example = example
+
+
+VALIDATION_HINT = (
+    "Each field named in detail is wrong or missing. loc gives its path in the body. Valid types, "
+    "moods and templates: GET /api/v1/blocks, GET /api/v1/slot-templates, GET /api/v1/templates. "
+    "Every field and its allowed values: /openapi.json, or /docs."
+)
+HA_HINT = (
+    "Home Assistant is not set up. Save its URL and a long-lived token in settings: "
+    "PUT /api/v1/settings/ha, or use the setup wizard. Then retry."
+)
+COMPOSE_EXAMPLE = {
+    "recipient": "yannic",
+    "blocks": [
+        {"type": "greeting", "mood": "happy", "slots": {"greeting": "GOOD MORNING", "summary": "Two dogs walked."}},
+        {"type": "metric", "mood": "factual", "slots": {"label": "Body battery", "value": 72, "unit": "%"}},
+    ],
+}
+BLOCKS_HINT = (
+    "Each block is {type, mood, span, slots}. type: one of GET /api/v1/blocks. mood: one of the moods "
+    "listed there, or 'auto'. span: 1 to 3 columns, default from the type. slots: check the type's fields "
+    "with GET /api/v1/blocks/{type}/schema. problems names each wrong slot as blocks[i].slots.field."
+)
+SLOT_HINT = (
+    "Slot tickets use template 101 (briefing) or 102 (note). See GET /api/v1/slot-templates, then "
+    "GET /api/v1/templates/{id}/schema for its slots. problems names each wrong slot."
+)
+HOLD_HINT = (
+    "A held ticket waits for a release. Use hold: true alone to hold until released, or send_at alone to "
+    "print at that time, or delivery on_release to wait for a person's release. The two cannot be mixed."
+)
 
 class ComposeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -376,16 +422,24 @@ def resolve_delivery(
         return hold, "at" if send_at is not None else "now"
     if delivery == "on_release":
         if send_at is not None:
-            raise HTTPException(status_code=422, detail="delivery on_release cannot take send_at")
+            raise ApiProblem(422, "delivery on_release cannot take send_at",
+                             "on_release tickets wait for the person's release. Remove send_at, or use delivery at.",
+                             {"delivery": "on_release"})
         return True, "on_release"
     if delivery == "at":
         if send_at is None:
-            raise HTTPException(status_code=422, detail="delivery at needs send_at")
+            raise ApiProblem(422, "delivery at needs send_at",
+                             "delivery at prints at send_at. Give send_at as local ISO 8601, for example 2026-10-30T10:00:00.",
+                             {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
         if hold:
-            raise HTTPException(status_code=422, detail="delivery at cannot be held")
+            raise ApiProblem(422, "delivery at cannot be held",
+                             "A scheduled ticket prints at its time and is not held. Drop hold, or drop send_at and use hold.",
+                             {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
         return False, "at"
     if send_at is not None:
-        raise HTTPException(status_code=422, detail="delivery now cannot take send_at; use delivery at")
+        raise ApiProblem(422, "delivery now cannot take send_at",
+                         "delivery now prints straight away. For a later time use delivery at with send_at.",
+                         {"delivery": "at", "send_at": "2026-10-30T10:00:00"})
     return hold, "now"
 
 
@@ -659,7 +713,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 on_model_result,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from None
+            raise ApiProblem(422, str(exc), "template must be 'auto' or a template id from GET /api/v1/templates.") from None
 
     def home_assistant() -> HAClient | None:
         url = store.get_setting("ha_url") or ""
@@ -730,23 +784,24 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not body.hold:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
                 return existing
         if not is_slot_template(body.template):
-            raise HTTPException(status_code=422, detail=f"template {body.template} is not a slot template")
+            raise ApiProblem(422, f"template {body.template} is not a slot template", SLOT_HINT,
+                             {"template": 101, "recipient": "yannic", "slots": {"greeting": "Good morning, Yannic"}})
         try:
             checked = validate_slots(body.template, body.slots)
         except SlotProblems as exc:
-            raise HTTPException(status_code=422, detail=exc.problems) from None
+            raise ApiProblem(422, exc.problems, SLOT_HINT) from None
         now = datetime.now(settings.tzinfo)
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
         if body.blocks and home_assistant() is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
         try:
             block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
         except HAError as exc:
@@ -792,9 +847,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a ticket. The template is chosen now, so printing needs no more work."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not body.hold:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
@@ -802,7 +857,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         choice = choose(body)
         message = prepare_text(body)
         if body.blocks and home_assistant() is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
         render_started = time.perf_counter()
         try:  # reject now rather than queue a ticket that cannot print
             receipt = Receipt(
@@ -866,9 +921,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first."""
         held, delivery = resolve_delivery(body.delivery, body.send_at, body.hold)
         if body.hold and body.send_at is not None:
-            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+            raise ApiProblem(422, "hold and send_at cannot be combined", HOLD_HINT, {"hold": True})
         if body.hold_key and not held:
-            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+            raise ApiProblem(422, "hold_key needs hold: true", HOLD_HINT, {"hold": True, "hold_key": "kitchen-briefing"})
         if body.idempotency_key:
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
@@ -876,7 +931,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         try:
             checked = compose_validate(body.blocks)
         except BlockProblem as exc:
-            raise HTTPException(status_code=422, detail=exc.problems) from None
+            raise ApiProblem(422, exc.problems, BLOCKS_HINT, COMPOSE_EXAMPLE) from None
         render_started = time.perf_counter()
         try:  # draw the strips now, so a queued ticket always prints; notes say what was shortened
             lines, notes = compose_render(checked, None)
@@ -945,7 +1000,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         """
         client = home_assistant()
         if client is None:
-            raise HTTPException(status_code=422, detail="Home Assistant is not configured")
+            raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
 
         found = insight_cache.get(person, limit, lambda: collect(person, client.numeric_history, limit))
         return [asdict(item) for item in found]
@@ -1283,6 +1338,20 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def get_metrics() -> dict[str, Any]:
         """Counters since start: tickets printed, failures, dead letters, interrupted jobs, pauses."""
         return {**metrics.snapshot(), "queue_paused": scheduler.paused_reason}
+
+    @app.exception_handler(ApiProblem)
+    async def _api_problem(_: Request, exc: ApiProblem) -> JSONResponse:
+        body: dict[str, Any] = {"detail": exc.detail, "hint": exc.hint}
+        if exc.example is not None:
+            body["example"] = exc.example
+        return JSONResponse(status_code=exc.status_code, content=body)
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": jsonable_encoder(exc.errors()), "hint": VALIDATION_HINT},
+        )
 
     app.include_router(api)
     app.state.watch_printer = watch_printer  # tests and the heartbeat share this check
