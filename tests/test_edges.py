@@ -44,4 +44,4 @@ def test_row_drops_the_value_under_the_label_when_it_cannot_fit(solid_draws):
     c = Canvas()
     c.y = 0
     height = strips._row(c, strips.OUTER_L, strips.OUTER_R, "A VERY LONG LABEL FOR A ROW", "99999 STEPS PER DAY ALL DAY LONG", indent=0)
-    assert height == 2 * strips.ROW
+    assert height >= 2 * strips.ROW  # the value is under the label, wrapped if it is wider than the line

@@ -57,6 +57,8 @@ class MetricRow(_Strict):
 class MetricSlots(MetricRow):
     series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Sparkline, oldest first.")
     range: str | None = Field(default=None, max_length=8, description="The time the sparkline covers, such as 24H. Default 24H.")
+    scope: str | None = Field(default=None, pattern="^(inside|outside)$", description="Where the reading is taken: inside or outside. Printed as IN or OUT after the label.")
+    as_of: str | None = Field(default=None, max_length=16, description="When the reading was taken, for example 08:15. Printed as AS OF 08:15.")
 
 
 class MetricRowsSlots(_Strict):
@@ -99,6 +101,7 @@ class AlertSlots(_Strict):
     label: str = Field(min_length=1, max_length=40, description="Short, for example WATER LEAK.")
     paragraph: str = Field(min_length=1, max_length=400)
     action: str | None = Field(default=None, min_length=1, max_length=40)
+    sign_off: str | None = Field(default=None, alias="from", min_length=1, max_length=20, description="Who the alert is from, for example Allyson. Printed at the bottom; the ticket's sender is used when omitted.")
 
 
 class ChecklistItem(_Strict):
@@ -373,6 +376,13 @@ def note_card_lines(message: str, sender: str | None, title: str | None = None) 
     return [ReceiptLine(message, raster=line.raster) for line in lines]  # the caption keeps the text for the log
 
 
+def _signed(block: Mapping[str, Any], sender: str | None) -> Mapping[str, Any]:
+    """A card that carries someone's words is never anonymous: an alert without a sign-off takes the ticket's sender."""
+    if block.get("type") == "alert" and sender and not block.get("slots", {}).get("from"):
+        return {**block, "slots": {**block["slots"], "from": sender}}
+    return block
+
+
 def ticket_lines(
     slots: Mapping[str, Any],
     client: HAClient | None,
@@ -381,7 +391,7 @@ def ticket_lines(
 ) -> list[ReceiptLine]:
     """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
     if "blocks" in slots:
-        blocks = slots["blocks"]
+        blocks = [_signed(block, sender) for block in slots["blocks"]]
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
     elif template_id == BRIEFING or "metrics" in slots:
