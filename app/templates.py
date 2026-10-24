@@ -105,9 +105,40 @@ class Deadline:
         return min(timeout, left)
 
 
-def rule_choice(recipient: str, title: str | None) -> Choice:
-    """Deterministic fallback. Titled tickets get the first template with a tall title."""
-    options = templates_for(recipient)
+# Words the rules read when the decision model has no usable answer. First match wins; no match is a note.
+RULE_KINDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("alert", re.compile(r"\b(urgent|urgently|alarm|alert|leak|leaking|warning|critical|emergency|smoke|flood|flooding|carbon monoxide)\b|\b(left|is|been) open\b")),
+    ("morning", re.compile(r"^\s*(good morning|morning\b|today\b)")),
+    ("evening", re.compile(r"\b(wrap[- ]?up|recap|summary|good ?night|gute nacht|sleep tight|rest well|day is done)\b")),
+    ("list", re.compile(r"\b(shopping|todo|to do|to-do|groceries|packing list|list)\b")),
+)
+# A kind a recipient has no text template for is printed as the nearest kind that has one.
+KIND_FALLBACK: dict[str, tuple[str, ...]] = {"morning": ("list", "note")}
+
+
+def rule_kind(message: str) -> str:
+    """The kind the rules pick from the words alone. A list is also a message with two or more commas."""
+    for kind, pattern in RULE_KINDS:
+        if pattern.search(message.lower()):
+            return kind
+    if message.count(",") >= 2:
+        return "list"
+    return "note"
+
+
+def templates_of_kind(options: Sequence[Template], kind: str) -> tuple[Template, ...]:
+    """The templates for a kind, or for the nearest kind the recipient has. Empty only if the group has none."""
+    for wanted in (kind, *KIND_FALLBACK.get(kind, ())):
+        found = tuple(t for t in options if t.kind == wanted)
+        if found:
+            return found
+    return ()
+
+
+def rule_choice(recipient: str, title: str | None, message: str = "") -> Choice:
+    """Deterministic fallback. The words pick the kind; a titled ticket gets that kind's first tall-title template."""
+    text = tuple(t for t in templates_for(recipient) if t.design is None)  # image designs are explicit only
+    options = templates_of_kind(text, rule_kind(message))
     template = options[0]
     if title:
         template = next((t for t in options if t.tall_title), options[0])
@@ -155,7 +186,7 @@ def resolve_choice(
             logger.warning("decision model unusable, using rules: %s", exc)
             if on_model_result:
                 on_model_result(exc)
-    return rule_choice(recipient, title)
+    return rule_choice(recipient, title, message)
 
 
 class ModelError(RuntimeError):
@@ -213,7 +244,7 @@ QUESTIONS: dict[str, str] = {
     "is_morning_briefing": "Is this a morning briefing or plan for the day?",
     "is_evening_briefing": "Is this an evening wrap-up or summary of the day?",
     "is_short_note": "Is this a short personal note?",
-    "is_list": "Is this a list of items?",
+    "is_list": "Is this a list of items, such as shopping or things to do?",
     "is_personal": "Is this a personal or affectionate message?",
     "has_numbers_or_stats": "Does this contain numbers, times or statistics?",
 }
@@ -227,7 +258,7 @@ KIND_QUESTIONS: dict[str, tuple[str, ...]] = {
     "alert": ("is_alert", "is_urgent"),
     "morning": ("is_morning_briefing",),
     "evening": ("is_evening_briefing",),
-    "list": ("is_list", "has_numbers_or_stats"),
+    "list": ("is_list",),
     "note": ("is_short_note", "is_personal"),
 }
 MIN_SCORE = 0.5  # below this, no template is trusted and the rules choose
@@ -289,11 +320,11 @@ class SystemOneModel:
         deadline: Deadline | None = None,
     ) -> tuple[int, list[str]]:
         scores = self.scores(recipient, title, message, deadline)
-        for kind, questions in KIND_QUESTIONS.items():
+        for kind, questions in KIND_QUESTIONS.items():  # priority order: the first kind that reaches MIN_SCORE wins
             if max(scores[q] for q in questions) >= MIN_SCORE:
-                chosen = next((t for t in options if t.kind == kind), None)
-                if chosen is None:
+                pool = templates_of_kind(options, kind)
+                if not pool:
                     raise ValueError(f"no {kind} template for this recipient")
                 # The template's own default decorations; resolve_choice keeps the ones it allows.
-                return chosen.id, list(chosen.default)
+                return pool[0].id, list(pool[0].default)
         raise ValueError(f"no kind scored at least {MIN_SCORE}")
