@@ -117,8 +117,11 @@ def render_ticket_lines(
         from app.compose import note_card_lines  # imported here: app.compose imports app.receipt
 
         return list(extra) or note_card_lines(str(ticket["message"]), sender_label(ticket), str(ticket["title"]) if ticket["title"] else None)
-    decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
-    return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
+    # Every other ticket is a message card in the shared shell, so no ticket prints as plain text.
+    from app.compose import note_card_lines  # imported here: app.compose imports app.receipt
+
+    title = str(ticket["title"]) if ticket["title"] else None
+    return note_card_lines(str(ticket["message"]), sender_label(ticket), title) + list(extra)
 
 
 def wrap(text: str, width: int) -> list[str]:
