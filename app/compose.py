@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from app.ha import HAClient, HAError
 from app.receipt import Line as ReceiptLine
+from app.receipt import format_number
 from app.render import strips as R
 from app.slots import fetch_values, slot_lines
 
@@ -233,7 +234,7 @@ def fetch_entities(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
             continue
         try:
             number = float(client.state(entity))
-            values[entity] = str(int(number)) if number.is_integer() else f"{number:.1f}"
+            values[entity] = format_number(number)
         except (HAError, ValueError, TypeError) as exc:
             logger.warning("entity %s unavailable: %s", entity, exc)
             values[entity] = None
