@@ -15,7 +15,7 @@ waiting items in their own pile, and prints on the right moment.
 
 ## What it does
 
-- **Two recipients**, `yannic` and `wife` (Allyson). Each has a pile of waiting items that
+- **Two recipients**, `yannic` and `wife`, shown with the names set in the setup wizard. Each has a pile of waiting items that
   prints as one continuous piece of paper, cut once at the end, when Home Assistant releases it:
   in the morning when the phone is unplugged, and in the evening when someone arrives home.
   The briefing goes on top and the rest follow in the order they were queued.
