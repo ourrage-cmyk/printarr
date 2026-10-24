@@ -52,6 +52,7 @@ from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
     note_card_lines,
+    ticket_lines,
     plain_message,
     BLOCKS as compose_blocks,
     BlockProblem,
@@ -67,7 +68,6 @@ from app.slots import (
     SlotProblems,
     autofill,
     is_slot_template,
-    slot_lines,
 )
 from app.slots import schema as slot_schema
 from app.slots import validate as validate_slots
@@ -830,7 +830,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         render_started = time.perf_counter()
         try:  # check the layout now, so a queued ticket always prints
             encode(
-                slot_lines(filled) + block_lines,
+                ticket_lines(filled, None, template_id=body.template, sender=body.sender) + block_lines,
                 feed=template_by_id(body.template).feed,
                 raster_mode=settings.raster_mode,
             )

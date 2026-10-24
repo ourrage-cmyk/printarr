@@ -67,17 +67,35 @@ class Canvas:
             self.set_px(x + dx, y + dy)
 
     # ---- text --------------------------------------------------------------------------
-    def text(self, x: int, y: int, text: str, scale: int = 2) -> int:
-        """Dot-matrix text, each glyph dot is scale x scale. Returns the advance width."""
+    def glyph_dots(self, x: int, y: int, text: str, scale: int) -> list[tuple[int, int, int, int]]:
+        """The ink squares of a line of text, as (x, y, w, h). Used to draw it and to erase it again.
+
+        Scales that are a multiple of 3 use the printed dot style: each dot is a 2 x 2 square on a
+        3-dot pitch (design system tokens, dot style). Other scales draw solid dots.
+        """
+        squares: list[tuple[int, int, int, int]] = []
         cx = x
         for ch in text:
             glyph = GLYPHS.get(ch.upper(), GLYPHS["?"])
             for r in range(7):
                 for c in range(5):
-                    if glyph[r][c] == "#":
-                        self.fill_rect(cx + c * scale, y + r * scale, scale, scale)
+                    if glyph[r][c] != "#":
+                        continue
+                    ox, oy = cx + c * scale, y + r * scale
+                    if scale % 3 == 0:
+                        for i in range(scale // 3):
+                            for j in range(scale // 3):
+                                squares.append((ox + i * 3, oy + j * 3, 2, 2))
+                    else:
+                        squares.append((ox, oy, scale, scale))
             cx += 6 * scale
-        return cx - x
+        return squares
+
+    def text(self, x: int, y: int, text: str, scale: int = 2) -> int:
+        """Dot-matrix text. Returns the advance width."""
+        for sx, sy, w, h in self.glyph_dots(x, y, text, scale):
+            self.fill_rect(sx, sy, w, h)
+        return 6 * scale * len(text)
 
     def text_in(self, x0: int, x1: int, y: int, text: str, scale: int = 2) -> None:
         self.text(x0 + (x1 - x0 - text_width(text, scale)) // 2, y, text, scale)
