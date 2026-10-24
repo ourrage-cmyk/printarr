@@ -66,6 +66,7 @@ ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("print_ms", "INTEGER"),
     ("choice_source", "TEXT"),
     ("model_scores", "TEXT NOT NULL DEFAULT ''"),
+    ("idempotency_key", "TEXT"),
 )
 
 
@@ -138,6 +139,11 @@ class TicketStore:
             for name, definition in ADDED_COLUMNS:
                 if name not in have:
                     conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
+            # One ticket per key. Rows without a key are not constrained.
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS tickets_idempotency "
+                "ON tickets (idempotency_key) WHERE idempotency_key IS NOT NULL"
+            )
 
     def create(
         self,
@@ -161,36 +167,55 @@ class TicketStore:
         render_ms: int | None = None,
         choice_source: str | None = None,
         model_scores: str = "",
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once.
 
         A ticket from one recipient's user to the other is an inbox item: it is 'unread' until
         it is printed in the evening rundown or seen.
         """
+        if idempotency_key:
+            existing = self.get_by_key(idempotency_key)
+            if existing is not None:
+                return existing
         ticket_id = uuid.uuid4().hex
         now = now_ms()
         status = "held" if held else "pending"
         inbox_state = "unread" if from_user and to_user else None
         with closing(self._connect()) as conn:
-            conn.execute(
+            try:
+                conn.execute(
                 """
                 INSERT INTO tickets (id, recipient, sender, title, message, status, hold_key,
                                      send_at_ms, next_attempt_ms, template_id, text_state,
                                      blocks_json, decorations, selection, created_at_ms, updated_at_ms,
                                      kind, tone, from_user, to_user, inbox_state, render_ms,
-                                     choice_source, model_scores)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     choice_source, model_scores, idempotency_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
-                    choice_source or selection, model_scores,
+                    choice_source or selection, model_scores, idempotency_key,
                 ),
             )
+            except sqlite3.IntegrityError:
+                # A concurrent request with the same key won the race: return its ticket.
+                existing = self.get_by_key(idempotency_key) if idempotency_key else None
+                if existing is None:
+                    raise
+                return existing
         result = self.get(ticket_id)
         assert result is not None
         return result
+
+    def get_by_key(self, idempotency_key: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT * FROM tickets WHERE idempotency_key = ?", (idempotency_key,)
+            ).fetchone()
+        return _to_dict(row) if row else None
 
     def get(self, ticket_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as conn:

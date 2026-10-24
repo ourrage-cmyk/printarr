@@ -141,6 +141,16 @@ class TicketCreate(BaseModel):
         default=False,
         description="Keep the ticket until POST /tickets/{id}/release or /holds/{hold_key}/release.",
     )
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=120,
+        description=(
+            "Makes the request safe to repeat, for example after a timeout. A second request "
+            "with the same key returns the first ticket and prints nothing new. "
+            "Use one key per logical ticket, such as morning:yannic:2026-10-26."
+        ),
+        examples=["morning:yannic:2026-10-26"],
+    )
     hold_key: str | None = Field(
         default=None,
         max_length=40,
@@ -515,6 +525,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
         if body.hold_key and not body.hold:
             raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+        if body.idempotency_key:
+            existing = store.get_by_key(body.idempotency_key)
+            if existing is not None:
+                return existing
         choice = choose(body)
         message = prepare_text(body)
         if body.blocks and home_assistant() is None:
@@ -556,6 +570,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             selection=choice.selection,
             held=body.hold,
             hold_key=body.hold_key,
+            idempotency_key=body.idempotency_key,
         )
 
     @api.post("/tickets/{ticket_id}/release", response_model=TicketOut, tags=["tickets"])
