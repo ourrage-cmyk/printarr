@@ -1,7 +1,12 @@
 # rest_command entries for printarr. Paste under rest_command: in configuration.yaml,
-# or into a package file. Replace PRINTARR_URL with the printarr address.
+# or into a package. Replace PRINTARR_URL with the printarr address.
 #
-# Every POST sends a JSON body. Templates are rendered by HA when the automation runs.
+# Delivery, for every ticket:
+#   now         print and cut at once (default when no send_at is given)
+#   at          print at send_at (local time, no offset). Cannot be combined with delivery on_release.
+#   on_release  wait in the person's pile; it prints with that person's next release.
+#
+# Strips: printarr prints one strip per release for that person only, and cuts after each strip.
 
 rest_command:
   printarr_create_ticket:
@@ -17,17 +22,17 @@ rest_command:
         "tone": "{{ tone | default('neutral') }}",
         "template": "auto",
         "sender": "home-assistant",
+        {% if delivery is defined and delivery %}"delivery": "{{ delivery }}",{% endif %}
+        {% if send_at is defined and send_at %}"send_at": "{{ send_at }}",{% endif %}
         {% if title is defined and title %}"title": {{ title | tojson }},{% endif %}
         {% if from_user is defined and from_user %}"from_user": "{{ from_user }}",{% endif %}
         {% if to_user is defined and to_user %}"to_user": "{{ to_user }}",{% endif %}
-        {% if hold_key is defined and hold_key %}"hold": true, "hold_key": "{{ hold_key }}",{% endif %}
         {% if idempotency_key is defined and idempotency_key %}"idempotency_key": "{{ idempotency_key }}",{% endif %}
         {% if blocks is defined and blocks %}"blocks": {{ blocks | tojson }},{% endif %}
         "text_state": "formatted"
       }
 
-  # Briefings and notes from slots (template 101 Briefing, 102 Note). Accepts hold, hold_key,
-  # idempotency_key and blocks, so a held briefing can be prepared before the phone is unplugged.
+  # Briefings and notes from slots (template 101 Briefing, 102 Note).
   printarr_create_slot_ticket:
     url: "http://PRINTARR_URL/api/v1/tickets/slots"
     method: POST
@@ -41,11 +46,21 @@ rest_command:
         "kind": "{{ kind | default('morning') }}",
         "tone": "{{ tone | default('neutral') }}",
         "slots": {{ slots | default({}) | tojson }},
-        {% if hold_key is defined and hold_key %}"hold": true, "hold_key": "{{ hold_key }}",{% endif %}
+        "delivery": "{{ delivery | default('on_release') }}",
         {% if idempotency_key is defined and idempotency_key %}"idempotency_key": "{{ idempotency_key }}",{% endif %}
         {% if blocks is defined and blocks %}"blocks": {{ blocks | tojson }},{% endif %}
         "from_user": null
       }
+
+  # One person's strip: everything in their pile, printed and cut in strips.
+  # trigger is one of morning, evening, arrival, request.
+  printarr_release_person:
+    url: "http://PRINTARR_URL/api/v1/people/{{ person }}/release"
+    method: POST
+    content_type: "application/json"
+    timeout: 30
+    payload: >-
+      {"trigger": "{{ trigger | default('request') }}"}
 
   printarr_release_hold:
     url: "http://PRINTARR_URL/api/v1/holds/{{ hold_key }}/release"
@@ -54,10 +69,5 @@ rest_command:
 
   printarr_cancel_ticket:
     url: "http://PRINTARR_URL/api/v1/tickets/{{ ticket_id }}/cancel"
-    method: POST
-    timeout: 10
-
-  printarr_release_ticket:
-    url: "http://PRINTARR_URL/api/v1/tickets/{{ ticket_id }}/release"
     method: POST
     timeout: 10
