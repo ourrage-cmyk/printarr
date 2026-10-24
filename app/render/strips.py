@@ -566,7 +566,10 @@ def _fit_title(text: str, max_w: int) -> tuple[int, list[str], bool]:
         lines.append(cur)
     lines = lines[:MAX_TITLE_LINES]
     last = lines[-1]
-    lines[-1] = (last[: per_line - 3] if len(last) > per_line - 3 else last).rstrip() + "..."
+    kept = last.split()
+    while len(kept) > 1 and len(" ".join(kept)) + 3 > per_line:
+        kept.pop()  # the ellipsis follows a whole word, never half of one
+    lines[-1] = " ".join(kept)[: per_line - 3].rstrip() + "..."
     return scale, lines, True
 
 
@@ -878,14 +881,23 @@ def span_x(col: int, span: int, left: int = OUTER_L, right: int = OUTER_R) -> tu
     return x0, x0 + span * cell + (span - 1) * COL_GAP
 
 
-def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[list[Block]]:
-    """Splits an ordered list into strips: at most max_blocks each, and a greeting starts a new strip."""
+MAX_STRIP_H = 1100  # dots of cards on one strip, about 6 in; a longer pile continues on the next strip
+
+
+def _too_tall(blocks: Sequence[Block]) -> bool:
+    rows, _ = layout(blocks)
+    return sum(max(p.units for p in row) * UNIT_H for row in rows) > MAX_STRIP_H
+
+
+def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS * 3) -> list[list[Block]]:
+    """Splits an ordered list into strips: a strip is cut when it would pass MAX_STRIP_H dots (or max_blocks blocks),
+    and a greeting starts a new strip."""
     strips: list[list[Block]] = []
     cur: list[Block] = []
     for block in blocks:
         validate(block)
     for block in prepare(blocks):  # a headline and what follows it are one card, so one block
-        if cur and (len(cur) >= max_blocks or block.type == "greeting" or block.type == "group" or cur[-1].type == "group" or block.slots.get("_cont")):
+        if cur and (len(cur) >= max_blocks or _too_tall([*cur, block]) or block.type == "greeting" or block.type == "group" or cur[-1].type == "group" or block.slots.get("_cont")):
             strips.append(cur)
             cur = []
         cur.append(block)
@@ -1198,11 +1210,18 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
     height = row_units * UNIT_H - GAP_V
     for p in row:
         # A graph takes the spare height of its card: the card height less padding, heading and footer.
-        card = Card(c, p.block.mood, plot_h=GRAPH_PLOT)
+        slots = p.slots
+        slack = max(0, height - 2 * PAD_V - p.content_h)  # a chart takes the spare height of its card, so no gap floats under it
+        plot = GRAPH_PLOT
+        if p.block.type == "graph":
+            plot += slack
+        elif p.block.type == "metric" and slots.get("series"):
+            slots = {**slots, "_extra": int(slots.get("_extra") or 0) + slack}
+        card = Card(c, p.block.mood, plot_h=plot)
         c.y = top + PAD_V
         if p.block.type == "tip" or (p.block.type == "greeting" and not p.slots.get("summary")):
             c.y = top + max(PAD_V, (height - p.content_h) // 2)  # one line or one title: centred in its card
-        _draw_block(card, p.block.type, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
+        _draw_block(card, p.block.type, slots, p.x0 + PAD_H, p.x1 - PAD_H)
         mood = p.block.mood
         c.round_box(p.x0, top, p.x1, top + height, RADIUS_BY_MOOD.get(mood, RADIUS), STROKE_BY_MOOD.get(mood, STROKE))
     c.y = top + row_units * UNIT_H
@@ -1227,8 +1246,8 @@ def render_strip_with_notes(
 ) -> tuple[Bitmap, list[str]]:
     if not blocks:
         raise ValueError("a strip needs at least one block")
-    if len(blocks) > MAX_BLOCKS:
-        raise ValueError(f"a strip holds at most {MAX_BLOCKS} blocks")
+    if len(blocks) > MAX_BLOCKS * 3:
+        raise ValueError(f"a strip holds at most {MAX_BLOCKS * 3} blocks")
     rows, notes = layout(prepare(blocks))
     c = Canvas()
     c.y = margin_top

@@ -435,7 +435,7 @@
           "tickets"
         ],
         "summary": "Create Composed Ticket",
-        "description": "Queue a composed ticket: blocks stacked in order on one card shell. Blocks are checked first.",
+        "description": "Queue a composed ticket: blocks as separate cards on a three-column grid. Blocks are checked first.",
         "operationId": "create_composed_ticket_api_v1_tickets_compose_post",
         "requestBody": {
           "content": {

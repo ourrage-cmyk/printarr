@@ -172,3 +172,22 @@ def test_every_other_block_is_its_own_tile_and_small_ones_share_a_row():
     assert [b.type for b in strips.prepare(blocks)] == ["tip", "fact", "message"]
     rows, _ = strips.layout(strips.prepare(blocks))
     assert [len(r) for r in rows] == [2, 1]
+
+
+def test_title_ellipsis_follows_a_whole_word():
+    scale, lines = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 440)
+    assert lines[-1].endswith("...") and all(w.rstrip(".") in "SHOPPING LIST FOR THE WEEKEND BARBECUE".split() or w == "" for w in lines[-1].replace("...", "").split())
+
+
+def test_a_graph_fills_its_card_down_to_the_axis():
+    from app.render.canvas import Canvas
+
+    series = [1, 2, 3, 2, 4, 3]
+    rows, _ = strips.layout([Block("graph", {"title": "T", "series": series})])
+    p = rows[0][0]
+    height = p.units * strips.UNIT_H - strips.GAP_V
+    c = Canvas()
+    c.y = 0
+    strips._draw_row(c, rows[0])
+    assert c.y == p.units * strips.UNIT_H  # drawn at the card's height
+    assert height - 2 * strips.PAD_V >= p.content_h
