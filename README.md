@@ -130,7 +130,8 @@ The main routes:
 | `GET` | `/api/v1/printer`, `/printer/self-check` | Printer status (the self-check prints nothing) |
 | `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, liveness, and the build (`version`, `git_sha`) |
 | `POST` | `/api/v1/notify` | Send a Telegram message to Yannic (one a minute per caller) |
-| `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs, and the PNG of one ticket as sent to the printer |
+| `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs, and the PNG of one ticket as sent to the printer (a ticket in a piece shows the whole piece) |
+| `GET` | `/api/v1/prints/{code}` | Finds a printed piece and its tickets by the code printed under the cut, next to the print time |
 | `GET` / `POST` | `/api/v1/backup/export`, `/backup/import` | Download or restore the database |
 
 Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.

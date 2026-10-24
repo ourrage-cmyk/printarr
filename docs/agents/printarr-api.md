@@ -112,6 +112,8 @@ Printarr keeps a PNG of every ticket as it reached the printer: each printed tic
 
 - `GET /api/v1/ticket-images?limit=50`: recent tickets that have an image, newest first. Each row gives `id`, `kind`, `template_id`, `template`, `recipient`, `status`, `created_at`, `printed_at` and `image_url`. Up to 250 are kept, and older ones are deleted.
 - `GET /api/v1/tickets/{id}/image`: the PNG (`image/png`) for one ticket. A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
+- `GET /api/v1/prints/{code}`: finds a printed piece by the code printed under its cut (4 to 32 hex characters). Returns `print_code`, `printed_at`, `strip_id`, `image_url` and the `tickets` on the piece (`id`, `recipient`, `kind`, `tone`, `title`, `message`, `status`, `printed_at`). Tickets and the image list carry `print_code`. 404 when nothing printed has that code, 422 when it is not hex.
+- The image of a ticket printed in a piece is the whole piece. Every print ends with the print time and a 6-character code in small text below the last ticket, inside the space fed for the cut, never in a ticket picture.
 - The printer log names the image path when a print fails, so a failure can be opened straight away.
 
 To diagnose a ticket that looks wrong: find its id in the log or the ticket list, fetch the image, and compare it with the template and the blocks in `GET /api/v1/tickets/{id}`.
