@@ -120,18 +120,15 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 
 ## Settings and the printer
 
-- The decision model, Home Assistant and Telegram settings are saved in the database. Change
-  them in the web page; they survive upgrades and rebuilds.
-- `PRINTARR_PRINTER_HOST` in the YAML is only the starting default for the setup wizard. Once
-  setup is finished, the printer address saved by the wizard wins, so changing the YAML does
-  nothing. There is no screen yet to change the printer address after setup (known gap, see the
-  Monday note below).
-- Values in the YAML are read only until setup is finished. After that the web page wins.
+- Every setting is saved by the setup wizard in the data folder: the printer, Home Assistant,
+  the model server, Telegram, names and timezone. Change them later at `http://<nas-ip>:8000/setup`
+  with the setup code from the log. They survive upgrades and rebuilds.
+- The YAML holds no settings, so there is nothing to edit there for the printer. To move from the
+  simulator to the real printer, change the printer address at `/setup`.
 
 ## Nightly backups
 
-- Turn them off with `PRINTARR_BACKUP: "off"`, or change the hour with `PRINTARR_BACKUP_HOUR`
-  (0 to 23, local time), and how many to keep with `PRINTARR_BACKUP_KEEP`.
+- They run at 03:00 local time and keep the last seven copies. These are fixed for now.
 - Backups sit on the same SSD as the data. They protect against a bad upgrade or a damaged
   database, not against losing the SSD. Copy the `backups/` folder to another disk now and then.
 

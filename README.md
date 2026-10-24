@@ -71,34 +71,10 @@ ticket arrives, so release and print never wait on it.
 
 ## Configuration
 
-Non-secret settings are environment variables with the `PRINTARR_` prefix. They are starting
-defaults: once the setup wizard has saved a value (printer host and port, timezone, model
-server), the saved value wins. Secrets (Home Assistant token, Telegram token) have no
-environment variable. They are typed into the wizard and stored in the database.
+All settings are set in the setup wizard at `/setup`, and saved in the data folder. The compose file
+holds only the image, memory, CPUs, ports and storage. Secrets (Home Assistant token, Telegram
+token) are typed into the wizard and stored in the database, never in environment variables.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PRINTARR_PRINTER_MODE` | `tcp` | `tcp` sends to the printer. `file` writes `.bin` files to `PRINTARR_OUTPUT_DIR` (used for the simulator and tests). |
-| `PRINTARR_PRINTER_HOST` | _(empty)_ | Printer IP or hostname in `tcp` mode. |
-| `PRINTARR_PRINTER_PORT` | `9100` | Raw TCP port. |
-| `PRINTARR_RASTER_MODE` | `gs_l` | Image command. `gs_l` is GS ( L function 112. `gs_v0` is the obsolete GS v 0, for a unit that rejects fn 112. |
-| `PRINTARR_PRINTER_TIMEOUT` | `5` | Seconds to wait for connect and send. |
-| `PRINTARR_TIMEZONE` | `Europe/London` | Used for naive `send_at` values and for the date on the receipt. |
-| `PRINTARR_DB_PATH` | `/data/printarr.db` | SQLite database file. |
-| `PRINTARR_OUTPUT_DIR` | `/data/output` | Where `file` mode writes jobs. |
-| `PRINTARR_POLL_INTERVAL` | `5` | Seconds between scheduler checks. |
-| `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is marked `failed`. |
-| `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
-| `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. Epson TRG: 512 dots, Font A 12 dots wide, so 42 columns. |
-| `PRINTARR_LLM_BASE_URL` | _(empty)_ | Starting default for the wizard: an OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. After setup, the saved value wins. |
-| `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model. It is sent to `/v1/systemone` (without the `/v1` in the base URL) to score questions about the message. A template is picked from the highest score, at least 0.5, else the rules choose. Decorations come from the template. |
-| `PRINTARR_LLM_TEXT_MODEL` | `granite4.2:3b` | Text model for paragraphs (used later). |
-| `PRINTARR_LLM_ENABLED` | `on` | The decision model is used when a base URL is set. Set to `off` to disable it. |
-| `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
-| `PRINTARR_SCHEDULER` | `on` | Set to `off` to disable the background printing worker. |
-| `PRINTARR_BACKUP` | `on` | Nightly copy of the database to `backups/` next to it. |
-| `PRINTARR_BACKUP_HOUR` | `3` | Local hour (0 to 23) for the nightly copy. |
-| `PRINTARR_BACKUP_KEEP` | `7` | Nightly copies kept. Older ones are deleted. |
 
 ## Data, upgrades and backups
 

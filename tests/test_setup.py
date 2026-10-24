@@ -226,3 +226,14 @@ def test_fill_secrets_keeps_saved_values_only_when_blank(wizard):
     assert kept.ha_token == SECRET
     replaced = setup_flow.fill_secrets(SetupValues(ha_token="new-token"), store)
     assert replaced.ha_token == "new-token"
+
+
+def test_compose_files_hold_no_settings():
+    """The YAML is image, memory, CPUs, ports and storage only. Settings belong to the wizard."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    for name in ("docker-compose.yml", "docker-compose.dev.yml"):
+        text = (root / name).read_text()
+        assert "environment:" not in text, name
+        assert "PRINTARR_" not in text, name
