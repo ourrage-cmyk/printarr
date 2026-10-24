@@ -1,0 +1,220 @@
+# OpenAPI tool definition for Hermes: the printarr operations Hermes may call.
+# Generated subset of docs/openapi.json. Keep the schemas short; the full API is in docs/openapi.json.
+#
+# Status of each operation is marked:
+#   [live]     exists on main today
+#   [planned]  target shape, waiting on the API-core schema work
+
+openapi: 3.1.0
+info:
+  title: printarr for Hermes
+  version: 0.2.0
+  description: >
+    Send receipts to Yannic (yannic) or Allyson (wife), list and cancel tickets, read history,
+    and pick briefing entities. There is no authentication; the API runs on the home LAN.
+servers:
+  - url: http://PRINTARR_URL/api/v1
+paths:
+  /insights/entities:
+    get:
+      operationId: listInsightEntities
+      summary: "[live] Numeric Home Assistant entities for a briefing, most notable first"
+      parameters:
+        - { name: person, in: query, required: true, schema: { $ref: "#/components/schemas/Recipient" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 30, default: 12 } }
+      responses:
+        "200":
+          description: Ranked candidates. Cached for five minutes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InsightEntity" }
+        "422": { description: Home Assistant is not configured }
+
+  /tickets:
+    get:
+      operationId: listTickets
+      summary: "[live] List tickets, optionally by status or recipient"
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/Status" } }
+        - { name: recipient, in: query, schema: { $ref: "#/components/schemas/Recipient" } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      responses:
+        "200":
+          description: Tickets, newest first.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
+    post:
+      operationId: createTicket
+      summary: "[live] Queue a ticket. Template is chosen now; printing happens when due."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketCreate" }
+      responses:
+        "201":
+          description: The queued ticket. A repeated idempotency_key returns the first ticket.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "422": { description: Invalid request, for example hold with send_at }
+
+  /tickets/{ticket_id}/cancel:
+    post:
+      operationId: cancelTicket
+      summary: "[live] Cancel a pending ticket"
+      parameters:
+        - { name: ticket_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The cancelled ticket }
+
+  /holds/{hold_key}/release:
+    post:
+      operationId: releaseHold
+      summary: "[live] Release every held ticket with this key. Safe to repeat."
+      parameters:
+        - { name: hold_key, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Released tickets, or an empty list.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
+
+  /log:
+    get:
+      operationId: readHistory
+      summary: "[live] Past tickets with kind, tone, template and timings"
+      parameters:
+        - { name: recipient, in: query, schema: { $ref: "#/components/schemas/Recipient" } }
+        - { name: since_hours, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
+      responses:
+        "200":
+          description: Tickets, oldest first.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Ticket" } }
+
+  /templates:
+    get:
+      operationId: listTemplates
+      summary: "[live] Templates by recipient group. Use before creating a ticket."
+      responses:
+        "200":
+          description: Template list.
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+
+  /templates/{template_id}/schema:
+    get:
+      operationId: getTemplateSchema
+      summary: "[planned] The slots a template accepts: greeting, title, metric slots, paragraph, tip"
+      parameters:
+        - { name: template_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Slot schema for the template. Waiting on API-core. }
+
+components:
+  schemas:
+    Recipient:
+      type: string
+      enum: [yannic, wife]
+      description: Yannic is yannic. Allyson is wife.
+    Status:
+      type: string
+      enum: [held, pending, printing, sent, failed, cancelled]
+    Kind:
+      type: string
+      enum: [morning, evening, note, shopping, todo, alert, fun, reminder]
+    Tone:
+      type: string
+      enum: [loving, neutral, reminder, playful, gentle, firm, urgent]
+    InsightEntity:
+      type: object
+      required: [entity_id, label, unit, current, mean_30d, z_score, trend, relevance, why]
+      properties:
+        entity_id: { type: string }
+        label: { type: string }
+        unit: { type: string }
+        category: { type: string, enum: [body, sleep, activity, house, energy, pets, weather, device] }
+        owner: { type: [string, "null"] }
+        current: { type: number }
+        mean_30d: { type: number }
+        stdev_30d: { type: number }
+        z_score: { type: number, description: "How unusual the current value is. Above 2 is well outside the usual range." }
+        trend: { type: string, enum: [up, down, flat] }
+        trend_pct: { type: number }
+        relevance: { type: integer, description: "3 own data, 1 shared house data." }
+        score: { type: number }
+        why: { type: string }
+    Block:
+      type: object
+      description: Live value read by HA at print time. Use value for a number, sparkline for a graph of history.
+      required: [type, entity_id, label]
+      properties:
+        type: { type: string, enum: [value, sparkline] }
+        entity_id: { type: string }
+        label: { type: string, maxLength: 40 }
+        unit: { type: string, maxLength: 12 }
+        hours: { type: integer, minimum: 1, maximum: 168, default: 24 }
+    Slots:
+      type: object
+      description: "[planned] Typed slots for a template. Hermes fills these; printarr draws the graphs at print time."
+      properties:
+        greeting: { type: string, maxLength: 60 }
+        title: { type: string, maxLength: 40 }
+        metrics:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [entity_id, label]
+            properties:
+              entity_id: { type: string }
+              label: { type: string, maxLength: 40 }
+              unit: { type: string, maxLength: 12 }
+              hours: { type: integer, minimum: 1, maximum: 168, default: 24 }
+        paragraph: { type: string, maxLength: 600 }
+        tip: { type: string, maxLength: 120 }
+    TicketCreate:
+      type: object
+      required: [recipient, message]
+      additionalProperties: false
+      properties:
+        recipient: { $ref: "#/components/schemas/Recipient" }
+        message:
+          type: string
+          maxLength: 2000
+          description: "Plain text for simple tickets. For a template with slots, use slots instead."
+        template: { oneOf: [{ type: integer }, { const: auto }], default: auto }
+        kind: { $ref: "#/components/schemas/Kind" }
+        tone: { $ref: "#/components/schemas/Tone" }
+        title: { type: string, maxLength: 80 }
+        sender: { type: string, maxLength: 40, description: "Use hermes." }
+        from_user: { $ref: "#/components/schemas/Recipient" }
+        to_user: { $ref: "#/components/schemas/Recipient" }
+        blocks: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/Block" } }
+        slots: { $ref: "#/components/schemas/Slots", description: "[planned] Not accepted until API-core ships the slot schema. Until then, send message and blocks." }
+        send_at: { type: string, format: date-time, description: "Local time without offset uses the server timezone." }
+        hold: { type: boolean, default: false }
+        hold_key: { type: string, maxLength: 40 }
+        idempotency_key: { type: string, maxLength: 120, description: "One key per logical ticket, for example morning:yannic:2026-10-26." }
+    Ticket:
+      type: object
+      properties:
+        id: { type: string }
+        recipient: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        kind: { type: string }
+        tone: { type: string }
+        message: { type: string }
+        send_at: { type: string, format: date-time }
+        printed_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+        inbox_state: { type: [string, "null"] }
