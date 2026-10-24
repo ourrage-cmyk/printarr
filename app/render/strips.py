@@ -663,8 +663,8 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     two left-aligned columns, so the second line sits on the same grid as the first. Nothing is cut."""
     c = card.c
     _heading(c, x0, _label(s.get("title") or "DOGS TODAY"), x1)
-    col_b = x1 - EDGE_GAP - 118  # the second column starts here and holds "N POOP" / "N RUN"
-    col_a = col_b - 118  # the first column holds "N PEE" / "N FOOD"
+    col_b = x1 - EDGE_GAP - 124  # the second column starts here and holds "N POOP" / "N RUN"
+    col_a = col_b - 134  # the first column holds "N PEE" / "N FOOD"
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
@@ -687,7 +687,7 @@ def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     clear = _kind_mark(card, "message", x1)
     if s.get("title"):
-        _title_line(card, x0, x1 - clear + 5, str(s["title"]))
+        _title_line(card, x0, x1 - clear - 4, str(s["title"]))
         clear = 0  # the title line is as tall as the mark, so the body below has the full width
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 6
     if s.get("tip"):
