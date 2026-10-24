@@ -1,0 +1,137 @@
+# Automations for printarr. Paste under automation: in configuration.yaml, or use the
+# automations UI with "Edit in YAML". Replace PRINTARR_URL where it appears in rest_commands.yaml.
+#
+# Each person has one morning and one evening ticket per day. Both are created ahead of time as
+# held tickets with a date-specific key, and released by the trigger. A second trigger on the same
+# day finds nothing held, so it prints nothing.
+
+automation:
+  # 1. Create the held morning briefing for each person, before they are likely to unplug.
+  - alias: "printarr: prepare morning briefing"
+    id: printarr_prepare_morning
+    mode: queued
+    trigger:
+      - platform: time
+        at: "05:30:00"
+    action:
+      - repeat:
+          for_each:
+            - { person: yannic, recipient: yannic, sensor: sensor.body_battery_most_recent, sleep: sensor.sleep_score }
+            - { person: allyson, recipient: wife, sensor: sensor.body_battery_most_recent_2, sleep: sensor.sleep_score_2 }
+          sequence:
+            - action: rest_command.printarr_create_ticket
+              data:
+                recipient: "{{ repeat.item.recipient }}"
+                kind: morning
+                tone: neutral
+                title: "Morning"
+                message: "Good morning, {{ repeat.item.person | capitalize }}."
+                hold: true
+                hold_key: "morning-{{ repeat.item.person }}-{{ now().date().isoformat() }}"
+                idempotency_key: "morning:{{ repeat.item.person }}:{{ now().date().isoformat() }}"
+                blocks:
+                  - { type: value, entity_id: "{{ repeat.item.sensor }}", label: "Body battery", unit: "%" }
+                  - { type: value, entity_id: "{{ repeat.item.sleep }}", label: "Sleep score", unit: "" }
+              continue_on_error: true
+
+  # 2. Release the morning briefing when the phone is unplugged, between 04:00 and 11:00.
+  - alias: "printarr: morning briefing on phone unplug"
+    id: printarr_morning_unplug
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.yannic_pixel_is_charging # CONFIRM
+        from: "on"
+        to: "off"
+        id: yannic
+      - platform: state
+        entity_id: binary_sensor.allyson_pixel_is_charging # CONFIRM
+        from: "on"
+        to: "off"
+        id: allyson
+    condition:
+      - condition: time
+        after: "04:00:00"
+        before: "11:00:00"
+    action:
+      - variables:
+          person: "{{ 'yannic' if trigger.id == 'yannic' else 'allyson' }}"
+      - action: rest_command.printarr_release_hold
+        data:
+          hold_key: "morning-{{ person }}-{{ now().date().isoformat() }}"
+        continue_on_error: true
+
+  # 3. Create the held evening rundown for each person at 16:00. It prints on the first arrival home.
+  - alias: "printarr: prepare evening rundown"
+    id: printarr_prepare_evening
+    mode: queued
+    trigger:
+      - platform: time
+        at: "16:00:00"
+    action:
+      - repeat:
+          for_each:
+            - { person: yannic, recipient: yannic, other: wife }
+            - { person: allyson, recipient: wife, other: yannic }
+          sequence:
+            - action: rest_command.printarr_create_ticket
+              data:
+                recipient: "{{ repeat.item.recipient }}"
+                kind: evening
+                tone: neutral
+                title: "Evening"
+                message: "Evening rundown for {{ repeat.item.person | capitalize }}."
+                hold: true
+                hold_key: "evening-{{ repeat.item.person }}-{{ now().date().isoformat() }}"
+                idempotency_key: "evening:{{ repeat.item.person }}:{{ now().date().isoformat() }}"
+                blocks:
+                  - { type: value, entity_id: sensor.home_temperature, label: "Home", unit: "°C" }
+                  - { type: value, entity_id: sensor.home_humidity, label: "Humidity", unit: "%" }
+              continue_on_error: true
+
+  # 4. Release the evening rundown on arrival home, from 16:00 onwards.
+  #    A person arriving a second time the same day finds nothing held.
+  - alias: "printarr: evening rundown on arriving home"
+    id: printarr_evening_arrival
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: device_tracker.yannic_phone # CONFIRM
+        to: home
+        id: yannic
+      - platform: state
+        entity_id: device_tracker.allyson_phone # CONFIRM
+        to: home
+        id: allyson
+    condition:
+      - condition: time
+        after: "16:00:00"
+    action:
+      - variables:
+          person: "{{ 'yannic' if trigger.id == 'yannic' else 'allyson' }}"
+      - action: rest_command.printarr_release_hold
+        data:
+          hold_key: "evening-{{ person }}-{{ now().date().isoformat() }}"
+        continue_on_error: true
+
+  # 5. Notification to print: a Home Assistant persistent notification or mobile action with
+  #    data.printarr: true is printed as an alert. Uses kind alert, so the template is an alert style.
+  - alias: "printarr: print notifications marked for paper"
+    id: printarr_notification_to_print
+    mode: queued
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: PRINTARR_PRINT
+    action:
+      - action: rest_command.printarr_create_ticket
+        data:
+          recipient: "{{ trigger.event.data.recipient | default('yannic') }}"
+          kind: alert
+          tone: "{{ trigger.event.data.tone | default('neutral') }}"
+          title: "Alert"
+          message: "{{ trigger.event.data.message }}"
+          sender: home-assistant
+          idempotency_key: "alert:{{ trigger.event.data.recipient | default('yannic') }}:{{ trigger.event.data.message | md5 }}:{{ now().strftime('%Y-%m-%d-%H-%M') }}"
+        continue_on_error: true
