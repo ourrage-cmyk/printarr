@@ -271,3 +271,36 @@ def test_image_and_compose_run_as_the_truenas_app_user():
     root = Path(__file__).resolve().parent.parent
     assert "USER 568:568" in (root / "Dockerfile").read_text()
     assert 'user: "568:568"' in (root / "docker-compose.yml").read_text()
+
+
+def test_no_printer_polling_while_waiting_for_setup(settings):
+    from app.scheduler import Scheduler
+    from app.store import TicketStore
+
+    class Silent:
+        target = ":9100"
+
+        def send(self, data):
+            raise AssertionError("sent before setup")
+
+        def check(self):
+            raise AssertionError("checked before setup")
+
+        def read_status(self):
+            raise AssertionError("polled before setup")
+
+    store = TicketStore(settings.db_path)
+    store.init()
+    waiting = Scheduler(store, Silent(), settings, clock=lambda: 1_000, printer_waiting=lambda: True)
+    assert waiting.run_once() == 0
+
+
+def test_printer_messages_do_not_mention_environment_variables():
+    from app.printer import PrinterError, TcpTransport, UnbuiltTransport
+
+    with pytest.raises(PrinterError) as missing:
+        TcpTransport("", 9100, 1.0).check()
+    assert "PRINTARR_" not in str(missing.value) and "/setup" in str(missing.value)
+    with pytest.raises(PrinterError) as usb:
+        UnbuiltTransport("usb").check()
+    assert "PRINTARR_" not in str(usb.value)

@@ -63,10 +63,13 @@ class Scheduler:
         clock: Callable[[], int] = now_ms,
         notifier: Notifier | None = None,
         metrics: Metrics | None = None,
+        printer_waiting: Callable[[], bool] | None = None,
     ) -> None:
         self.store = store
         self.transport = transport
         self.settings = settings
+        # True until setup is finished and a printer address is saved. No status polling until then.
+        self._printer_waiting = printer_waiting
         self.clock = clock
         self.notifier = notifier
         self.metrics = metrics or Metrics()
@@ -97,6 +100,9 @@ class Scheduler:
         Status is read at most once per poll interval. A printer that cannot be reached is
         not a pause: the send fails and the ticket backs off as usual.
         """
+        if self._printer_waiting is not None and self._printer_waiting():
+            self._last_status = None
+            return False
         if self._last_status_ms is None or now - self._last_status_ms >= self.settings.poll_interval * 1000:
             self._last_status_ms = now
             try:
