@@ -63,7 +63,7 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 
 Writing tickets, for agents:
 - Say the headline once. Use `title` or the block's heading, and do not repeat it in the body text.
-- Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- Nothing a greeting or title says is dropped: HELLO, GOOD MORNING and the rest all print. A greeting is optional; a briefing sent without one is headed by the addressee (`YANNIC MORNING`), and the preset appends the recipient's name (`GOOD MORNING YANNIC`). Only briefings get an automatic greeting. Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
 - A fun fact is a `fact` block with mood `playful`. It prints its text alone: no "Did you know" and no "FUN FACT" label is added. Do not use a `fact` block for a reminder, a note or an alert.
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
@@ -85,7 +85,7 @@ Writing tickets, for agents:
 
 ### A briefing preset
 
-`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. A metric label is at most 20 characters. Text with characters the printer cannot draw (emoji, CJK) still prints, each as `?`, and the response lists them under `warnings`. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
+`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. A metric label is at most 20 characters. Text with characters the printer cannot draw (emoji, CJK) still prints, each as `?`, and the response lists them under `warnings`. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent. A preset ticket is kind `morning` unless `kind` is sent. The preset is stored as its slots and built when the ticket prints: the graph and sparklines are read from Home Assistant at release, so a held briefing shows the values of the morning it prints, not of the day it was queued. Home Assistant is only asked at queue time to check that it answers.
 
 ### A slot ticket
 
@@ -112,6 +112,8 @@ Printarr keeps a PNG of every ticket as it reached the printer: each printed tic
 
 - `GET /api/v1/ticket-images?limit=50`: recent tickets that have an image, newest first. Each row gives `id`, `kind`, `template_id`, `template`, `recipient`, `status`, `created_at`, `printed_at` and `image_url`. Up to 250 are kept, and older ones are deleted.
 - `GET /api/v1/tickets/{id}/image`: the PNG (`image/png`) for one ticket. A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
+- `GET /api/v1/prints/{code}`: finds a printed piece by the code printed under its cut (4 to 32 hex characters). Returns `print_code`, `printed_at`, `strip_id`, `image_url` and the `tickets` on the piece (`id`, `recipient`, `kind`, `tone`, `title`, `message`, `status`, `printed_at`). Tickets and the image list carry `print_code`. 404 when nothing printed has that code, 422 when it is not hex.
+- The image of a ticket printed in a piece is the whole piece. Every print ends with the print time and a 6-character code in small text below the last ticket, inside the space fed for the cut, never in a ticket picture.
 - The printer log names the image path when a print fails, so a failure can be opened straight away.
 
 To diagnose a ticket that looks wrong: find its id in the log or the ticket list, fetch the image, and compare it with the template and the blocks in `GET /api/v1/tickets/{id}`.

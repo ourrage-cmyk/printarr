@@ -365,13 +365,31 @@ def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[st
     return {"type": "metric", "mood": "factual", "span": 1, "slots": slots}
 
 
-def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None) -> list[dict[str, Any]]:
+ADDRESSEES = {"yannic": "YANNIC", "wife": "ALLYSON"}  # the name printed on a briefing that sends no greeting
+
+
+def time_of_day(hour: int) -> str:
+    return "MORNING" if hour < 12 else "AFTERNOON" if hour < 18 else "EVENING"
+
+
+def addressee_greeting(recipient: str | None) -> str | None:
+    """The name and time of day that head a briefing sent without a greeting, so the paper shows who it is for."""
+    name = ADDRESSEES.get(str(recipient or "").lower())
+    if name is None:
+        return None
+    return f"{name} {time_of_day(datetime.now(DISPLAY_TZ).hour)}"
+
+
+def briefing_blocks(
+    slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None, recipient: str | None = None
+) -> list[dict[str, Any]]:
     """A briefing (template 101) as blocks: a greeting, one metric card per number, and a tip."""
     blocks: list[dict[str, Any]] = []
     head = slots.get("title") or slots.get("greeting")  # a title, when sent, is the headline; the greeting leads the text
     text = slots.get("paragraph")
     if slots.get("title") and slots.get("greeting") and not text:
         text = slots["greeting"]  # a title and a greeting with no text: the greeting is the subtitle; with text it is dropped
+    head = head or (addressee_greeting(recipient) if slots.get("metrics") or slots.get("tip") or text else None)
     if head or text:
         greeting: dict[str, Any] = {"greeting": head or "TODAY", "_group": True}  # a briefing is one nested card
         if text:
@@ -431,14 +449,17 @@ def ticket_lines(
     client: HAClient | None,
     template_id: int | None = None,
     sender: str | None = None,
+    recipient: str | None = None,
 ) -> list[ReceiptLine]:
     """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
-    if "blocks" in slots:
+    if "preset" in slots:  # a stored briefing preset: its graph and sparklines are read now, at print time
+        blocks = sign_blocks(briefing_preset_blocks(slots["slots"], client, sender), sender)
+    elif "blocks" in slots:
         blocks = sign_blocks(slots["blocks"], sender)
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
     elif template_id == BRIEFING or "metrics" in slots:
-        blocks = briefing_blocks(slots, client, sender)
+        blocks = briefing_blocks(slots, client, sender, recipient)
     elif "greeting" in slots:
         blocks = [{"type": "greeting", "mood": "neutral", "span": 3, "slots": {k: slots[k] for k in ("greeting", "summary") if slots.get(k)}}]
         if sender and not slots.get("tip"):
@@ -496,7 +517,16 @@ class BriefingPresetSlots(_Strict):
 
 
 
-def briefing_preset_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None) -> list[dict[str, Any]]:
+def _preset_greeting(time_of_day: str, recipient: str | None) -> str:
+    """GOOD MORNING, with the addressee's name after it when the recipient is known."""
+    greeting = f"GOOD {time_of_day.upper()}"
+    name = ADDRESSEES.get(str(recipient or "").lower())
+    return f"{greeting} {name}" if name else greeting
+
+
+def briefing_preset_blocks(
+    slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None, recipient: str | None = None
+) -> list[dict[str, Any]]:
     """The briefing preset as blocks, in print order. Raises BlockProblem naming each wrong slot."""
     try:
         parsed = BriefingPresetSlots.model_validate(dict(slots))
@@ -504,7 +534,7 @@ def briefing_preset_blocks(slots: Mapping[str, Any], client: HAClient | None, se
         raise BlockProblem(_slot_problems("preset", exc)) from None
     blocks: list[dict[str, Any]] = [{
         "type": "greeting", "mood": "neutral", "span": 3,
-        "slots": {"greeting": f"GOOD {parsed.time_of_day.upper()}"},
+        "slots": {"greeting": _preset_greeting(parsed.time_of_day, recipient)},
     }]
     blocks.extend(_metric_block(metric.model_dump(exclude_none=True), client) for metric in parsed.metrics)
     graph = parsed.graph

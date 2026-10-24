@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import logging
 import os
 import time
@@ -48,7 +49,7 @@ from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
-from app.blocks import Block, resolve_blocks
+from app.blocks import Block, resolve_blocks, unavailable_lines
 from app.ha import HAClient, HAError
 from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
@@ -395,6 +396,7 @@ class TicketOut(BaseModel):
     delivery: str = "now"
     strip_id: str | None = None
     strip_trigger: str | None = None
+    print_code: str = Field(default="", description="The short code printed under the cut, with the print time. GET /api/v1/prints/{code} finds the piece.")
     moods: str = ""
     notes: list[str] = Field(default_factory=list, description="What was shortened to fit.")
     truncated: bool = Field(default=False, description="True when some of the text did not fit and was shortened. Read notes for what.")
@@ -820,7 +822,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return HAClient(url, token) if url and token else None
 
     def prepare_blocks(body: TicketCreate) -> list[Line]:
-        """Fetch Home Assistant data now. An unreachable Home Assistant rejects the request."""
+        """Fetch Home Assistant data now, for the preview. An unreachable Home Assistant rejects the preview."""
         if not body.blocks:
             return []
         try:
@@ -901,10 +903,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
         if body.blocks and home_assistant() is None:
             raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
-        try:
+        try:  # an unreachable Home Assistant never blocks a ticket: it prints with an unavailable mark
             block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
         except HAError as exc:
-            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
+            logger.warning("home assistant data unavailable at queue time: %s", exc)
+            block_lines = unavailable_lines(body.blocks)
         render_started = time.perf_counter()
         try:  # check the layout now, so a queued ticket always prints
             encode(
@@ -1033,7 +1036,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 return existing
         try:
             if body.preset == PRESET_BRIEFING:
-                raw_blocks = briefing_preset_blocks(body.slots or {}, home_assistant(), body.sender)
+                # Checked without Home Assistant: the values are read when the ticket prints, not when it is queued.
+                raw_blocks = briefing_preset_blocks(body.slots or {}, None, body.sender, body.recipient)
                 checked = compose_validate(raw_blocks)
             else:
                 checked = compose_validate(body.blocks or [])
@@ -1063,7 +1067,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             selection="explicit",
             choice_source="explicit",
             render_ms=render_ms,
-            slots_json=json.dumps({"blocks": checked}, default=str),
+            # A preset is stored as its slots and built at print time; blocks are stored as checked.
+            slots_json=json.dumps(
+                {"preset": body.preset, "slots": body.slots} if body.preset else {"blocks": checked},
+                default=str,
+            ),
             held=held,
             delivery=delivery,
             hold_key=body.hold_key,
@@ -1485,6 +1493,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 "created_at": ticket["created_at"],
                 "printed_at": ticket["printed_at"],
                 "image_url": f"/api/v1/tickets/{ticket['id']}/image",
+                "print_code": ticket["print_code"],
             })
         return rows
 
@@ -1507,6 +1516,29 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 "GET /api/v1/ticket-images lists the images kept.",
             )
         return Response(content=path.read_bytes(), media_type="image/png")
+
+    @api.get("/prints/{code}", tags=["tickets"])
+    def find_print(code: str) -> dict[str, Any]:
+        """Look up a piece of paper by the code printed under its cut (4 to 32 hex characters).
+
+        Returns the print time, the image of the piece and every ticket on it, so you can name the exact ticket.
+        """
+        code = code.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{4,32}", code):
+            raise ApiProblem(422, "a print code is 4 to 32 hex characters", hint="Use the code printed under the cut.")
+        tickets = store.find_print(code)
+        if not tickets:
+            raise ApiProblem(404, "no printed piece has this code", hint="Only printed tickets have a code.")
+        return {
+            "print_code": tickets[0]["print_code"],
+            "printed_at": tickets[0]["printed_at"],
+            "strip_id": tickets[0]["strip_id"],
+            "image_url": f"/api/v1/tickets/{tickets[0]['id']}/image",
+            "tickets": [
+                {key: t[key] for key in ("id", "recipient", "kind", "tone", "title", "message", "status", "printed_at")}
+                for t in tickets
+            ],
+        }
 
     @api.get("/printer", response_model=PrinterStatus, tags=["printer"])
     def printer_status() -> PrinterStatus:

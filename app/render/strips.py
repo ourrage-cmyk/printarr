@@ -933,31 +933,23 @@ def _shorten(block: Block, slots: dict[str, Any], x0: int, x1: int, max_h: int) 
     return trimmed
 
 
-SALUTATIONS = ("HELLO", "HI ", "HEY", "GOOD MORNING", "GOOD EVENING", "GOOD AFTERNOON", "GOOD NIGHT", "DEAR", "PSYCH", "MORNING")
 TITLED = ("message", "checklist", "metric_rows", "graph", "dog_counts")
-
-
-def _is_salutation(text: str) -> bool:
-    words = f"{str(text).upper().strip()} "
-    return words.startswith(SALUTATIONS) or str(text).upper().strip() in ("HI", "HEY", "HELLO")
 
 
 def fuse(blocks: Sequence[Block]) -> list[Block]:
     """A headline with no text of its own is the title of the card after it, not a card of its own: one thought,
-    one box. A salutation (HELLO LOVE, PSYCH!) is not a title, so it is dropped and the card keeps its own."""
+    one box. Whatever the headline says, it is printed: nothing is dropped as a salutation."""
     out: list[Block] = []
     items = list(blocks)
     i = 0
     while i < len(items):
         block = items[i]
         nxt = items[i + 1] if i + 1 < len(items) else None
-        if block.type == "greeting" and not block.slots.get("summary") and nxt is not None and nxt.type != "greeting":
+        if block.type == "greeting" and not block.slots.get("summary") and not block.slots.get("_group") and nxt is not None and nxt.type != "greeting":
             heading = str(block.slots.get("greeting", ""))
-            if nxt.type in TITLED or nxt.type == "alert":
-                if not _is_salutation(heading):
-                    key = "label" if nxt.type == "alert" else "title"
-                    nxt = Block(nxt.type, {**nxt.slots, key: heading}, mood=nxt.mood, span=nxt.span)
-                items[i + 1] = nxt
+            key = "label" if nxt.type == "alert" else "title"
+            if (nxt.type in TITLED or nxt.type == "alert") and not nxt.slots.get(key):  # a card with its own title keeps it
+                items[i + 1] = Block(nxt.type, {**nxt.slots, key: heading}, mood=nxt.mood, span=nxt.span)
                 i += 1
                 continue
         out.append(block)

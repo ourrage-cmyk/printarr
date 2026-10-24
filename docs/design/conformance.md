@@ -26,7 +26,7 @@ The arena and lab results that drove the choices are in the design folder. The c
 | Mood band | one band across the top of a tile, 28 dots tall | `BAND_H` in `app/render/strips.py` |
 | Kind mark | one per block type that has one, top-right corner | `KIND_MARKS` |
 | Ticket edges | no blank is drawn at the top or bottom of a composed ticket (`TICKET_MARGIN = 0`) | `app/compose.py` |
-| Cut | the feed before the cut is sent with the partial-cut command, never drawn into the picture | `CUT_FEED` in `app/escpos.py` |
+| Cut | the feed before the cut is sent with the partial-cut command, never drawn into the picture. A small line with the print time and a 6-character code (`2026-10-24 21:05  a3f9c2`) sits just under the last ticket, inside that space | `CUT_FEED` in `app/escpos.py`; `STAMP_GAP` in `app/scheduler.py` |
 
 The strip margins are Yannic's rule and are not in the design tokens.
 

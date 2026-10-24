@@ -112,7 +112,7 @@ def render_ticket_lines(
         from app.compose import ticket_lines  # imported here: app.compose imports app.receipt
 
         slots = json.loads(str(ticket.get("slots_json") or "{}"))
-        return list(extra) or ticket_lines(slots, None, template_id=template.id, sender=sender_label(ticket))
+        return list(extra) or ticket_lines(slots, None, template_id=template.id, sender=sender_label(ticket), recipient=ticket.get("recipient"))
     if ticket.get("kind") == "note":
         from app.compose import note_card_lines  # imported here: app.compose imports app.receipt
 

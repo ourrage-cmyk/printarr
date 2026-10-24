@@ -134,8 +134,9 @@ curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
                  "fun_fact": "Octopuses have three hearts.", "from": "hermes"}}'
 ```
 
-- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING.
+- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING, and it appends the recipient's name where one is set (`GOOD MORNING YANNIC`).
 - `scope` is `inside` or `outside` and prints as IN or OUT after the label. `as_of` prints as AS OF 08:15 under the readings.
+- Queueing works even when Home Assistant is unreachable. Preset values are read at print time, so a value Home Assistant cannot give prints as `--`.
 - `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`. `hours` (1 to 168, default 24) sets how far back the sparkline reaches.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
 - `body` is the text, up to 800 characters. `fun_fact` is one line, up to 200 characters. Printarr adds no heading or label to a fun fact; write the fact as one sentence. The words can appear inside the sentence when they read naturally.
@@ -208,6 +209,12 @@ what the paper showed. The newest 250 are kept.
 curl -sS -o ticket.png http://192.0.2.231:30100/api/v1/tickets/<id>/image
 ```
 
+- Every print ends with a small line under the last ticket: the print time and a 6-character code, for example
+  `2026-10-24 21:05  a3f9c2`. When Yannic quotes a code, call `GET /api/v1/prints/{code}` (4 to 32 hex characters). It
+  returns the print time, the image of the whole piece and every ticket on it (`id`, `recipient`, `kind`, `title`,
+  `message`). A piece printed together shares one code; a ticket printed alone uses the start of its id. Tickets and the
+  image list also carry `print_code`. The image of any ticket in a piece is the whole piece.
+
 A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
 Text is drawn from an approximation of Font A, so check the wording against the real paper or the simulator.
 
@@ -218,7 +225,7 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 
 - **Say the headline once.** Use `title` or the block's heading, and do not repeat it in the body.
 - **Title plus a short body.** One message in one box. Do not split a single message across two blocks.
-- **Greetings belong to briefings.** A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- **Greetings belong to briefings, and nothing you send is ever dropped.** Any greeting or title prints exactly as sent (HELLO, GOOD MORNING, YANNIC EVENING, anything). A greeting is not required: a briefing sent without one is headed by the addressee, the name and time of day (`YANNIC MORNING`, `ALLYSON EVENING`), and the briefing preset appends the recipient's name (`GOOD MORNING YANNIC`). Only briefings get this; a single-topic ticket (bins, a reminder, a note) has no greeting block and is never given one. A greeting before a card that has no title of its own becomes that card's title; a card with its own title keeps it and the greeting stays a separate tile.
 - **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:

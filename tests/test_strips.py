@@ -250,3 +250,39 @@ def test_one_release_is_one_piece_whatever_the_greetings():
     sched.settings = type("S", (), {"strip_max_blocks": 12})()
     pile = [ticket("a", 102), ticket("b", 102), ticket("brief", 101), ticket("c", 101), ticket("d", 102)]
     assert [len(chunk) for chunk in sched._strip_chunks(pile)] == [5]
+
+
+def test_every_ticket_in_a_piece_recalls_the_whole_piece(settings):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        a = queue(client, "yannic", "first note", delivery="on_release")
+        b = queue(client, "yannic", "second note", delivery="on_release")
+        client.post("/api/v1/people/yannic/release", json={"trigger": "morning"})
+        one = client.get(f"/api/v1/tickets/{a['id']}/image")
+        two = client.get(f"/api/v1/tickets/{b['id']}/image")
+        assert one.status_code == two.status_code == 200
+        assert one.content == two.content
+        alone = queue(client, "yannic", "first note", delivery="now")
+        app.state.scheduler.run_once()
+        single = client.get(f"/api/v1/tickets/{alone['id']}/image").content
+        assert len(one.content) > len(single)  # the piece holds both notes
+
+def test_the_cut_space_carries_print_time_and_code_that_the_api_resolves(settings):
+    app, transport = make(settings)
+    with TestClient(app) as client:
+        a = queue(client, "yannic", "first note", delivery="on_release")
+        b = queue(client, "yannic", "second note", delivery="on_release")
+        result = client.post("/api/v1/people/yannic/release", json={"trigger": "morning"}).json()
+        code = result["strips"][0]["strip_id"][:6]
+        assert f"  {code}".encode() in transport.payloads[0]
+        found = client.get(f"/api/v1/prints/{code}").json()
+        assert found["print_code"] == code and found["printed_at"]
+        assert [t["id"] for t in found["tickets"]] == [a["id"], b["id"]]
+        assert client.get(f"/api/v1/tickets/{a['id']}").json()["print_code"] == code
+        assert client.get("/api/v1/prints/zzzz").status_code == 422
+        assert client.get("/api/v1/prints/ffffff").status_code == 404
+        alone = queue(client, "yannic", "solo", delivery="now")
+        app.state.scheduler.run_once()
+        solo = alone["id"][:6]
+        assert f"  {solo}".encode() in transport.payloads[-1]
+        assert client.get(f"/api/v1/prints/{solo}").json()["tickets"][0]["id"] == alone["id"]
