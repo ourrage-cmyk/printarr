@@ -26,9 +26,15 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     body = json.dumps({"chat_id": chat_id, "text": text}).encode()
     request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=10) as response:
-        if response.status != 200:
-            raise RuntimeError(f"Telegram returned HTTP {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Telegram returned HTTP {response.status}")
+    except Exception as exc:
+        # The bot token is part of the URL, so an error message can carry it. Strip it, and drop
+        # the chained original so no traceback printed later can show it either.
+        message = str(exc).replace(token, "<token>") if token else str(exc)
+        raise RuntimeError(f"Telegram send failed: {message}") from None
 
 
 class Notifier:
@@ -79,8 +85,8 @@ class Notifier:
             return
         try:
             self._sender(settings.telegram_token, settings.telegram_chat_id, text)
-        except Exception:
-            logger.exception("could not send Telegram alert")
+        except Exception as exc:
+            logger.error("could not send Telegram alert: %s", exc)
 
 
 class HeartbeatThread:
