@@ -1,6 +1,6 @@
 ---
 name: printarr
-description: Print receipt strips on the printarr thermal printer through its REST API. Use to queue notes, shopping lists, reminders, briefings, alerts and messages between Yannic and Allyson, to schedule or cancel a print, to release a person's waiting strips, to check the queue or printer, to look at a printed ticket image, or to ping Yannic on Telegram.
+description: Print receipt strips on the printarr thermal printer through its REST API. Use to queue notes, shopping lists, reminders, briefings, alerts and messages between Yannic and the second person, to schedule or cancel a print, to release a person's waiting strips, to check the queue or printer, to look at a printed ticket image, or to ping Yannic on Telegram.
 ---
 
 # printarr: print strips through the API
@@ -145,7 +145,7 @@ printarr never creates schedules. It holds a ticket until it is due. You decide 
 
 | `delivery` | When it prints | Use it for |
 |---|---|---|
-| `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and Allyson |
+| `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and the second person |
 | `at` | At `send_at` (local time, no offset, for example `2026-10-25T18:00:00`) as its own strip | "Remind me at 18:00", a shopping list for when Yannic gets home |
 | `now` | Straight away, as its own strip | Shopping lists on request, alerts |
 

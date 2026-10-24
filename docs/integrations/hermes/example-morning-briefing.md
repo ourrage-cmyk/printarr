@@ -71,5 +71,5 @@ The headline is GOOD MORNING, from `time_of_day`. Every briefing has this same l
 The briefing waits in Yannic's pile. When his phone is unplugged, Home Assistant creates the morning
 briefing (same idempotency key, so it is not duplicated) and calls
 `POST /api/v1/people/yannic/release` with `{"trigger": "morning"}`. His strip prints with the briefing
-and any messages waiting for him, cut after each strip. Allyson's strip is separate, and only prints
+and any messages waiting for him, cut after each strip. the second person's strip is separate, and only prints
 on her own trigger.

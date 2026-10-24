@@ -17,7 +17,7 @@ Reference renders: `receipt-lab/renders5/B5-001.png` to `B5-029.png`. Source: `r
 ## Templates (29 mockups)
 | Family | Tone | Variants | Content |
 |---|---|---|---|
-| morning | neutral | 3 | Battery and sleep tiles for Yannic and Allyson, steps, energy now and next, inside and outside, outdoor 24-hour line graph, dogs, calendar (optional) |
+| morning | neutral | 3 | Battery and sleep tiles for Yannic and the second person, steps, energy now and next, inside and outside, outdoor 24-hour line graph, dogs, calendar (optional) |
 | evening | neutral | 3 | Hello, dogs today, daily summary, missed messages from the other person |
 | personal, loving | loving | 2 | Heart header, dotted wave divider, sign-off |
 | personal, neutral | neutral | 2 | Hairline header, plain text, sign-off |
