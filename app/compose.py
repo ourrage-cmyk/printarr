@@ -28,8 +28,8 @@ AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until
 MAX_BLOCKS = 16
 PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
 DISPLAY_TZ: tzinfo | None = None  # the household's time zone, set at start-up from the settings
-TICKET_MARGIN = 24  # dots above a composed ticket
-TICKET_MARGIN_BOTTOM = 66  # plus the one-line cutter feed (about 24 dots): the blank before the cut is about 90 dots
+TICKET_MARGIN = 0  # a composed ticket carries no blank: the space before the cut is fed with the cut command
+TICKET_MARGIN_BOTTOM = 0
 CARD_CAPTION = "[card]"  # what a text preview shows in place of a drawn card
 HISTORY_POINTS = 48  # sparkline points: the renderer draws at most this many
 
@@ -300,8 +300,12 @@ def compose_render(blocks: Sequence[Mapping[str, Any]], client: HAClient | None)
     filled = fill_values(blocks, fetch_entities(blocks, client))
     lines: list[ReceiptLine] = []
     notes: list[str] = []
-    for strip in R.split_strips(_render_blocks(filled)):
-        bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=TICKET_MARGIN, margin_bottom=TICKET_MARGIN_BOTTOM)
+    strips = R.split_strips(_render_blocks(filled))
+    for i, strip in enumerate(strips):
+        # One piece of paper: the cut margins belong to the ends of the ticket, strips inside it are one tile gap apart.
+        top = TICKET_MARGIN if i == 0 else R.GAP_V
+        bottom = TICKET_MARGIN_BOTTOM if i == len(strips) - 1 else 0
+        bitmap, strip_notes = R.render_strip_with_notes(strip, margin_top=top, margin_bottom=bottom)
         lines.append(ReceiptLine(CARD_CAPTION, raster=(bitmap.width // 8, bitmap.height, bitmap.bits)))
         notes.extend(strip_notes)
     return lines, notes

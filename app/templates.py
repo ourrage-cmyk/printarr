@@ -28,6 +28,9 @@ Selection = Literal["explicit", "model", "rule"]
 DECORATIONS = ("stars", "frame", "footer")
 
 
+CUT_FEED = 4  # lines fed with the cut command (about 90 dots): the only blank on the paper
+
+
 @dataclass(frozen=True)
 class Template:
     id: int
@@ -39,7 +42,7 @@ class Template:
     allowed: tuple[str, ...]  # decorations the model may pick from
     default: tuple[str, ...]  # decorations the rule-based path uses
     design: str | None = None  # an image design (app/render/registry.py) instead of text
-    feed: int = 1  # lines fed before the cut: the card shell margin is the rest of the blank
+    feed: int = CUT_FEED  # lines fed with the cut command: the only blank before the cut
     kind: str = "note"  # what the ticket is for: alert, morning, evening, list, note or plain
 
 
