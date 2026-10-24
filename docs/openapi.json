@@ -1062,6 +1062,66 @@
         }
       }
     },
+    "/api/v1/setup/discover": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Setup Discover",
+        "description": "Look on the local network for one service. Nothing is saved, and no credentials are sent.\n\nWithout a network, the /24 around printarr is used. Inside Docker's own range there is no home\nnetwork to find, so the response asks for one and suggests 192.168.1.0/24.",
+        "operationId": "setup_discover_api_v1_setup_discover_post",
+        "parameters": [
+          {
+            "name": "x-setup-code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The setup code from the log.",
+              "title": "X-Setup-Code"
+            },
+            "description": "The setup code from the log."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Setup Discover Api V1 Setup Discover Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Setup code is wrong"
+          },
+          "422": {
+            "description": "Network not allowed"
+          }
+        }
+      }
+    },
     "/api/v1/setup/complete": {
       "post": {
         "tags": [
@@ -2023,6 +2083,35 @@
           "blocks"
         ],
         "title": "ComposeCreate"
+      },
+      "DiscoverRequest": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "enum": [
+              "home_assistant",
+              "printer",
+              "model_server"
+            ],
+            "title": "Service"
+          },
+          "network": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Network",
+            "description": "Network to scan, such as 192.168.1.0/24. Blank uses the network around this printarr.",
+            "default": "",
+            "examples": [
+              "192.168.1.0/24"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "service"
+        ],
+        "title": "DiscoverRequest"
       },
       "HASettingsOut": {
         "properties": {

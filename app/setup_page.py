@@ -33,6 +33,9 @@ SETUP_UI = r"""<!doctype html>
   body.editing .edit-only { display:block; }
   body.editing .edit-only.check { display:flex; }
   #finish-msg { margin-top:12px; }
+  .candidates { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .candidates button { font-size:14px; padding:6px 10px; }
+  .candidates button.verified { border-color:var(--ok); color:var(--ok); }
 </style>
 </head>
 <body>
@@ -46,13 +49,21 @@ SETUP_UI = r"""<!doctype html>
     <input id="printer_host" placeholder="192.168.1.50">
     <label for="printer_port">Port</label>
     <input id="printer_port" type="number" min="1" max="65535">
-    <div class="row"><button type="button" data-check="printer">Test</button><span class="result" data-result="printer"></span></div>
+    <div class="row"><button type="button" data-check="printer">Test</button><button type="button" data-scan="printer">Scan network</button><span class="result" data-result="printer"></span></div>
+    <div class="candidates" data-candidates="printer"></div>
   </fieldset>
 
   <fieldset>
     <legend>Setup code</legend>
     <label for="code">Setup code</label>
     <input id="code" autocomplete="off" spellcheck="false" placeholder="from the log, printed at start">
+  </fieldset>
+
+  <fieldset>
+    <legend>Network for Scan network</legend>
+    <label for="scan_network">Home network (optional)</label>
+    <input id="scan_network" placeholder="192.168.1.0/24">
+    <div class="hint">Leave blank to scan the network around printarr. Scans look only at private addresses and send no passwords.</div>
   </fieldset>
 
   <fieldset>
@@ -63,7 +74,8 @@ SETUP_UI = r"""<!doctype html>
     <input id="ha_token" type="password" autocomplete="off" placeholder="paste to set or replace">
     <div class="hint" id="ha_token_state"></div>
     <div class="check edit-only"><input id="clear_ha_token" type="checkbox"><label for="clear_ha_token" style="margin:0">Remove the saved token</label></div>
-    <div class="row"><button type="button" data-check="home_assistant">Test</button><span class="result" data-result="home_assistant"></span></div>
+    <div class="row"><button type="button" data-check="home_assistant">Test</button><button type="button" data-scan="home_assistant">Scan network</button><span class="result" data-result="home_assistant"></span></div>
+    <div class="candidates" data-candidates="home_assistant"></div>
   </fieldset>
 
   <fieldset>
@@ -75,7 +87,8 @@ SETUP_UI = r"""<!doctype html>
     <input id="llm_model">
     <label for="llm_text_model">Text clean-up model</label>
     <input id="llm_text_model">
-    <div class="row"><button type="button" data-check="model_server">Test</button><span class="result" data-result="model_server"></span></div>
+    <div class="row"><button type="button" data-check="model_server">Test</button><button type="button" data-scan="model_server">Scan network</button><span class="result" data-result="model_server"></span></div>
+    <div class="candidates" data-candidates="model_server"></div>
   </fieldset>
 
   <fieldset>
@@ -152,6 +165,57 @@ async function runCheck(name) {
 
 document.querySelectorAll("[data-check]").forEach((button) => {
   button.addEventListener("click", () => runCheck(button.dataset.check));
+});
+
+// Fill the fields from a found service. Nothing is tested or saved until the user presses Test or Finish.
+function useCandidate(service, c) {
+  if (service === "printer") { $("printer_host").value = c.host; $("printer_port").value = c.port; }
+  if (service === "home_assistant") $("ha_url").value = c.url;
+  if (service === "model_server") {
+    $("llm_base_url").value = c.url;
+    $("llm_enabled").checked = true;
+    if (c.models.includes("d1:latest")) $("llm_model").value = "d1:latest";
+    if (c.models.includes("granite4.2:3b")) $("llm_text_model").value = "granite4.2:3b";
+  }
+  show(service, true, "Filled in from the scan. Press Test to check it.");
+}
+
+async function runScan(service) {
+  if (!$("code").value.trim()) { show(service, false, "Enter the setup code first."); return; }
+  const box = document.querySelector(`[data-candidates="${service}"]`);
+  box.textContent = "";
+  show(service, true, "Scanning the network. This takes a few seconds...");
+  try {
+    const response = await fetch("/api/v1/setup/discover", {
+      method: "POST", headers: headers(),
+      body: JSON.stringify({ service, network: $("scan_network").value.trim() }),
+    });
+    if (!response.ok) { show(service, false, await readError(response)); return; }
+    const result = await response.json();
+    if (result.needs_network) {
+      $("scan_network").placeholder = result.suggested_network;
+      $("scan_network").focus();
+      show(service, false, `printarr is inside Docker's own network. Type your home network in "Network for Scan network", for example ${result.suggested_network}, then scan again.`);
+      return;
+    }
+    if (result.candidates.length === 0) {
+      show(service, false, `Nothing found on ${result.network}. Check the device is on and try again.`);
+      return;
+    }
+    show(service, true, `Found ${result.candidates.length} on ${result.network}. Pick one:`);
+    for (const c of result.candidates) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = c.detail;
+      if (c.verified) button.className = "verified";
+      button.addEventListener("click", () => useCandidate(service, c));
+      box.appendChild(button);
+    }
+  } catch (err) { show(service, false, "The printarr server did not answer."); }
+}
+
+document.querySelectorAll("[data-scan]").forEach((button) => {
+  button.addEventListener("click", () => runScan(button.dataset.scan));
 });
 
 $("finish").addEventListener("click", async () => {
