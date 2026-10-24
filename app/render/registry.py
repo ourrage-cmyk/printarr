@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from app.ha import HAClient, HAError
 from app.receipt import Line
 from app.render.canvas import Bitmap
-from app.render.designs import Morning, morning_yannic
+from app.render.designs import Morning, morning_system
 
 logger = logging.getLogger("printarr.render")
 
@@ -32,7 +32,7 @@ def _whole(value: float | None) -> int | None:
 
 
 def _build_morning(values: Values, summary: str) -> Bitmap:
-    return morning_yannic(
+    return morning_system(
         Morning(
             summary=summary,
             body_battery=_whole(values.get("body_battery")),

@@ -1,0 +1,6 @@
+{
+  "_note": "Which ornament sits on which card. Keys are design ids, then card names, then a piece id from manifest.json. At most one piece per card. Change a duel winner here, not in code.",
+  "morning": {
+    "hello": "sys-sun"
+  }
+}

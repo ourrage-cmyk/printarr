@@ -1,0 +1,830 @@
+{
+  "generated": "build/build_system.py",
+  "pitch_dots": 3,
+  "count": 58,
+  "assets": [
+    {
+      "arena": "pieces",
+      "id": "sys-dotted-rule",
+      "name": "Dotted rule",
+      "type": "divider",
+      "size": "447x6",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-dotted-rule.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-perforation",
+      "name": "Perforation",
+      "type": "divider",
+      "size": "447x9",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-perforation.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-tape-ticks",
+      "name": "Tape measure ticks",
+      "type": "divider",
+      "size": "447x15",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-tape-ticks.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-barcode-decor",
+      "name": "Barcode decor",
+      "type": "divider",
+      "size": "447x15",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-barcode-decor.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-wave",
+      "name": "Wave",
+      "type": "divider",
+      "size": "447x15",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-wave.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-sun-strip",
+      "name": "Horizon sun strip",
+      "type": "strip",
+      "size": "447x27",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-sun-strip.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-battery",
+      "name": "Battery",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-battery.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-heart",
+      "name": "Heart",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-heart.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-star",
+      "name": "Star",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-star.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-house",
+      "name": "House",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-house.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-bell",
+      "name": "Bell",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-bell.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-dog",
+      "name": "Dog",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-dog.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-bone",
+      "name": "Bone",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-bone.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-warning",
+      "name": "Warning triangle",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-warning.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-check-circle",
+      "name": "Check circle",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-check-circle.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-stamp",
+      "name": "Stamp",
+      "type": "stamp",
+      "size": "72x72",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-stamp.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-sun",
+      "name": "Sun",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-sun.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-moon",
+      "name": "Moon",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-moon.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-bolt",
+      "name": "Bolt",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-bolt.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-drop",
+      "name": "Water drop",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-drop.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-cloud",
+      "name": "Cloud",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-cloud.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-coffee",
+      "name": "Coffee",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-coffee.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-plant",
+      "name": "Plant",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-plant.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-arrow",
+      "name": "Arrow right",
+      "type": "icon",
+      "size": "39x39",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-arrow.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-corner",
+      "name": "Corner L",
+      "type": "corner",
+      "size": "15x15",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-corner.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "pieces",
+      "id": "sys-card-outline",
+      "name": "Card outline, rounded",
+      "type": "border",
+      "size": "510x180",
+      "pitch": 3,
+      "dot": 2,
+      "file": "ornaments/orn-sys-card-outline.png",
+      "source": "Original, drawn for this project (receipt-lab arena) (dot pitch 3)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-dotted-rule",
+      "name": "Dotted rule \u00b7 system",
+      "type": "round ticket",
+      "size": "512x419",
+      "file": "assets/round/sys-dotted-rule.png",
+      "ticket": "assets/round/sys-dotted-rule.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-dotted-rule",
+      "name": "Dotted rule \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-dotted-rule.png",
+      "ticket": "assets/round/old-dotted-rule.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-perforation",
+      "name": "Perforation \u00b7 system",
+      "type": "round ticket",
+      "size": "512x422",
+      "file": "assets/round/sys-perforation.png",
+      "ticket": "assets/round/sys-perforation.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-perforation",
+      "name": "Perforation \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-perforation.png",
+      "ticket": "assets/round/old-perforation.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-tape-ticks",
+      "name": "Tape measure ticks \u00b7 system",
+      "type": "round ticket",
+      "size": "512x428",
+      "file": "assets/round/sys-tape-ticks.png",
+      "ticket": "assets/round/sys-tape-ticks.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-tape-ticks",
+      "name": "Tape measure ticks \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-tape-ticks.png",
+      "ticket": "assets/round/old-tape-ticks.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-barcode-decor",
+      "name": "Barcode decor \u00b7 system",
+      "type": "round ticket",
+      "size": "512x428",
+      "file": "assets/round/sys-barcode-decor.png",
+      "ticket": "assets/round/sys-barcode-decor.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-barcode-decor",
+      "name": "Barcode decor \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-barcode-decor.png",
+      "ticket": "assets/round/old-barcode-decor.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-wave",
+      "name": "Wave \u00b7 system",
+      "type": "round ticket",
+      "size": "512x428",
+      "file": "assets/round/sys-wave.png",
+      "ticket": "assets/round/sys-wave.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-wave",
+      "name": "Wave \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-wave.png",
+      "ticket": "assets/round/old-wave.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-sun-strip",
+      "name": "Horizon sun strip \u00b7 system",
+      "type": "round ticket",
+      "size": "512x440",
+      "file": "assets/round/sys-sun-strip.png",
+      "ticket": "assets/round/sys-sun-strip.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-sun-strip",
+      "name": "Horizon sun strip \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-sun-strip.png",
+      "ticket": "assets/round/old-sun-strip.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-battery",
+      "name": "Battery \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-battery.png",
+      "ticket": "assets/round/sys-battery.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-battery",
+      "name": "Battery \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-battery.png",
+      "ticket": "assets/round/old-battery.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-heart",
+      "name": "Heart \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-heart.png",
+      "ticket": "assets/round/sys-heart.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-heart",
+      "name": "Heart \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-heart.png",
+      "ticket": "assets/round/old-heart.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-star",
+      "name": "Star \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-star.png",
+      "ticket": "assets/round/sys-star.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-star",
+      "name": "Star \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-star.png",
+      "ticket": "assets/round/old-star.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-house",
+      "name": "House \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-house.png",
+      "ticket": "assets/round/sys-house.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-house",
+      "name": "House \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-house.png",
+      "ticket": "assets/round/old-house.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-bell",
+      "name": "Bell \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-bell.png",
+      "ticket": "assets/round/sys-bell.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-bell",
+      "name": "Bell \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-bell.png",
+      "ticket": "assets/round/old-bell.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-dog",
+      "name": "Dog \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-dog.png",
+      "ticket": "assets/round/sys-dog.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-dog",
+      "name": "Dog \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-dog.png",
+      "ticket": "assets/round/old-dog.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-bone",
+      "name": "Bone \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-bone.png",
+      "ticket": "assets/round/sys-bone.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-bone",
+      "name": "Bone \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-bone.png",
+      "ticket": "assets/round/old-bone.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-warning",
+      "name": "Warning triangle \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-warning.png",
+      "ticket": "assets/round/sys-warning.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-warning",
+      "name": "Warning triangle \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-warning.png",
+      "ticket": "assets/round/old-warning.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-check-circle",
+      "name": "Check circle \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-check-circle.png",
+      "ticket": "assets/round/sys-check-circle.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-check-circle",
+      "name": "Check circle \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-check-circle.png",
+      "ticket": "assets/round/old-check-circle.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-sys-stamp",
+      "name": "Stamp \u00b7 system",
+      "type": "round ticket",
+      "size": "512x415",
+      "file": "assets/round/sys-stamp.png",
+      "ticket": "assets/round/sys-stamp.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "system"
+      }
+    },
+    {
+      "arena": "system",
+      "id": "round-old-stamp",
+      "name": "Stamp \u00b7 old",
+      "type": "round ticket",
+      "file": "assets/round/old-stamp.png",
+      "ticket": "assets/round/old-stamp.png",
+      "source": "Original, drawn for this project (receipt-lab arena)",
+      "licence": "Original, drawn for this project (receipt-lab arena)",
+      "attributes": {
+        "set": "old"
+      }
+    }
+  ],
+  "note": "Paths are relative to design-lab/system. Rebuild with scripts/build_system.py from the arena folder."
+}
