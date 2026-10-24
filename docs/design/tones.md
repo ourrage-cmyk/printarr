@@ -1,54 +1,62 @@
-# Tone language
+# Mood and tone language
 
-A tone tells the reader how a ticket feels before they read it. Each tone has one ornament
-family and one icon, so the paper says the feeling at a glance. The catalogue is
-`app/render/system/blocks.json` (`moods`); `tests/test_tones.py` checks the rules below.
+A mood tells the reader how a tile feels before they read it. The mood is set on each block. The catalogue is
+`app/render/system/blocks.json` (`moods`), and `tests/test_tones.py` covers the catalogue.
 
-| Tone | Feeling | Header ornament | Icon | Title | Notes |
-| --- | --- | --- | --- | --- | --- |
-| neutral | plain information | hairline | box | dot matrix | no ornament beyond the rule |
-| factual | a number or status | doubleHairline | box | dot matrix | |
-| happy | good news | sunStrip | sun | dot matrix | |
-| playful | light, fun | dottedWave | star | dot matrix | |
-| excited | enthusiasm | sunStrip | star | dot matrix | |
-| loving | affection | heart | heart | dot matrix | the only tone with a heart |
-| gentle_warning | a soft heads-up | dottedWave (zigzag) | drop | dot matrix | the zigzag is the gentle, cute motif |
-| reminder | a time cue | tapeTicks | check | dot matrix | no heart; tape reads as a note to self |
-| sad | sympathy | dashedRule | drop | dot matrix | |
-| confused | a question | dashedRule | question | dot matrix | |
-| upset | a complaint | perforation | warn | dot matrix | |
-| firm_complaint | a firm complaint | doubleHairline | warn | dot matrix | |
-| urgent | needs attention | barcode border | warn | dot matrix | the barcode border signals urgency |
-| critical | needs attention now | barcode border | warn | inverted (white on black) | the only inverted title; super urgent only |
+A tone is the ticket-level setting (`tone` on a ticket). Printed tickets never print the tone name or the mood name.
+
+## Moods
+
+Each mood has one band across the top of its card, one icon, and an outline. The band is drawn once, 28 dots tall,
+with no second ornament and no mood word. Ink rises with urgency.
+
+| Mood | Band | Icon | Outline |
+| --- | --- | --- | --- |
+| neutral | none (plain card) | box | standard |
+| factual | none (plain card) | thermometer | standard |
+| happy | sparse dots | sun | rounder corner |
+| loving | sparse dots | heart | rounder corner (the only mood with a heart) |
+| excited | zigzag | star | standard |
+| playful | zigzag | bone | rounder corner |
+| reminder | upright ticks | clock | standard |
+| sad | dense stipple | drop | standard |
+| confused | dense stipple | question | standard |
+| gentle_warning | diagonal hatch | cloud | rounder corner |
+| upset | diagonal hatch | warning | heavy square outline |
+| firm_complaint | blocks | warning | heavy outline (3 dots) |
+| urgent | barcode | warning | heavy square outline |
+| critical | solid black bar | warning | heaviest outline (5 dots) |
 
 Rules:
-- Header, icon and title accent together are unique per tone, so no two tones look the same.
-  `urgent` and `critical` share the barcode border and warn icon; only the inverted title tells them apart.
-- The inverted (pill) title is used only by `critical`.
+- The band carries the mood. Moods in one family (for example upset and gentle_warning) differ by their icon and outline.
+- The inverted title (white on black) is used only by `critical`, so it is the one mood that reads as urgent before the words.
 - A heart appears only for `loving`.
-- Fun facts use the playful tone, not reminders. A fun fact prints its text alone: no "Did you know" heading
-  and no "FUN FACT" label is added. The words may appear in the sender's own text.
-- Printed tickets never print the tone name.
+- Fun facts use the `playful` mood, not `reminder`. They are printed without a label such as "Did you know" or "Fun fact" above them.
+  The fact stands alone, and a reminder or note never carries one. The words "Did you know" are not forbidden inside a sentence.
 
-Outline weight: the card outline also carries the tone. `urgent`, `upset` and `firm_complaint`
-draw a heavy (4 dot) square-cornered outline, `critical` the heaviest (5 dots), and soft tones
-(`loving`, `gentle_warning`, `playful`, `happy`) draw a rounder corner. The rest use the shell's own
-2-dot outline. Each kind of ticket also wears its own mark at the top-right: envelope for a note,
-bolt for an alert, clock for a reminder, bulb for a fun fact and cart for a shopping list.
+## Kind marks
 
-## Mood bands (one per card, at the top)
+Five block types wear a small mark at the top-right corner of their card. The mark follows the block, not the ticket's `kind`:
 
-The band carries the mood; it is drawn once at the top of the card, 28 dots tall, with no second ornament and no mood words. Ink rises with urgency.
-
-| Band | Moods |
+| Block | Mark |
 | --- | --- |
-| none (plain card) | neutral, factual |
-| sparse dots | loving, happy |
-| zigzag | excited, playful |
-| upright ticks | reminder |
-| dense stipple | sad, confused |
-| diagonal hatch | gentle_warning, upset |
-| barcode | firm_complaint, urgent |
-| solid black bar (plus inverted title) | critical |
+| `message` (a note from a person) | envelope |
+| `alert` | bolt |
+| `tip` (a reminder) | clock |
+| `fact` | bulb |
+| `checklist` (a shopping or to-do list) | cart |
 
-Moods in one family differ by their icon, and by outline weight (firm 3, urgent 4, upset 4, critical 5). The older header/footer table above is superseded for the ornament column.
+## Tones
+
+Tones (`tone` on a ticket) set the ticket's default feel: `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`.
+A block's own mood still decides its band, icon and outline.
+
+## Outlines and corners
+
+The outline follows the mood. `urgent`, `upset` and `firm_complaint` draw a heavy square outline, `critical` the heaviest.
+The soft moods (`loving`, `gentle_warning`, `playful`, `happy`) draw rounder corners. The rest use the standard two-dot outline.
+
+## Where the numbers come from
+
+The mood catalogue is the source of truth. It is in `app/render/system/blocks.json`, and the renderer reads it at start-up.
+The stroke and corner values for each mood are in `app/render/strips.py` (`STROKE_BY_MOOD`, `RADIUS_BY_MOOD`).
