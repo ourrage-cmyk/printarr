@@ -394,6 +394,16 @@ SINCE_HOURS_MAX = 24 * 365 * 10  # ten years; larger values overflow the SQLite 
 PAPER_WARN_LINES = 20  # a receipt longer than this uses a lot of paper; warn, do not block
 
 
+CSV_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: Any) -> Any:
+    """Stop a spreadsheet reading a message as a formula: a leading = + - @ is shown as text."""
+    if isinstance(value, str) and value.startswith(CSV_FORMULA_START):
+        return "'" + value
+    return value
+
+
 def preview_warnings(text: str) -> list[str]:
     """Checks for a rendered receipt: length, and characters that print as "?"."""
     warnings: list[str] = []
@@ -1090,7 +1100,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
-            writer.writerow({**row, "decorations": ",".join(row["decorations"])})
+            cells = {**row, "decorations": ",".join(row["decorations"])}
+            writer.writerow({key: _csv_safe(value) for key, value in cells.items()})
         return Response(buffer.getvalue(), media_type="text/csv")
 
     @api.get("/tickets/{ticket_id}", response_model=TicketOut, tags=["tickets"])

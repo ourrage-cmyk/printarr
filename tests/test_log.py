@@ -74,3 +74,11 @@ def test_log_cannot_group_by_message_text(settings):
     store.init()
     with pytest.raises(ValueError):
         store.log_counts("message")
+
+
+def test_csv_export_does_not_let_a_message_run_as_a_formula(settings):
+    with TestClient(create_app(settings)) as client:
+        client.post("/api/v1/tickets", json={"recipient": "wife", "message": "=HYPERLINK(\"http://x\")", "template": "auto"})
+        csv_text = client.get("/api/v1/log/export").text
+        assert "'=HYPERLINK" in csv_text
+        assert ",=HYPERLINK" not in csv_text
