@@ -72,6 +72,7 @@ from app.slots import schema as slot_schema
 from app.slots import validate as validate_slots
 from app.templates import (
     RECIPIENTS,
+    Deadline,
     TEMPLATES,
     Choice,
     template_by_id,
@@ -698,7 +699,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             return None
         return OpenAICompatibleModel(current.base_url, current.text_model, current.timeout)
 
-    def prepare_text(body: TicketCreate) -> str:
+    def prepare_text(body: TicketCreate, deadline: Deadline | None = None) -> str:
         """Clean up unformatted text before rendering. Falls back to the text as sent."""
         if body.text_state == "formatted":
             return body.message
@@ -706,7 +707,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if model is None:
             return body.message
         try:
-            cleaned = model.rewrite(body.message)
+            cleaned = model.rewrite(body.message, deadline)
         except Exception as exc:  # the text is printed as sent; a model problem never blocks a print
             notifier.repeated("text_model", f"text model failed, sent text uncleaned: {exc}")
             return body.message
@@ -719,7 +720,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         else:  # one slow answer is logged; an alert needs repeated failures (see Notifier.repeated)
             notifier.repeated("model", f"decision model failed, using rules: {error}")
 
-    def choose(body: TicketCreate) -> Choice:
+    def choose(body: TicketCreate, deadline: Deadline | None = None) -> Choice:
         template_id = None if body.template == "auto" else body.template
         try:
             return resolve_choice(
@@ -729,6 +730,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 template_id,
                 current_model(),
                 on_model_result,
+                deadline,
             )
         except ValueError as exc:
             raise ApiProblem(422, str(exc), "template must be 'auto' or a template id from GET /api/v1/templates.") from None
@@ -872,8 +874,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             existing = store.get_by_key(body.idempotency_key)
             if existing is not None:
                 return existing
-        choice = choose(body)
-        message = prepare_text(body)
+        deadline = Deadline()  # one budget for the text clean-up and the decision, together
+        choice = choose(body, deadline)
+        message = prepare_text(body, deadline)
         if body.blocks and home_assistant() is None:
             raise ApiProblem(422, "Home Assistant is not configured", HA_HINT)
         render_started = time.perf_counter()
@@ -1231,8 +1234,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.post("/tickets/preview", response_model=PreviewOut, tags=["tickets"])
     def preview(body: TicketCreate) -> dict[str, Any]:
         """Choose a template and render a receipt without queueing it."""
-        choice = choose(body)
-        message = prepare_text(body)
+        deadline = Deadline()  # one budget for the text clean-up and the decision, together
+        choice = choose(body, deadline)
+        message = prepare_text(body, deadline)
         extra = prepare_blocks(body)
         text = render_preview(body, choice, message, extra)
         return {

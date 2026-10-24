@@ -208,7 +208,7 @@ def test_formatted_is_the_default_and_is_sent_as_is(settings):
 def test_unformatted_text_is_cleaned_by_the_text_model(settings, monkeypatch):
     from app import templates
 
-    monkeypatch.setattr(templates.OpenAICompatibleModel, "rewrite", lambda self, text: "Dinner is ready.")
+    monkeypatch.setattr(templates.OpenAICompatibleModel, "rewrite", lambda self, text, deadline=None: "Dinner is ready.")
     with TestClient(create_app(settings)) as client:
         client.put(
             "/api/v1/settings/model",

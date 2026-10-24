@@ -47,4 +47,4 @@ What changed:
 - A failed model never blocks a print. The rules choose, and the text is printed as sent.
 - Granite calls send max_tokens 1024. A small budget left the answer empty.
 
-Known limit: a cold text clean-up followed by a cold decision call can run past the 60 s ticket limit. The rules fallback still prints.
+Both model calls on one ticket share a 50 s budget, leaving 10 s for rendering inside the 60 s ticket limit. The decision gets what the text clean-up left. When the budget runs out, the rules choose and the text prints as sent.

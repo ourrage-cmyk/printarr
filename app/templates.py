@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -85,6 +86,25 @@ class DecisionModel(Protocol):
     ) -> tuple[int, list[str]]: ...
 
 
+MODEL_BUDGET_S = 50.0  # every model call on one ticket shares this; 60 s is the ticket limit, 10 s is for rendering
+MIN_CALL_S = 1.0  # below this, a call is not worth starting
+
+
+class Deadline:
+    """The time left for the model calls of one request. Shared by the text clean-up and the decision."""
+
+    def __init__(self, seconds: float = MODEL_BUDGET_S, clock: Callable[[], float] = time.monotonic) -> None:
+        self._clock = clock
+        self._end = clock() + seconds
+
+    def allow(self, timeout: float) -> float:
+        """The timeout for the next call: its own limit, or what is left if that is less. Raises when nothing is left."""
+        left = self._end - self._clock()
+        if left < MIN_CALL_S:
+            raise ModelError("the model time for this ticket is used up; the rules chose instead")
+        return min(timeout, left)
+
+
 def rule_choice(recipient: str, title: str | None) -> Choice:
     """Deterministic fallback. Titled tickets get the first template with a tall title."""
     options = templates_for(recipient)
@@ -109,6 +129,7 @@ def resolve_choice(
     template_id: int | None = None,
     model: DecisionModel | None = None,
     on_model_result: Callable[[Exception | None], None] | None = None,
+    deadline: Deadline | None = None,
 ) -> Choice:
     """Pick a template. Raises ValueError only for an explicit template outside the group.
 
@@ -120,7 +141,8 @@ def resolve_choice(
         return explicit_choice(recipient, template_id)
     if model is not None:
         try:
-            chosen_id, decorations = model.choose(templates_for(recipient), recipient, title, message)
+            extra = {"deadline": deadline} if deadline is not None else {}  # test doubles take no deadline
+            chosen_id, decorations = model.choose(templates_for(recipient), recipient, title, message, **extra)
             template = next(t for t in templates_for(recipient) if t.id == chosen_id)
             picked = tuple(d for d in DECORATIONS if d in decorations and d in template.allowed)
             if on_model_result:
@@ -145,7 +167,7 @@ class OpenAICompatibleModel:
         self.model = model
         self.timeout = timeout
 
-    def _chat(self, system: str, user: str) -> str:
+    def _chat(self, system: str, user: str, deadline: Deadline | None = None) -> str:
         body = json.dumps(
             {
                 "model": self.model,
@@ -160,21 +182,22 @@ class OpenAICompatibleModel:
         request = urllib.request.Request(
             self.url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
+        timeout = deadline.allow(self.timeout) if deadline is not None else self.timeout
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 reply = json.loads(response.read())
         except Exception as exc:
-            raise ModelError(describe_failure(exc, f"the text model {self.model} at {self.url}", self.timeout)) from None
+            raise ModelError(describe_failure(exc, f"the text model {self.model} at {self.url}", timeout)) from None
         return reply["choices"][0]["message"]["content"]
 
-    def rewrite(self, text: str) -> str:
+    def rewrite(self, text: str, deadline: Deadline | None = None) -> str:
         """Clean up unformatted text, for example speech-to-text. Used by the text model only."""
         system = (
             "You clean up text for a receipt printer. Fix spelling, punctuation and garbled "
             "speech-to-text. Keep the meaning and the language. Reply with only the cleaned text, "
             "no quotes and no commentary."
         )
-        cleaned = self._chat(system, text).strip()
+        cleaned = self._chat(system, text, deadline).strip()
         if not cleaned:
             raise ValueError("text model returned nothing")
         return cleaned
@@ -222,7 +245,7 @@ class SystemOneModel:
         self.model = model
         self.timeout = timeout
 
-    def scores(self, recipient: str, title: str | None, message: str) -> dict[str, float]:
+    def scores(self, recipient: str, title: str | None, message: str, deadline: Deadline | None = None) -> dict[str, float]:
         body = json.dumps(
             {
                 "model": self.model,
@@ -239,11 +262,12 @@ class SystemOneModel:
         request = urllib.request.Request(
             self.url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
+        timeout = deadline.allow(self.timeout) if deadline is not None else self.timeout
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 reply = json.loads(response.read())
         except Exception as exc:
-            raise ModelError(describe_failure(exc, f"the decision model {self.model} at {self.url}", self.timeout)) from None
+            raise ModelError(describe_failure(exc, f"the decision model {self.model} at {self.url}", timeout)) from None
         answers = reply.get("answers", {})
         result: dict[str, float] = {}
         for name in QUESTIONS:
@@ -254,9 +278,14 @@ class SystemOneModel:
         return result
 
     def choose(
-        self, options: Sequence[Template], recipient: str, title: str | None, message: str
+        self,
+        options: Sequence[Template],
+        recipient: str,
+        title: str | None,
+        message: str,
+        deadline: Deadline | None = None,
     ) -> tuple[int, list[str]]:
-        scores = self.scores(recipient, title, message)
+        scores = self.scores(recipient, title, message, deadline)
         for kind, questions in KIND_QUESTIONS.items():
             if max(scores[q] for q in questions) >= MIN_SCORE:
                 chosen = next((t for t in options if t.kind == kind), None)
