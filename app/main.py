@@ -55,6 +55,7 @@ from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
     note_card_lines,
+    note_card_render,
     ticket_lines,
     plain_message,
     BLOCKS as compose_blocks,
@@ -357,7 +358,9 @@ class TicketOut(BaseModel):
     strip_id: str | None = None
     strip_trigger: str | None = None
     moods: str = ""
-    notes: list[str] = Field(default_factory=list, description="What was shortened to fit, for composed tickets.")
+    notes: list[str] = Field(default_factory=list, description="What was shortened to fit.")
+    truncated: bool = Field(default=False, description="True when some of the text did not fit and was shortened. Read notes for what.")
+    strip_count: int = Field(default=1, description="How many strips the ticket prints as.")
 
 
 class ChoiceOut(BaseModel):
@@ -903,16 +906,16 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 sent_at=datetime.now(settings.tzinfo),
             )
             if choice.template.design:
-                lines = [placeholder_line(choice.template.design, message)]
+                lines, notes = [placeholder_line(choice.template.design, message)], []
             else:
-                lines = note_card_lines(message, body.sender, body.title)
+                lines, notes = note_card_render(message, body.sender, body.title)
             encode(lines, feed=choice.template.feed, raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         render_ms = round((time.perf_counter() - render_started) * 1000)
         kind = body.kind or (choice.template.kind if choice.template.kind in KINDS else DEFAULT_KIND)
-        return store.create(
+        ticket = store.create(
             kind=kind,
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
@@ -933,6 +936,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             hold_key=body.hold_key,
             idempotency_key=body.idempotency_key,
         )
+        return {**ticket, "notes": notes, "truncated": bool(notes), "strip_count": len(lines)}
 
     @api.post("/tickets/{ticket_id}/release", response_model=TicketOut, tags=["tickets"])
     def release_ticket(ticket_id: str) -> dict[str, Any]:
@@ -997,7 +1001,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             idempotency_key=body.idempotency_key,
             moods=",".join(block["mood"] for block in checked),
         )
-        return {**ticket, "notes": notes}
+        return {**ticket, "notes": notes, "truncated": bool(notes), "strip_count": len(lines)}
 
     @api.post("/people/{person}/release", tags=["tickets"])
     def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:

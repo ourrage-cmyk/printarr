@@ -94,7 +94,7 @@ def test_metric_tiles_pack_side_by_side():
 def test_one_and_two_column_row():
     from app.render.strips import layout
 
-    blocks = [Block("metric", {"label": "A", "value": 1}), Block("message", {"paragraph": "Hi there."}, span=2)]
+    blocks = [Block("metric", {"label": "A", "value": 1}), Block("alert", {"label": "HI", "paragraph": "Hi there."}, span=2)]
     rows, _ = layout(blocks)
     assert len(rows) == 1
     assert [p.span for p in rows[0]] == [1, 2]
