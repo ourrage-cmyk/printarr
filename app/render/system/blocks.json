@@ -1,0 +1,345 @@
+{
+  "version": 1,
+  "note": "Block catalogue for composable receipt strips. A strip is an ordered list of blocks that share one card shell. Moods change only the look (ornament, icon, accent), never the size or the grid. Slot names reuse printarr's slot names where they exist (greeting, title, metrics, paragraph, tip).",
+  "shell": {
+    "width_dots": 512,
+    "side_margin_dots": 14,
+    "card_padding_dots": 14,
+    "block_gap_dots": 10,
+    "stroke_dots": 2,
+    "radius_dots": 4,
+    "radius_options": [
+      4,
+      8
+    ],
+    "ornaments_per_card": 1,
+    "ornament_slots": [
+      "header",
+      "divider"
+    ],
+    "fonts": {
+      "headline": "dot5x7 scale 3",
+      "numerals": "dot5x7 scale 3-5",
+      "body": "dot5x7 scale 2",
+      "label": "dot5x7 scale 2, uppercase"
+    },
+    "margins": {
+      "top_dots": 90,
+      "bottom_dots": 90,
+      "note": "About half an inch at 180 dpi. Configurable per printer. Gives a clean cut with no wasted paper."
+    },
+    "strip_rules": {
+      "max_blocks": 5,
+      "greeting_starts_strip": true,
+      "cut_after_strip": true,
+      "print_trigger": "per recipient, when they arrive or unplug, or on an explicit print-now request. Never a shared strip for two people."
+    }
+  },
+  "blocks": {
+    "greeting": {
+      "label": "Greeting",
+      "slots": {
+        "greeting": "string, max 40, e.g. HELLO YANNIC",
+        "summary": "string, optional, one or two lines"
+      },
+      "renders": "headline at scale 3, then the summary wrapped at body scale",
+      "moods": [
+        "neutral",
+        "happy",
+        "excited",
+        "reminder"
+      ]
+    },
+    "metric": {
+      "label": "Metric tile",
+      "span": 1,
+      "units": "2 to 4 (a label can wrap to two lines, and a sparkline adds height)",
+      "slots": {
+        "label": "string",
+        "value": "number or text",
+        "unit": "string, optional",
+        "series": "list of numbers, optional, sparkline"
+      },
+      "renders": "label, numeral at scale 3, unit, optional sparkline",
+      "moods": [
+        "neutral",
+        "happy",
+        "sad",
+        "factual",
+        "urgent"
+      ]
+    },
+    "metric_rows": {
+      "label": "Metric rows",
+      "slots": {
+        "rows": "list of {label, value, unit}, up to 6 rows"
+      },
+      "renders": "label, dot leaders, value right-aligned at the card edge",
+      "moods": [
+        "neutral",
+        "factual",
+        "reminder",
+        "confused",
+        "upset"
+      ]
+    },
+    "graph": {
+      "label": "Graph",
+      "slots": {
+        "title": "string",
+        "series": "list of numbers, oldest first, up to 48",
+        "unit": "string, optional"
+      },
+      "renders": "line graph 56 dots tall, dotted gridlines, first and last value labelled",
+      "moods": [
+        "neutral",
+        "factual",
+        "excited"
+      ]
+    },
+    "dog_counts": {
+      "label": "Dog counts",
+      "slots": {
+        "dogs": "list of {name, pee, poop, food, run} counts, up to 2"
+      },
+      "renders": "one row per dog, counts in the four categories",
+      "moods": [
+        "neutral",
+        "happy",
+        "sad",
+        "factual"
+      ]
+    },
+    "message": {
+      "label": "Message",
+      "slots": {
+        "title": "string, optional",
+        "paragraph": "string, required, max 800",
+        "tip": "string, optional closing line",
+        "from": "string, sign-off name"
+      },
+      "renders": "header ornament, wrapped paragraph, divider ornament, sign-off",
+      "moods": [
+        "loving",
+        "neutral",
+        "reminder",
+        "playful",
+        "gentle_warning",
+        "firm_complaint",
+        "happy",
+        "sad",
+        "confused",
+        "excited",
+        "upset",
+        "factual"
+      ]
+    },
+    "alert": {
+      "label": "Alert",
+      "slots": {
+        "label": "string, short, e.g. WATER LEAK",
+        "paragraph": "string",
+        "action": "string, optional"
+      },
+      "renders": "filled pill with the label, paragraph, action row",
+      "moods": [
+        "gentle_warning",
+        "urgent",
+        "upset"
+      ]
+    },
+    "checklist": {
+      "label": "Checklist",
+      "slots": {
+        "title": "string",
+        "items": "list of {text, checked}, up to 8"
+      },
+      "renders": "box or tick sprite per item, text at body scale",
+      "moods": [
+        "neutral",
+        "reminder",
+        "happy"
+      ]
+    },
+    "tip": {
+      "label": "Tip",
+      "slots": {
+        "tip": "string, max 120"
+      },
+      "renders": "one line with a small icon",
+      "moods": [
+        "neutral",
+        "reminder",
+        "happy",
+        "confused"
+      ]
+    },
+    "fact": {
+      "label": "Fun fact",
+      "slots": {
+        "paragraph": "string, max 200"
+      },
+      "renders": "playful header and divider, the fact, FUN FACT label",
+      "moods": [
+        "playful",
+        "excited",
+        "happy"
+      ]
+    }
+  },
+  "moods": {
+    "neutral": {
+      "header": "hairline",
+      "divider": "hairline",
+      "footer": "dashedRule",
+      "icon": "box",
+      "accent": "outline",
+      "sprite_set": "neutral"
+    },
+    "happy": {
+      "header": "sunStrip",
+      "divider": "tapeTicks",
+      "footer": "dottedWave",
+      "icon": "sun",
+      "accent": "outline",
+      "sprite_set": "bright"
+    },
+    "excited": {
+      "header": "sunStrip",
+      "divider": "tapeTicks",
+      "footer": "dottedWave",
+      "icon": "star",
+      "accent": "pill",
+      "sprite_set": "bright"
+    },
+    "loving": {
+      "header": "heart",
+      "divider": "dottedWave",
+      "footer": "dashedRule",
+      "icon": "heart",
+      "accent": "outline",
+      "sprite_set": "soft"
+    },
+    "playful": {
+      "header": "sunStrip",
+      "divider": "tapeTicks",
+      "footer": "dottedWave",
+      "icon": "star",
+      "accent": "outline",
+      "sprite_set": "bright"
+    },
+    "reminder": {
+      "header": "tapeTicks",
+      "divider": "dashedRule",
+      "footer": "tapeTicks",
+      "icon": "check",
+      "accent": "outline",
+      "sprite_set": "neutral"
+    },
+    "factual": {
+      "header": "hairline",
+      "divider": "hairline",
+      "footer": "hairline",
+      "icon": "box",
+      "accent": "outline",
+      "sprite_set": "neutral"
+    },
+    "sad": {
+      "header": "dottedWave",
+      "divider": "dashedRule",
+      "footer": "hairline",
+      "icon": "drop",
+      "accent": "outline",
+      "sprite_set": "soft"
+    },
+    "confused": {
+      "header": "dashedRule",
+      "divider": "dashedRule",
+      "footer": "hairline",
+      "icon": "question",
+      "accent": "outline",
+      "sprite_set": "neutral"
+    },
+    "upset": {
+      "header": "perforation",
+      "divider": "doubleHairline",
+      "footer": "barcode",
+      "icon": "warn",
+      "accent": "outline",
+      "sprite_set": "alert"
+    },
+    "gentle_warning": {
+      "header": "dottedWave",
+      "divider": "dashedRule",
+      "footer": "hairline",
+      "icon": "drop",
+      "accent": "outline",
+      "sprite_set": "alert"
+    },
+    "firm_complaint": {
+      "header": "perforation",
+      "divider": "doubleHairline",
+      "footer": "barcode",
+      "icon": "warn",
+      "accent": "outline",
+      "sprite_set": "alert"
+    },
+    "urgent": {
+      "header": "barcode",
+      "divider": "perforation",
+      "footer": "barcode",
+      "icon": "warn",
+      "accent": "pill",
+      "sprite_set": "alert"
+    }
+  },
+  "mood_rules": "Moods change the ornament, icon and accent only. Size, grid, font and card shell never change. One ornament per card: the first of header or divider that the block draws. Footer ornaments are not used on cards.",
+  "d1_questions": {
+    "block_type": {
+      "greeting": "Does this content open the message with a greeting to a person by name?",
+      "metric_tiles": "Does this content give one or two numbers with a trend?",
+      "metric_rows": "Does this content give a list of labelled values?",
+      "graph": "Does this content describe a change over time?",
+      "dog_counts": "Does this content count events for a dog?",
+      "message": "Does this content read as a message from one person to another?",
+      "alert": "Does this content warn about a problem at home?",
+      "checklist": "Does this content list things to buy or do?",
+      "tip": "Does this content give one piece of advice?",
+      "fact": "Does this content share a fun fact?"
+    },
+    "mood": {
+      "happy": "Is the content positive and cheerful?",
+      "excited": "Is the content enthusiastic about something?",
+      "loving": "Does the content express love or affection?",
+      "playful": "Is the content light-hearted or joking?",
+      "reminder": "Is the content a reminder about a task or time?",
+      "factual": "Is the content plain information with no emotion?",
+      "sad": "Is the content sad or disappointed?",
+      "confused": "Is the content unsure, asking a question, or unclear?",
+      "upset": "Is the content angry or upset?",
+      "gentle_warning": "Is the content a calm heads-up about something to check?",
+      "firm_complaint": "Does the content complain and ask for a change?",
+      "urgent": "Does the content need action right away?"
+    }
+  },
+  "grid": {
+    "unit_h": 40,
+    "gap_v": 10,
+    "pad_v": 8,
+    "pad_h": 14,
+    "cols": 3,
+    "col_gap": 10,
+    "outer_l": 15,
+    "outer_r": 497
+  },
+  "grid_rules": {
+    "columns": 3,
+    "card_width": "1, 2 or 3 columns; 3 is the full paper width",
+    "card_height": "whole units; unit = 40 dots; card = units*40 - 10",
+    "fluid": "text blocks measure their content and take the units it needs, within min_units and max_units",
+    "overflow": "a fluid card past max_units is shortened at the end of its text and marked with ...",
+    "packing": "consecutive blocks share a row while their spans add up to 3 or less",
+    "row_height": "all cards in a row take the tallest card's units",
+    "text_min_span": "text blocks need at least 2 columns"
+  }
+}
