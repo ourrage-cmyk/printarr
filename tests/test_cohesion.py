@@ -110,3 +110,12 @@ def test_dog_counts_for_two_dogs_fit_the_card_without_cutting():
     block = Block("dog_counts", SAMPLES["dog_counts"] | {"dogs": SAMPLES["dog_counts"]["dogs"] * 2})
     rows, notes = strips.layout([block])
     assert not any("shortened" in note for note in notes)
+
+
+def test_morning_card_uses_the_shared_gutters_and_top_margin():
+    from app.render.designs import SAMPLE_MORNING, morning_system
+
+    bitmap = morning_system(SAMPLE_MORNING)
+    left, right = _ink_columns(bitmap)
+    assert left == OUTER_L
+    assert PAPER_DOTS - 1 - right == PAPER_DOTS - OUTER_R - 1

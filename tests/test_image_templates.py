@@ -103,8 +103,8 @@ def test_morning_card_carries_the_system_icon_and_it_is_data_driven(monkeypatch)
     monkeypatch.setitem(system.decorations(), "morning", {})
     without_icon = morning_system(SAMPLE_MORNING)
     assert with_icon.bits != without_icon.bits
-    # The icon narrows the summary, so it can add one wrapped line (7 x 2 + 4 dots), no more.
-    assert 0 <= with_icon.height - without_icon.height <= 7 * 2 + 4
+    # The icon narrows the summary, so it can add one wrapped line (7 x 3 + 4 dots), no more.
+    assert 0 <= with_icon.height - without_icon.height <= 7 * 3 + 4  # one wrapped line at body scale 3
 
 
 def test_system_design_is_not_the_b4_014_reference():
