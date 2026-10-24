@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Res
 from pydantic import BaseModel, ConfigDict, Field
 
 from app import ticket_images
+from app.notify import MAX_TEXT, NotifyLimiter, clean_text
 from app.web import WEB_UI
 from app.version import PACKAGE_VERSION, build_info
 
@@ -109,6 +110,11 @@ Template choice: pass `template` to pick one explicitly from that recipient's gr
 If you leave it out, a local decision model picks one when it is configured. Otherwise
 a fixed rule picks one.
 """
+
+
+class NotifyIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    text: str = Field(min_length=1, max_length=MAX_TEXT, description="The message. Plain text, up to 1000 characters.")
 
 
 class ApiProblem(Exception):
@@ -1122,6 +1128,38 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             send_telegram(current.telegram_token, current.telegram_chat_id, "Printarr test alert: all good.")
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Telegram send failed: {exc}") from None
+        return {"sent": True}
+
+    notify_limiter = NotifyLimiter()
+
+    @api.post("/notify", tags=["settings"])
+    def notify(body: NotifyIn, request: Request) -> dict[str, Any]:
+        """Send a short message to Yannic's Telegram. One message per caller every 60 seconds."""
+        current = read_alert_settings()
+        if not (current.telegram_token and current.telegram_chat_id):
+            raise ApiProblem(
+                400,
+                "Telegram is not configured",
+                hint="Save the bot token and chat ID with PUT /api/v1/settings/alerts, then try again.",
+            )
+        source = request.client.host if request.client else "unknown"
+        wait = notify_limiter.check(source)
+        if wait > 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"one message per minute: wait {int(wait) + 1} seconds",
+                headers={"Retry-After": str(int(wait) + 1)},
+            )
+        text = clean_text(body.text).strip()
+        if not text:
+            raise ApiProblem(422, "the message is empty after removing control characters", hint="Send plain text in text.")
+        try:
+            send_telegram(current.telegram_token, current.telegram_chat_id, text)
+        except Exception as exc:
+            # The error text can carry the token. Log only the kind of error, and say nothing more to the caller.
+            logger.warning("notify from %s failed: %s", source, type(exc).__name__)
+            raise HTTPException(status_code=502, detail="Telegram did not accept the message. Try again later.") from None
+        logger.info("notify from %s sent (%d characters)", source, len(text))
         return {"sent": True}
 
     @api.get("/settings/ha", response_model=HASettingsOut, tags=["settings"])
