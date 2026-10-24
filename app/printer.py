@@ -93,7 +93,7 @@ class TcpTransport:
 
     def _connect(self) -> socket.socket:
         if not self.host:
-            raise PrinterError("no printer host configured (PRINTARR_PRINTER_HOST)")
+            raise PrinterError("printer address not set yet: finish setup at /setup")
         try:
             return socket.create_connection((self.host, self.port), timeout=self.timeout)
         except OSError as exc:
@@ -137,7 +137,7 @@ class UnbuiltTransport:
         self.target = kind
 
     def _fail(self) -> None:
-        raise PrinterError(f"{self.kind} printer connection is not built yet; use PRINTARR_PRINTER_MODE=tcp")
+        raise PrinterError(f"{self.kind} printer connection is not built yet; use a network (tcp) printer")
 
     def send(self, data: bytes) -> None:
         self._fail()

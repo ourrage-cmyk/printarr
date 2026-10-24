@@ -270,7 +270,7 @@ class TicketCreate(BaseModel):
         default=None,
         description=(
             "When to print, as ISO 8601. Values without a timezone use the server's "
-            "PRINTARR_TIMEZONE. Omit to print as soon as possible. Cannot be combined with hold."
+            "the timezone set in the setup wizard. Omit to print as soon as possible. Cannot be combined with hold."
         ),
         examples=["2026-10-24T17:30:00"],
     )
@@ -502,7 +502,15 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     notifier = Notifier(read_alert_settings)
     metrics = Metrics()
-    scheduler = Scheduler(store, transport, settings, notifier=notifier, metrics=metrics)
+    def printer_waiting() -> bool:
+        """True until setup is finished and a printer address is saved. Polling and alerts wait for that."""
+        if runtime["setup_open"]:
+            return True
+        return settings.printer_mode == "tcp" and not (store.get_setting("printer_host") or settings.printer_host)
+
+    scheduler = Scheduler(
+        store, transport, settings, notifier=notifier, metrics=metrics, printer_waiting=printer_waiting
+    )
     nightly = NightlyBackup(
         settings.db_path, store.backup_dir, settings.tzinfo, settings.backup_hour, settings.backup_keep
     )
@@ -561,6 +569,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     def watch_printer() -> None:
         """Every minute: reachability, then the printer's own status (paper, cover, cutter)."""
+        if printer_waiting():
+            return  # not set up yet: no alert and no poll
         metrics.incr("status_polls")
         try:
             answers = transport.read_status()
