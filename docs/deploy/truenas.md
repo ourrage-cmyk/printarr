@@ -116,10 +116,11 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 
 - The decision model, Home Assistant and Telegram settings are saved in the database. Change
   them in the web page; they survive upgrades and rebuilds.
-- `PRINTARR_PRINTER_HOST` in the YAML is the printer's address. To move from the simulator to
-  the real printer, change this one line and save.
-- Printer settings marked "first start only" in the YAML are read only on the first start.
-  After that the web page wins.
+- `PRINTARR_PRINTER_HOST` in the YAML is only the starting default for the setup wizard. Once
+  setup is finished, the printer address saved by the wizard wins, so changing the YAML does
+  nothing. There is no screen yet to change the printer address after setup (known gap, see the
+  Monday note below).
+- Values in the YAML are read only until setup is finished. After that the web page wins.
 
 ## Nightly backups
 
@@ -186,16 +187,10 @@ the TM-T88V. The simulator shows each receipt in a browser on the laptop.
 timeout 3 bash -c '</dev/tcp/<laptop-ip>/9100' && echo "port 9100 open" || echo "port 9100 closed"
 ```
 
-**Install or update printarr with the laptop as the printer.** In the YAML from
-[`docker-compose.yml`](../../docker-compose.yml), set:
-
-```yaml
-PRINTARR_PRINTER_MODE: tcp
-PRINTARR_PRINTER_HOST: <laptop-ip>   # the laptop, for now
-PRINTARR_PRINTER_PORT: "9100"
-```
-
-Save the app. Then check it, from any machine on the LAN:
+**Install printarr with the laptop as the printer.** Install the YAML from
+[`docker-compose.yml`](../../docker-compose.yml) as it is. In the setup wizard, enter the
+laptop's LAN address as the printer's IP address and `9100` as the port, then press **Test** and
+**Finish setup**. Then check it, from any machine on the LAN:
 
 ```sh
 curl http://<nas-ip>:8000/api/v1/printer                  # reachable: true
@@ -205,6 +200,8 @@ curl -X POST http://<nas-ip>:8000/api/v1/printer/test      # prints a test recei
 The receipt appears in the simulator at `http://localhost:8080` on the laptop. For the full
 check, run `sh scripts/smoke-test.sh http://<nas-ip>:8000` as well.
 
-**Monday, switch to the real printer.** Set `PRINTARR_PRINTER_HOST` to the TM-T88V's IP address
-(give the printer a fixed address first) and save. Nothing else changes. Tickets, settings and
+**Monday, switch to the real printer.** The printer address saved by the wizard wins over the YAML, and there is no
+screen yet to change it after setup (known gap). Until that exists, the simplest route is to keep the
+printer's address stable: give the TM-T88V the address the wizard was given, or run the wizard again
+on a fresh data folder. Tickets, settings and
 backups stay as they are.
