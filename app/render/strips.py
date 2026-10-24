@@ -793,20 +793,12 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 
 def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
-    """One line of advice. On its own card it is centred between the tone icon and the kind mark and the card
-    centres it vertically; inside a bigger card it leads with its icon like the rest of the text."""
+    """A line of advice: the tone icon, then the text flush left like every other body, clear of the kind mark."""
     c = card.c
     icon_is_mark = MOODS[card.mood]["icon"] == KIND_MARKS["tip"]  # a reminder's clock is the kind mark already
     clear = 0 if icon_is_mark else _kind_mark(card, "tip", x1)
     card.icon(x0, c.y)
-    if card.in_group:
-        c.y += paragraph(c, x0 + 34, c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2
-    else:
-        inner_l, inner_r = x0 + 36, x1 - 36
-        for line in solid_wrap(str(s.get("tip", "")), inner_r - inner_l):
-            c.solid(inner_l + (inner_r - inner_l - solid_width(line, 21)) // 2, c.y, line, 21)
-            c.y += ROW
-        c.y += 2
+    c.y += paragraph(c, x0 + 34, c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2  # flush left, like every other body
     if s.get("from"):
         c.solid(x0, c.y + 4, f"- {_label(s['from'])}", 21)
         c.y += ROW + 4
@@ -1219,7 +1211,7 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
             slots = {**slots, "_extra": int(slots.get("_extra") or 0) + slack}
         card = Card(c, p.block.mood, plot_h=plot)
         c.y = top + PAD_V
-        if p.block.type == "tip" or (p.block.type == "greeting" and not p.slots.get("summary")):
+        if p.block.type == "greeting" and not p.slots.get("summary"):
             c.y = top + max(PAD_V, (height - p.content_h) // 2)  # one line or one title: centred in its card
         _draw_block(card, p.block.type, slots, p.x0 + PAD_H, p.x1 - PAD_H)
         mood = p.block.mood
