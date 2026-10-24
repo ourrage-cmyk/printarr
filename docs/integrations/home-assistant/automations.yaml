@@ -19,13 +19,14 @@ automation:
             - { person: yannic, recipient: yannic, sensor: sensor.body_battery_most_recent, sleep: sensor.sleep_score }
             - { person: allyson, recipient: wife, sensor: sensor.body_battery_most_recent_2, sleep: sensor.sleep_score_2 }
           sequence:
-            - action: rest_command.printarr_create_ticket
+            - action: rest_command.printarr_create_slot_ticket
               data:
+                template: 101
                 recipient: "{{ repeat.item.recipient }}"
                 kind: morning
                 tone: neutral
-                title: "Morning"
-                message: "Good morning, {{ repeat.item.person | capitalize }}."
+                slots:
+                  title: "Morning"
                 hold: true
                 hold_key: "morning-{{ repeat.item.person }}-{{ now().date().isoformat() }}"
                 idempotency_key: "morning:{{ repeat.item.person }}:{{ now().date().isoformat() }}"
@@ -74,13 +75,14 @@ automation:
             - { person: yannic, recipient: yannic, other: wife }
             - { person: allyson, recipient: wife, other: yannic }
           sequence:
-            - action: rest_command.printarr_create_ticket
+            - action: rest_command.printarr_create_slot_ticket
               data:
+                template: 101
                 recipient: "{{ repeat.item.recipient }}"
                 kind: evening
                 tone: neutral
-                title: "Evening"
-                message: "Evening rundown for {{ repeat.item.person | capitalize }}."
+                slots:
+                  title: "Evening"
                 hold: true
                 hold_key: "evening-{{ repeat.item.person }}-{{ now().date().isoformat() }}"
                 idempotency_key: "evening:{{ repeat.item.person }}:{{ now().date().isoformat() }}"

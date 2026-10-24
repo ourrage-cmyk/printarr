@@ -7,7 +7,7 @@ its REST API at `http://PRINTARR_URL/api/v1`. Tool definition: `openapi.yaml`. W
 
 | Want to | Call |
 |---|---|
-| A morning or evening briefing | `GET /templates/101/schema`, then `POST /tickets/slots` with `template: 101` |
+| A morning or evening briefing | `GET /templates/101/schema`, then `POST /tickets/slots` with `template: 101` (add `hold` and keys for a held briefing) |
 | A note or message between the two people | `POST /tickets/slots` with `template: 102`, or `POST /tickets` with plain `message` |
 | Choose graph candidates for a briefing | `GET /insights/entities?person=...` |
 | Cancel a pending ticket | `POST /tickets/{id}/cancel` |
@@ -24,16 +24,11 @@ its REST API at `http://PRINTARR_URL/api/v1`. Tool definition: `openapi.yaml`. W
 6. Use `send_at` to print at a time (local time, no offset, is the server timezone). Leave it out to print when queued.
 7. If a call returns 422, read the problems list, fix the slots, and send again. Do not resend unchanged.
 
-## Gaps to know about (not live yet)
+## Holds and retries on briefings
 
-The following are needed for the morning flow Home Assistant triggers, and are requested from the API thread:
-
-- `hold`, `hold_key` and `idempotency_key` on `POST /tickets/slots`. Today only `POST /tickets` has them.
-- `blocks` on slot tickets, for graphs read from Home Assistant at print time.
-
-Until they land, a briefing Hermes creates with `/tickets/slots` prints at once or at `send_at`. For a morning
-ticket that must wait for the phone to unplug, use `POST /tickets` with `hold`, `hold_key` and `idempotency_key`,
-and a plain paragraph in `message`.
+`POST /tickets/slots` accepts `hold`, `hold_key`, `idempotency_key` and `blocks`. For a briefing that Home
+Assistant should release on phone unplug, send `hold: true`, `hold_key: morning-<person>-<date>` and
+`idempotency_key: morning:<person>:<date>`. A retry with the same key returns the first ticket.
 
 ## Briefing shape
 
