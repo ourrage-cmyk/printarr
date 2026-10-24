@@ -66,3 +66,19 @@ def test_preview_warns_about_length_and_question_marks(settings):
         ).json()
         assert any("\U0001F600" in w for w in emoji["warnings"])
         assert emoji["warnings"] and not any("lines long" in w for w in emoji["warnings"])
+
+
+def test_glyph_lines_are_logged_with_their_source_text(settings, caplog):
+    import logging
+
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    caplog.set_level(logging.INFO, logger="printarr.scheduler")
+    app = create_app(settings)
+    with TestClient(app) as client:
+        ticket = client.post("/api/v1/tickets", json={"recipient": "wife", "message": "Привет, Алиса"}).json()
+        assert app.state.scheduler.run_once() == 1
+        assert ticket["id"]
+    assert any("drawn as images" in r.message and "Привет, Алиса" in r.message for r in caplog.records)

@@ -123,3 +123,49 @@ def test_systemone_rejects_a_missing_or_out_of_range_score(monkeypatch):
     )
     with pytest.raises(ValueError):
         templates.SystemOneModel("http://h:11434", "d1", 5).scores("yannic", None, "hi")
+
+
+def test_every_recipient_group_has_all_six_kinds():
+    from app import templates
+
+    for recipient in ("yannic", "wife"):
+        kinds = sorted(t.kind for t in templates.templates_for(recipient))
+        assert kinds == ["alert", "evening", "list", "morning", "note", "plain"]
+
+
+def test_kind_is_decided_before_the_template_so_briefings_stay_briefings(monkeypatch):
+    import io
+    import json
+
+    from app import templates
+
+    scores = {name: 0.0 for name in templates.QUESTIONS}
+    scores["is_morning_briefing"] = 0.7
+    scores["has_numbers_or_stats"] = 0.98  # would have won under raw highest-score picking
+    scores["is_short_note"] = 0.89
+    reply = {"answers": {name: {"type": "noul", "noul": value} for name, value in scores.items()}}
+    monkeypatch.setattr(
+        templates.urllib.request, "urlopen", lambda request, timeout: io.BytesIO(json.dumps(reply).encode())
+    )
+    model = templates.SystemOneModel("http://h:11434", "d1", 5)
+    choice = resolve_choice("wife", None, "Breakfast 8:00, bins out", model=model)
+    assert choice.selection == "model"
+    assert choice.template.kind == "morning" and choice.template.id == 10
+
+
+def test_alert_wins_over_briefing_when_both_score(monkeypatch):
+    import io
+    import json
+
+    from app import templates
+
+    scores = {name: 0.0 for name in templates.QUESTIONS}
+    scores["is_alert"] = 0.9
+    scores["is_morning_briefing"] = 0.95
+    reply = {"answers": {name: {"type": "noul", "noul": value} for name, value in scores.items()}}
+    monkeypatch.setattr(
+        templates.urllib.request, "urlopen", lambda request, timeout: io.BytesIO(json.dumps(reply).encode())
+    )
+    model = templates.SystemOneModel("http://h:11434", "d1", 5)
+    choice = resolve_choice("yannic", None, "Smoke alarm in the hall", model=model)
+    assert choice.template.kind == "alert" and choice.template.id == 8

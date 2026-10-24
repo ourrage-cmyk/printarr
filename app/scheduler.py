@@ -15,6 +15,7 @@ from app.ha import HAError, client_from_store
 from app.printer import PrinterError, Transport
 from app.receipt import Line, render_ticket_lines, ticket_feed
 from app.render.registry import design_line
+from app.text import printable
 from app.templates import template_by_id
 from app.blocks import resolve_blocks
 from app.store import TicketStore, now_ms
@@ -85,6 +86,11 @@ class Scheduler:
             live = self.live_lines(ticket)
             fetched = time.perf_counter()
             lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
+            # Lines drawn as images (names outside CP437): log the source text, so the printed
+            # bitmap can be matched to what was sent.
+            glyph_sources = [line.text for line in lines if line.raster is None and printable(line.text)[1]]
+            if glyph_sources:
+                logger.info("ticket %s: %d line(s) drawn as images: %s", ticket["id"], len(glyph_sources), glyph_sources)
             payload = encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
             rendered = time.perf_counter()
             self.transport.send(payload)
