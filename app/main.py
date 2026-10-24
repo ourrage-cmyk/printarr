@@ -43,7 +43,7 @@ from app.setup import CheckName, SetupValues, check_item, run_checks
 from app.setup_page import SETUP_UI
 from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
-from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
+from app.receipt import Line, Receipt, line_to_dict, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks
 from app.ha import HAClient, HAError
@@ -51,6 +51,7 @@ from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
+    note_card_lines,
     plain_message,
     BLOCKS as compose_blocks,
     BlockProblem,
@@ -760,7 +761,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         )
         if choice.template.design:
             return to_text([design_line(choice.template.design, message, home_assistant())[0]], width)
-        lines = render_lines(receipt, width, choice.template, choice.decorations, extra)
+        lines = note_card_lines(message, body.sender, body.title) + list(extra)
         return to_text(lines, width)
 
     @app.get("/healthz", tags=["meta"])
@@ -891,7 +892,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             if choice.template.design:
                 lines = [placeholder_line(choice.template.design, message)]
             else:
-                lines = render_lines(receipt, width, choice.template, choice.decorations)
+                lines = note_card_lines(message, body.sender, body.title)
             encode(lines, feed=choice.template.feed, raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("rendering failed; ticket not queued")
@@ -1363,7 +1364,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             sent_at=datetime.now(settings.tzinfo),
         )
         try:
-            transport.send(encode(render_lines(receipt, width), raster_mode=settings.raster_mode))
+            card = note_card_lines("If you can read this, the printer is connected.", "printarr", "Printer test")
+            transport.send(encode(card, raster_mode=settings.raster_mode))
         except PrinterError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from None
         return PrinterStatus(mode=settings.printer_mode, target=transport.target, reachable=True)

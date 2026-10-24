@@ -31,7 +31,7 @@ def test_render_failure_rejects_ticket(settings, monkeypatch):
     def broken(*args, **kwargs):
         raise RuntimeError("bad template")
 
-    monkeypatch.setattr(main, "render_lines", broken)
+    monkeypatch.setattr(main, "note_card_lines", broken)
     with TestClient(create_app(settings)) as client:
         response = client.post("/api/v1/tickets", json={"recipient": "yannic", "message": "hi"})
         assert response.status_code == 500
