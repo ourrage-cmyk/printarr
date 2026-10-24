@@ -279,7 +279,7 @@
       "sprite_set": "alert"
     },
     "firm_complaint": {
-      "header": "bandBarcode",
+      "header": "bandBlocks",
       "divider": "none",
       "footer": "none",
       "icon": "warn",

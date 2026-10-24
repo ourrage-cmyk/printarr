@@ -40,7 +40,7 @@ def test_titles_use_the_heavy_face_when_every_word_fits():
 
 
 def test_firm_complaint_has_a_barcode():
-    assert strips.MOODS["firm_complaint"]["header"] == "bandBarcode"
+    assert strips.MOODS["firm_complaint"]["header"] == "bandBlocks"
 
 
 def test_metric_tiles_nest_in_the_card_that_closes_them():
