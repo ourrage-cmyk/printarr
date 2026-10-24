@@ -13,7 +13,8 @@ from app.blocks import parse_blocks, unavailable_lines
 from app.config import Settings
 from app.escpos import encode
 from app.ha import HAError, client_from_store
-from app.printer import PrinterError, Transport
+from app.metrics import Metrics
+from app.printer import PrinterError, PrintInterrupted, Transport
 from app.receipt import Line, render_ticket_lines, ticket_feed
 from app.status import FAULT_TEXT, PrinterStatus, decode
 from app.render.registry import design_line
@@ -37,12 +38,14 @@ class Scheduler:
         settings: Settings,
         clock: Callable[[], int] = now_ms,
         notifier: Notifier | None = None,
+        metrics: Metrics | None = None,
     ) -> None:
         self.store = store
         self.transport = transport
         self.settings = settings
         self.clock = clock
         self.notifier = notifier
+        self.metrics = metrics or Metrics()
         self._paused_reason: str | None = None
         self._last_status_ms: int | None = None
         self._last_status: PrinterStatus | None = None
@@ -85,6 +88,7 @@ class Scheduler:
         reason = ", ".join(sorted(FAULT_TEXT[key] for key in status.faults))
         if reason != self._paused_reason:
             logger.warning("queue paused: %s", reason)
+            self.metrics.incr("queue_pauses")
             self._paused_reason = reason
         return True
 
@@ -160,17 +164,22 @@ class Scheduler:
         except Exception as exc:  # any failure is recorded against the ticket
             error = str(exc) or type(exc).__name__
             logger.warning("ticket %s attempt %d failed: %s", ticket["id"], ticket["attempts"], error)
+            self.metrics.incr("print_failures")
+            if isinstance(exc, PrintInterrupted):
+                self.metrics.incr("print_interrupted")
             if isinstance(exc, PrinterError) and self.notifier:
                 self.notifier.problem("printer", f"printer unreachable: {error}")
             self._record_failure(ticket, error)
             return
         if self.notifier:
             self.notifier.recovered("printer", "printer is reachable again")
+        self.metrics.incr("tickets_printed")
         self.store.mark_sent(ticket["id"], print_ms=round(total_ms))
         logger.info("ticket %s printed", ticket["id"])
 
     def _record_failure(self, ticket: dict, error: str) -> None:
         if ticket["attempts"] >= self.settings.max_attempts:
+            self.metrics.incr("tickets_dead_lettered")
             self.store.record_failure(ticket["id"], error, retry_at_ms=None)
             if self.notifier:
                 self.notifier.problem(

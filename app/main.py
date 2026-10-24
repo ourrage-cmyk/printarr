@@ -32,7 +32,8 @@ from app.insights import InsightCache, collect
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
 from app.printer import PrinterError, Transport, build_transport
-from app.status import FAULT_TEXT, decode
+from app.metrics import Metrics
+from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks
@@ -332,7 +333,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         )
 
     notifier = Notifier(read_alert_settings)
-    scheduler = Scheduler(store, transport, settings, notifier=notifier)
+    metrics = Metrics()
+    scheduler = Scheduler(store, transport, settings, notifier=notifier, metrics=metrics)
     nightly = NightlyBackup(
         settings.db_path, store.backup_dir, settings.tzinfo, settings.backup_hour, settings.backup_keep
     )
@@ -391,6 +393,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     def watch_printer() -> None:
         """Every minute: reachability, then the printer's own status (paper, cover, cutter)."""
+        metrics.incr("status_polls")
         try:
             answers = transport.read_status()
         except PrinterError as exc:
@@ -958,6 +961,34 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except PrinterError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from None
         return PrinterStatus(mode=settings.printer_mode, target=transport.target, reachable=True)
+
+    @api.get("/printer/self-check", tags=["printer"])
+    def printer_self_check() -> dict[str, Any]:
+        """Check the link and read the printer's status bytes. Prints nothing.
+
+        `faults` are the blocking keys the queue pauses for. `unanswered` lists keys whose
+        status request got no reply, so they could not be checked.
+        """
+        base: dict[str, Any] = {"mode": settings.printer_mode, "target": transport.target}
+        try:
+            transport.check()
+            answers = transport.read_status()
+        except PrinterError as exc:
+            return {**base, "reachable": False, "error": str(exc)}
+        status = decode(answers)
+        return {
+            **base,
+            "reachable": True,
+            "faults": sorted(status.faults),
+            "warnings": sorted(status.warnings),
+            "unanswered": sorted(set(REQUESTS_FOR_KEY) - status.known),
+            "queue_paused": scheduler.paused_reason,
+        }
+
+    @api.get("/metrics", tags=["monitoring"])
+    def get_metrics() -> dict[str, Any]:
+        """Counters since start: tickets printed, failures, dead letters, interrupted jobs, pauses."""
+        return {**metrics.snapshot(), "queue_paused": scheduler.paused_reason}
 
     app.include_router(api)
     app.state.watch_printer = watch_printer  # tests and the heartbeat share this check
