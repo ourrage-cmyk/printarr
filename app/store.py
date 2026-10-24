@@ -93,6 +93,10 @@ class TicketStore:
             conn.execute("PRAGMA journal_mode=WAL")
             migrations.migrate(conn, before_upgrade=backup.pre_upgrade_copy(self.backup_dir))
 
+    def schema_version(self) -> int:
+        with closing(self._connect()) as conn:
+            return migrations.schema_version(conn)
+
     def create(
         self,
         *,
