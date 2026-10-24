@@ -75,6 +75,8 @@ Top-level fields: `recipient` (required), `blocks` (required, 1 to 16), `kind`, 
 - Each block is `{"type", "mood", "slots"}`. **`mood` is required on every block.** Use one of:
   `neutral`, `happy`, `excited`, `loving`, `playful`, `reminder`, `factual`, `sad`, `confused`, `upset`,
   `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints `neutral`.
+- Kind marks: a small mark sits at the top-right of a card for five block types: `message` (envelope), `alert` (bolt),
+  `tip` (clock), `fact` (bulb) and `checklist` (cart). The mark follows the block, so pick the block type that fits.
 - A greeting always starts a new strip. A strip holds at most 5 blocks.
 
 ### Block types
@@ -211,6 +213,8 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
   - `urgent` (barcode border): needs attention.
   - `critical` (white on black): needs attention now, and only then.
   - `factual`: numbers and status. `happy`, `excited`, `playful`: good news and fun.
+- **Outline follows the tone.** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, and `critical` the heaviest.
+  `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners.
 - **Keep text short for 42 columns.** Font A prints 42 characters per line. Long words wrap badly, so prefer short sentences.
 - **Characters outside CP437 print as `?`.** CJK and emoji do not print. Use plain ASCII where you can.
 - **Dates and times in local time**, without an offset, for `send_at`.
