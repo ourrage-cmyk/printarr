@@ -30,6 +30,9 @@ class Settings:
     llm_model: str = "d1:latest"  # decision model: template and decoration choice only
     llm_text_model: str = "granite4.2:3b"  # text model: for paragraphs, later
     llm_timeout: float = 5.0
+    backup_enabled: bool = True
+    backup_hour: int = 3  # local hour for the nightly copy
+    backup_keep: int = 7  # nightly copies kept
 
     @property
     def tzinfo(self) -> ZoneInfo:
@@ -60,10 +63,17 @@ def load_settings() -> Settings:
         llm_model=_env("LLM_MODEL", "d1:latest"),
         llm_text_model=_env("LLM_TEXT_MODEL", "granite4.2:3b"),
         llm_timeout=float(_env("LLM_TIMEOUT", "5")),
+        backup_enabled=_env("BACKUP", "on").lower() in _TRUE_VALUES,
+        backup_hour=int(_env("BACKUP_HOUR", "3")),
+        backup_keep=int(_env("BACKUP_KEEP", "7")),
     )
     if settings.printer_mode not in PRINTER_MODES:
         raise ValueError(f"PRINTARR_PRINTER_MODE must be one of {PRINTER_MODES}")
     if settings.raster_mode not in ("gs_l", "gs_v0"):
         raise ValueError("PRINTARR_RASTER_MODE must be gs_l or gs_v0")
+    if not 0 <= settings.backup_hour <= 23:
+        raise ValueError("PRINTARR_BACKUP_HOUR must be 0 to 23")
+    if settings.backup_keep < 1:
+        raise ValueError("PRINTARR_BACKUP_KEEP must be at least 1")
     settings.tzinfo  # fails fast on an unknown timezone name
     return settings

@@ -21,54 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS tickets (
-    id              TEXT PRIMARY KEY,
-    recipient       TEXT NOT NULL,
-    sender          TEXT,
-    title           TEXT,
-    message         TEXT NOT NULL,
-    status          TEXT NOT NULL
-                    CHECK (status IN ('held', 'pending', 'printing', 'sent', 'failed', 'cancelled')),
-    hold_key        TEXT,
-    send_at_ms      INTEGER NOT NULL,
-    next_attempt_ms INTEGER NOT NULL,
-    attempts        INTEGER NOT NULL DEFAULT 0,
-    last_error      TEXT,
-    template_id     INTEGER NOT NULL,
-    text_state      TEXT NOT NULL DEFAULT 'formatted',
-    blocks_json     TEXT NOT NULL DEFAULT '[]',
-    decorations     TEXT NOT NULL DEFAULT '',
-    selection       TEXT NOT NULL CHECK (selection IN ('explicit', 'model', 'rule')),
-    created_at_ms   INTEGER NOT NULL,
-    updated_at_ms   INTEGER NOT NULL,
-    printed_at_ms   INTEGER
-);
-CREATE INDEX IF NOT EXISTS tickets_due ON tickets (status, next_attempt_ms);
-CREATE INDEX IF NOT EXISTS tickets_recipient ON tickets (recipient, created_at_ms);
-CREATE INDEX IF NOT EXISTS tickets_hold ON tickets (status, hold_key);
-CREATE TABLE IF NOT EXISTS settings (
-    key    TEXT PRIMARY KEY,
-    value  TEXT NOT NULL
-);
-"""
+from app import backup, migrations
 
 MAX_ERROR_LENGTH = 500
-
-# Columns added after the first release. init() adds any that an older database lacks.
-ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
-    ("kind", "TEXT NOT NULL DEFAULT 'note'"),
-    ("tone", "TEXT NOT NULL DEFAULT 'neutral'"),
-    ("from_user", "TEXT"),
-    ("to_user", "TEXT"),
-    ("inbox_state", "TEXT"),
-    ("render_ms", "INTEGER"),
-    ("print_ms", "INTEGER"),
-    ("choice_source", "TEXT"),
-    ("model_scores", "TEXT NOT NULL DEFAULT ''"),
-    ("idempotency_key", "TEXT"),
-)
-
 
 LOG_COLUMNS = ("kind", "tone", "template_id", "status", "choice_source")
 
@@ -122,8 +77,10 @@ def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 
 class TicketStore:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, backup_dir: Path | None = None) -> None:
         self.path = path
+        # Copies taken before a schema upgrade go here. Default: a backups/ folder beside the database.
+        self.backup_dir = backup_dir or Path(path).parent / "backups"
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)
@@ -134,16 +91,7 @@ class TicketStore:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.executescript(SCHEMA)
-            have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
-            for name, definition in ADDED_COLUMNS:
-                if name not in have:
-                    conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
-            # One ticket per key. Rows without a key are not constrained.
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS tickets_idempotency "
-                "ON tickets (idempotency_key) WHERE idempotency_key IS NOT NULL"
-            )
+            migrations.migrate(conn, before_upgrade=backup.pre_upgrade_copy(self.backup_dir))
 
     def create(
         self,
@@ -216,6 +164,11 @@ class TicketStore:
                 "SELECT * FROM tickets WHERE idempotency_key = ?", (idempotency_key,)
             ).fetchone()
         return _to_dict(row) if row else None
+
+    def export_bytes(self) -> bytes:
+        """A consistent copy of the whole database, for download."""
+        with closing(self._connect()) as conn:
+            return backup.export_bytes(conn, self.backup_dir)
 
     def get(self, ticket_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as conn:
