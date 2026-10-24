@@ -177,6 +177,8 @@ def test_web_ui_is_served(settings):
         assert page.status_code == 200
         assert "New ticket" in page.text
         assert ">Preview<" in page.text
+        for label in ("History", "Inbox", "Insights", "Left by", "Tone"):
+            assert label in page.text
 
 
 def test_render_is_fast_enough_for_instant_print(settings):
