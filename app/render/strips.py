@@ -933,7 +933,7 @@ def _shorten(block: Block, slots: dict[str, Any], x0: int, x1: int, max_h: int) 
     return trimmed
 
 
-SALUTATIONS = ("HELLO", "HI ", "HEY", "GOOD MORNING", "GOOD EVENING", "GOOD AFTERNOON", "GOOD NIGHT", "DEAR", "PSYCH", "MORNING")
+SALUTATIONS = ("HELLO", "HI ", "HEY", "GOOD MORNING", "GOOD EVENING", "GOOD AFTERNOON", "GOOD NIGHT", "DEAR", "PSYCH")
 TITLED = ("message", "checklist", "metric_rows", "graph", "dog_counts")
 
 
@@ -951,7 +951,7 @@ def fuse(blocks: Sequence[Block]) -> list[Block]:
     while i < len(items):
         block = items[i]
         nxt = items[i + 1] if i + 1 < len(items) else None
-        if block.type == "greeting" and not block.slots.get("summary") and nxt is not None and nxt.type != "greeting":
+        if block.type == "greeting" and not block.slots.get("summary") and not block.slots.get("_group") and nxt is not None and nxt.type != "greeting":
             heading = str(block.slots.get("greeting", ""))
             if nxt.type in TITLED or nxt.type == "alert":
                 if not _is_salutation(heading):

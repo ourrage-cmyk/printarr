@@ -49,6 +49,9 @@ def _log_filters(
     return clauses, params
 
 
+PRINT_CODE_LEN = 6
+
+
 class TicketNotFound(LookupError):
     pass
 
@@ -65,6 +68,11 @@ def _iso(ms: int | None) -> str | None:
     return None if ms is None else datetime.fromtimestamp(ms / 1000, tz=UTC).isoformat()
 
 
+def print_code(ticket: dict[str, Any]) -> str:
+    """The short code printed under the cut: the first 6 characters of the strip id, or of the ticket id alone."""
+    return str(ticket.get("strip_id") or ticket["id"])[:PRINT_CODE_LEN]
+
+
 def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
     data = dict(row)
     data["decorations"] = [d for d in data["decorations"].split(",") if d]
@@ -74,6 +82,7 @@ def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
     data["updated_at"] = _iso(data["updated_at_ms"])
     data["printed_at"] = _iso(data["printed_at_ms"])
     data["truncated"] = bool(data.get("truncated"))
+    data["print_code"] = print_code(data)
     data["notes"] = [n for n in str(data.pop("render_notes", "") or "").split("\n") if n]
     return data
 
@@ -187,6 +196,18 @@ class TicketStore:
         with closing(self._connect()) as conn:
             row = conn.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         return _to_dict(row) if row else None
+
+    def find_print(self, code: str) -> list[dict[str, Any]]:
+        """Every ticket printed under a code: its strip, or the single ticket whose id starts with it. Oldest first."""
+        like = code.lower() + "%"
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT * FROM tickets WHERE status = 'sent' AND "
+                "((strip_id IS NOT NULL AND strip_id LIKE ?) OR (strip_id IS NULL AND id LIKE ?)) "
+                "ORDER BY printed_at_ms ASC, created_at_ms ASC",
+                (like, like),
+            ).fetchall()
+        return [_to_dict(row) for row in rows]
 
     def search(
         self,

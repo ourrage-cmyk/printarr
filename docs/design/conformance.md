@@ -50,7 +50,7 @@ The 5x7 dot matrix is not a font file. It is a glyph table drawn for this projec
 | Ticket margin | 24 dots, content width 464 | Tokens (`ticket`). |
 | Card inset and padding | 12 dots | Tokens (`ticket.card_inset`, `card_padding`). |
 | Grid unit | 3 dots, spacing xs 3, s 6, m 12, l 18, xl 24, xxl 36 | Tokens (`grid`). |
-| Strip margins | None in the picture. The blank before the cut (about 90 dots, half an inch) is fed with the cut command (4 lines), once at the end of the whole piece | Yannic's rule (2026-10-24): a strip, a continuation or a queued ticket carries no blank of its own. Confirm the real line height on the printer Monday. |
+| Strip margins | None in the picture. The blank before the cut (about 90 dots, half an inch) is fed with the cut command (4 lines), once at the end of the whole piece. A small line with the print time and a 6-character code (`2026-10-24 21:05  a3f9c2`) is printed as text just under the last ticket, inside that space | Yannic's rule (2026-10-24): a strip, a continuation or a queued ticket carries no blank of its own. Confirm the real line height on the printer Monday. |
 
 Winning template patterns (`leaderboard-templates.json`, 118 duels):
 - **morning v1**, Elo 1688, 15-2: hello header, morning, radius 4, dense, light, outlined. This is the best-ranked template.

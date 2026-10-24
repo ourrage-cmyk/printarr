@@ -7,6 +7,7 @@ import logging
 import threading
 import uuid
 import time
+from datetime import datetime
 from collections.abc import Callable
 
 from app.alerts import Notifier
@@ -24,7 +25,7 @@ from app.text import printable
 from app import ticket_images
 from app.templates import template_by_id
 from app.blocks import resolve_blocks
-from app.store import TicketStore, now_ms
+from app.store import PRINT_CODE_LEN, TicketStore, now_ms
 
 logger = logging.getLogger("printarr.scheduler")
 
@@ -57,6 +58,7 @@ def opens_strip(ticket: dict) -> bool:
 
 
 INNER_GAP = 10  # dots between two tickets printed as one piece, the same as between two cards
+STAMP_GAP = 24  # dots between the last ticket and the print time and code
 
 
 def _gap_line(height: int) -> Line:
@@ -237,7 +239,11 @@ class Scheduler:
             glyph_sources = [line.text for line in lines if line.text and printable(line.text)[1]]
             if glyph_sources:
                 logger.info("ticket %s: %d line(s) drawn as images: %s", ticket["id"], len(glyph_sources), glyph_sources)
-            payload = encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
+            payload = encode(
+                lines + self._stamp_lines(ticket["id"][:PRINT_CODE_LEN]),
+                feed=ticket_feed(ticket),
+                raster_mode=self.settings.raster_mode,
+            )
             rendered = time.perf_counter()
             self.transport.send(payload)
             sent = time.perf_counter()
@@ -310,7 +316,9 @@ class Scheduler:
             parts: list[list[Line]] = []
             try:
                 parts = [self._ticket_lines(ticket) for ticket in tickets]
-                self.transport.send(encode(self._strip_lines(parts), feed=CUT_FEED, raster_mode=self.settings.raster_mode))
+                lines = self._strip_lines(parts) + self._stamp_lines(strip_id[:PRINT_CODE_LEN])
+                strip_payload = encode(lines, feed=CUT_FEED, raster_mode=self.settings.raster_mode)
+                self.transport.send(strip_payload)
             except Exception as exc:
                 self.store.unclaim(won)
                 # Each ticket in the failed strip keeps its own image, drawn as its own ticket.
@@ -318,13 +326,31 @@ class Scheduler:
                     image = self._keep_image(ticket, self._ticket_payload(part, ticket))
                     logger.warning("ticket %s in failed strip %s (image: %s)", ticket["id"], strip_id, image or "none")
                 raise ReleaseIncomplete(strips, str(exc) or type(exc).__name__) from exc
-            for ticket, part in zip(tickets, parts):
-                self._keep_image(ticket, self._ticket_payload(part, ticket))
+            self._keep_strip_image(tickets, strip_payload)  # every ticket in the piece recalls the whole piece
             for ticket_id in won:
                 self._mark_sent(ticket_id, strip_id=strip_id, strip_trigger=trigger)
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
             strips.append({"strip_id": strip_id, "ticket_ids": won})
         return strips
+
+    def _stamp_lines(self, code: str) -> list[Line]:
+        """The print time and short code, in small text below the last ticket, inside the space fed for the cut.
+
+        It is text for the printer, never part of a ticket's picture."""
+        stamp = datetime.now(self.settings.tzinfo).strftime("%Y-%m-%d %H:%M")
+        return [_gap_line(STAMP_GAP), Line(f"{stamp}  {code}", align="center")]
+
+    def _keep_strip_image(self, tickets: list[dict], payload: bytes) -> None:
+        """Save the printed piece as the image of each ticket on it, so GET /tickets/{id}/image shows the whole strip.
+
+        Never raises, like _keep_image.
+        """
+        try:
+            png = payload_to_png(payload)
+            for ticket in tickets:
+                ticket_images.save(self.settings.images_dir, ticket["id"], png, self.settings.image_keep)
+        except Exception:
+            logger.exception("strip of %d ticket(s): could not save its image", len(tickets))
 
     def _strip_chunks(self, pile: list[dict]) -> list[list[dict]]:
         """Splits a pile into strips: one piece of paper, new only when strip_max_blocks tickets are on it. A greeting ticket leads (the pile is ordered that way); a second one is just another tile."""
