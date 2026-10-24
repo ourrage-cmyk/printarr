@@ -7,7 +7,7 @@
   {"recipient": "yannic", "category": "note", "message": "ok"},
   {"recipient": "yannic", "category": "note", "message": "remind me to ring jon about the thing on friday"},
   {"recipient": "yannic", "category": "note", "message": "I got a new alert setting on my phone, nice."},
-  {"recipient": "yannic", "category": "note", "message": "Gute Nacht, schlaf gut."},
+  {"recipient": "yannic", "category": "evening", "message": "Gute Nacht, schlaf gut."},
   {"recipient": "wife", "category": "note", "message": "Love you, see you tonight x"},
   {"recipient": "wife", "category": "note", "message": "Your mum rang, call her back when you can."},
   {"recipient": "wife", "category": "note", "message": "I miss you already, I cannot wait to see you."},
