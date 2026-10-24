@@ -37,7 +37,7 @@ BODY = 3  # body and label scale: cap 21 (conformance, font arena tier B)
 ROW = 7 * BODY + 9  # one row of text: cap 21 with the tokens' body leading of 9 dots
 CAPTION = 2  # caption scale: cap 14, the minimum
 NUMERAL = 6  # display numerals: cap 42, used when the value fits the tile
-TITLE = 4  # titles that do not fit one line at NUMERAL: cap 28, still larger than body (cap 21)
+TITLE = NUMERAL  # one dot size for every title; the other two sizes are solid: display (42) and body (21)
 GRAPH_PLOT = 56  # a graph is 56 dots tall, as the catalogue says, so its height does not depend on the card
 
 UNIT_H = GRID["unit_h"]  # one unit of height, in dots
@@ -528,8 +528,7 @@ def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
 def _fit_title(text: str, max_w: int) -> tuple[int, list[str], bool]:
     """A title in the dot font, larger than body text. The heavy face (scale 6, a multiple of 3, so the dots are
     the same 2 x 2 squares as every other title) on one line, else wrapped on two; a title that still does not fit
-    steps down to scale 4 on two lines; only past that is it cut at a word boundary and ends in "...". Returns
-    (scale, lines, cut)."""
+    is cut at a word boundary and ends in "...". There is no smaller dot size. Returns (scale, lines, cut)."""
     label = str(text)
     if text_width(label, NUMERAL) <= max_w:
         return NUMERAL, [label], False
@@ -578,7 +577,7 @@ def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
     return scale, lines
 
 
-MAX_TITLE_LINES = 2
+MAX_TITLE_LINES = 3  # one dot size, so a long title takes a third line before it is cut
 EDGE_GAP = 14  # the least clear space between a line of text and the card border, in dots
 
 
@@ -1102,7 +1101,7 @@ def _cont_title(base: str) -> str:
     words = base.upper().split()
     while words:
         text = " ".join(words) + " CONT."
-        if not _fit_title(text, 380)[2]:
+        if not _fit_title(text, 400)[2]:
             return text
         words.pop()
     return "CONT."

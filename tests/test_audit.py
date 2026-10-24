@@ -80,16 +80,16 @@ def test_a_url_wider_than_the_card_breaks_by_character():
     assert len(lines) > 1 and all(strips.solid_width(line, 21) <= 300 for line in lines)
 
 
-def test_a_title_is_at_most_two_lines():
+def test_a_title_is_at_most_three_lines():
     scale, lines = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 400)
-    assert len(lines) <= 2
+    assert len(lines) <= 3
 
 
-def test_a_long_title_steps_down_then_ends_in_an_ellipsis_and_two_titles_never_print_the_same():
-    fits = strips.title_lines("SHOPPING LIST FOR THE WEEKEND", 440)
-    assert fits[0] == strips.TITLE and not fits[1][-1].endswith("...")
-    cut = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 440)
-    assert cut[1][-1].endswith("...") and cut != fits
+def test_every_title_uses_the_one_dot_size_and_a_long_one_ends_in_an_ellipsis():
+    for text in ("HELLO", "BROWN FOX JUMPS OVER THE LAZY DOG", "SHOPPING LIST FOR THE WEEKEND BARBECUE"):
+        assert strips.title_lines(text, 440)[0] == strips.NUMERAL
+    assert strips.title_lines("BROWN FOX JUMPS OVER THE LAZY DOG AND THE QUICK CAT", 440)[1][-1].endswith("...")
+    assert not strips.title_lines("GOOD EVENING", 440)[1][-1].endswith("...")
 
 
 def test_a_continuation_title_keeps_every_word_of_the_original():
