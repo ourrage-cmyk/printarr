@@ -118,8 +118,8 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
   them in the web page; they survive upgrades and rebuilds.
 - `PRINTARR_PRINTER_HOST` in the YAML is only the starting default for the setup wizard. Once
   setup is finished, the printer address saved by the wizard wins, so changing the YAML does
-  nothing. To move from the simulator to the real printer, change the printer address in the
-  printarr web page.
+  nothing. There is no screen yet to change the printer address after setup (known gap, see the
+  Monday note below).
 - Values in the YAML are read only until setup is finished. After that the web page wins.
 
 ## Nightly backups
@@ -200,6 +200,8 @@ curl -X POST http://<nas-ip>:8000/api/v1/printer/test      # prints a test recei
 The receipt appears in the simulator at `http://localhost:8080` on the laptop. For the full
 check, run `sh scripts/smoke-test.sh http://<nas-ip>:8000` as well.
 
-**Monday, switch to the real printer.** In the printarr web page, change the printer address to the
-TM-T88V's IP address (give the printer a fixed address first) and save. Nothing else changes. Tickets, settings and
+**Monday, switch to the real printer.** The printer address saved by the wizard wins over the YAML, and there is no
+screen yet to change it after setup (known gap). Until that exists, the simplest route is to keep the
+printer's address stable: give the TM-T88V the address the wizard was given, or run the wizard again
+on a fresh data folder. Tickets, settings and
 backups stay as they are.
