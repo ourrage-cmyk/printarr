@@ -139,7 +139,7 @@ def test_only_private_networks_can_be_scanned():
 
 def test_docker_range_asks_for_the_home_network_instead():
     assert discovery.detect_network("172.17.0.5") is None
-    assert discovery.detect_network("192.0.2.231") == "192.168.1.0/24"
+    assert discovery.detect_network("192.168.1.50") == "192.168.1.0/24"
     assert discovery.detect_network(None) is None
 
 
