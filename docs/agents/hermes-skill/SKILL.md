@@ -46,7 +46,7 @@ Use only the slots a schema lists. Do not invent entity IDs. Take them from `/in
 
 ## 3. Compose a strip (the default)
 
-`POST /api/v1/tickets/compose` takes an ordered list of blocks and draws them as strips.
+`POST /api/v1/tickets/compose` takes an ordered list of blocks, or a fixed preset, and draws each block as its own tile on a strip.
 
 ```bash
 curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
@@ -67,29 +67,32 @@ curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
   }'
 ```
 
-Top-level fields: `recipient` (required), `blocks` (required, 1 to 16), `kind`, `tone`, `from_user`, `to_user`,
+Top-level fields: `recipient` (required), `blocks` or `preset` (one of them, 1 to 16 blocks), `slots` (with `preset` only), `kind`, `tone`, `from_user`, `to_user`,
 `sender`, `delivery`, `send_at`, `hold`, `hold_key`, `idempotency_key`.
 
 - `kind`: `morning`, `evening`, `note`, `shopping`, `todo`, `alert`, `fun`, `reminder`. Default `note`.
-- `tone`: `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`. Default `neutral`.
+- `tone`: `loving`, `neutral`, `reminder`, `playful`, `gentle`, `firm`, `urgent`. Default `neutral`. Printed tickets never print the tone name.
 - Each block is `{"type", "mood", "slots"}`. **`mood` is required on every block.** Use one of:
   `neutral`, `happy`, `excited`, `loving`, `playful`, `reminder`, `factual`, `sad`, `confused`, `upset`,
-  `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints `neutral`.
+  `gentle_warning`, `firm_complaint`, `critical`, `urgent`. `auto` is accepted but prints as `neutral` for now.
+- Up to 16 blocks per ticket. Each block is its own bordered tile. Tiles sit side by side when they fit, and a strip is cut by height, not by block count.
+- **Mood band.** Every card has at most one band across its top edge, and the band carries the mood. Neutral and factual have none. Sparse dots: `loving`, `happy`. Zigzag: `excited`, `playful`. Upright ticks: `reminder`. Dense stipple: `sad`, `confused`. Diagonal hatch: `gentle_warning`, `upset`. Blocks: `firm_complaint`. Barcode: `urgent`. Solid black bar with an inverted title: `critical`. Do not print mood names or tone names in the text.
+- **Outline.** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, and `critical` the heaviest. `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners.
 - Kind marks: a small mark sits at the top-right of a card for five block types: `message` (envelope), `alert` (bolt),
   `tip` (clock), `fact` (bulb) and `checklist` (cart). The mark follows the block, so pick the block type that fits.
-- A release prints one piece of paper, cut once at the end: the ticket with a greeting (the briefing) goes on top and the other queued tickets follow in order with no cut gap. A second ticket with a greeting starts a new strip. A strip is cut by height, not by block count. The blank before the cut is fed with the cut command, never drawn in a ticket. A metric label is at most 20 characters; characters the printer cannot draw print as `?` and the response lists them under `warnings`.
+- A release prints one person's pile as one piece of paper. The ticket with a greeting (the briefing) goes on top, and the other queued tickets follow in order, one tile apart, with no cut between them. A strip is cut after 12 tickets or when it gets too tall, and a new greeting starts a new strip. The cut is made after each strip. The blank before the cut is fed with the cut command, never drawn in a ticket. A metric label is at most 20 characters; characters the printer cannot draw print as `?` and the response lists them under `warnings`.
 
 ### Block types
 
 | Type | Slots | Limits |
 |---|---|---|
-| `greeting` | `greeting`, `summary` | greeting 40 chars, summary 200 |
-| `metric` | `label` and `value` or `entity_id`; `unit`, `series` | label 40, unit 12, series 2 to 48 numbers |
-| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`); `title` | label 40, title 40 |
-| `graph` | `title`, `series` (2 to 48 numbers); `unit` | title 40 |
+| `greeting` | `greeting`, `summary`, `from` | greeting 40 chars, summary 200, from 20 |
+| `metric` | `label` and `value` or `entity_id`; `unit`, `series`, `range`, `as_of`, `scope` | label 40, unit 12, series 2 to 48 numbers |
+| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`, `scope`); `title`, `as_of` | label 40, title 40 |
+| `graph` | `title`, `series` (2 to 48 numbers); `unit`, `range` | title 40 |
 | `dog_counts` | `dogs` (1 or 2 of `name`, `pee`, `poop`, `food`, `run`, integer counts) | name 20 |
 | `message` | `paragraph`, `from`; `title`, `tip` | paragraph 800, from 20, title 40, tip 120 |
-| `alert` | `label`, `paragraph`; `action` | label 40, paragraph 400, action 40 |
+| `alert` | `label`, `paragraph`, `from`; `action` | label 40, paragraph 400, action 40 |
 | `checklist` | `items` (1 to 8 of `text` plus `checked`); `title` | item text 120, title 40 |
 | `tip` | `tip` | 120 |
 | `fact` | `paragraph` | 200 |
@@ -107,7 +110,7 @@ curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets \
        "kind": "reminder", "tone": "reminder", "delivery": "on_release"}'
 ```
 
-For messy speech-to-text input, add `"text_state": "unformatted"`. Message text is 2000 characters at most.
+For messy speech-to-text input, add `"text_state": "unformatted"`. A text model then cleans spelling and speech errors, and a decision model picks the template. If either model fails, the text prints as sent. Message text is 2000 characters at most.
 `POST /api/v1/tickets/preview` returns the plain text of a plain ticket without queueing it.
 
 ### Briefings (the briefing preset)
@@ -131,10 +134,12 @@ curl -sS -X POST http://192.0.2.231:30100/api/v1/tickets/compose \
                  "fun_fact": "Octopuses have three hearts.", "from": "hermes"}}'
 ```
 
-- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING and so on.
-- `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`.
+- `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING, and it appends the recipient's name where one is set (`GOOD MORNING YANNIC`).
+- `scope` is `inside` or `outside` and prints as IN or OUT after the label. `as_of` prints as AS OF 08:15 under the readings.
+- Queueing works even when Home Assistant is unreachable. Preset values are read at print time, so a value Home Assistant cannot give prints as `--`.
+- `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`. `hours` (1 to 168, default 24) sets how far back the sparkline reaches.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
-- `body` is the text. `fun_fact` is one line. Printarr adds no heading or label to a fun fact; write just the fact.
+- `body` is the text, up to 800 characters. `fun_fact` is one line, up to 200 characters. Printarr adds no heading or label to a fun fact; write the fact as one sentence. The words can appear inside the sentence when they read naturally.
 - Do not send `blocks` with `preset`. A bad slot returns 422 and names it as `preset.slots.field`.
 
 The older slot briefing (template 101, `POST /api/v1/tickets/slots`) still works, but use the preset for new briefings.
@@ -224,14 +229,12 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 - **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
-  - `loving` (heart ornament): messages between Yannic and the second person.
-  - `reminder` (tape ornament): times and to-dos.
-  - `gentle_warning` (zigzag): a soft heads-up.
-  - `urgent` (barcode border): needs attention.
-  - `critical` (white on black): needs attention now, and only then.
+  - `loving` (sparse dots): messages between Yannic and the second person.
+  - `reminder` (upright ticks): times and to-dos.
+  - `gentle_warning` (diagonal hatch, rounder outline): a soft heads-up.
+  - `urgent` (barcode): needs attention.
+  - `critical` (solid bar): needs attention now, and only then.
   - `factual`: numbers and status. `happy`, `excited`, `playful`: good news and fun.
-- **Outline follows the tone.** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, and `critical` the heaviest.
-  `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners.
 - **Keep text short for 42 columns.** Font A prints 42 characters per line. Long words wrap badly, so prefer short sentences.
 - **Characters outside CP437 print as `?`.** CJK and emoji do not print. Use plain ASCII where you can.
 - **Dates and times in local time**, without an offset, for `send_at`.
