@@ -19,7 +19,7 @@ Run it yourself with [simulation-v1.md](simulation-v1.md).
 | --- | --- |
 | `0.079 GBP/kWh` printed as `0.1`, both in briefings and in composed metric rows | One number formatter keeps small values' digits |
 | `6120steps` ran the value into the unit | Letter units get a space, `%` does not |
-| Receipts read `TO: yannic` and `FROM: hermes` when Allyson wrote the message | Receipts use the names, and `from_user` wins over the sender label |
+| Receipts read `TO: yannic` and `FROM: hermes` when the second person wrote the message | Receipts use the names, and `from_user` wins over the sender label |
 
 ## Open, not fixed in this run
 

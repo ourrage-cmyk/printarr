@@ -238,3 +238,15 @@ def test_a_tall_picture_is_sent_in_bands_a_printer_can_take():
     data = b"\xff" * (64 * 1120)
     stream = encode([Line("", raster=(64, 1120, data))])
     assert stream.count(b"\x1d(L\x02\x000\x32") == 2  # two prints, each under 65535 bytes
+
+
+def test_one_release_is_one_piece_whatever_the_greetings():
+    from app.scheduler import Scheduler
+
+    def ticket(i, template_id=7):
+        return {"id": str(i), "template_id": template_id, "slots_json": "{}"}
+
+    sched = Scheduler.__new__(Scheduler)
+    sched.settings = type("S", (), {"strip_max_blocks": 12})()
+    pile = [ticket("a", 102), ticket("b", 102), ticket("brief", 101), ticket("c", 101), ticket("d", 102)]
+    assert [len(chunk) for chunk in sched._strip_chunks(pile)] == [5]

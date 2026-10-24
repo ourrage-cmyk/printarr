@@ -6,10 +6,11 @@ width) or narrower, and tall in whole units. Short blocks can sit side by side, 
 need, within a min and a max. Anything beyond the max is shortened with "..." so cards never overlap.
 
 Rules, from design-system/blocks.json:
-- one ornament per card
-- at most five blocks per strip, and a greeting always starts a new strip
-- blank margins at the top and bottom of each strip, for a clean cut
-- moods change the ornament, icon and accent only
+- one band per card, at the top (the mood), 28 dots tall, never a mood word
+- a strip is cut by height (MAX_STRIP_H) or at 12 tickets, not by block count; a briefing nests, every other block is its own card
+- no blank in the picture: the half inch before the cut is fed with the cut command, once at the end of the piece
+- three text sizes only: large dot matrix for titles, medium solid for numbers, small solid for the rest
+- moods change the band, icon, outline weight and corner only, never the size or the grid
 
 Port of the grid in receipt-lab/lib/blocks.js (the Node reference). Keep the constants in step.
 """
@@ -452,7 +453,6 @@ class Card:
     ornamented: bool = False
     plot_h: int = 56  # graph height, set from the card's height
     in_group: bool = False  # the card holds several regions: a tip leads with its icon instead of centring
-    fact_labeled: bool = False
     marked: set[str] = field(default_factory=set)  # kind marks already stamped: one of each per card
 
     def ornament(self, slot: str, x0: int, x1: int) -> None:
@@ -648,6 +648,8 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
     # Numbers are full-line text (Inter): display size (cap 42) when the value fits the tile, else body size.
     cap = int(s.get("_cap") or (42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21))
+    while cap > AXIS_CAP and solid_width(value, cap) > x1 - x0:
+        cap = 21 if cap > 21 else AXIS_CAP  # a number wider than its tile steps down, it never runs over the border
     scale = cap
     c.solid(x0, c.y, value, cap)
     unit_x = x0 + text_width(value, scale) + 6
@@ -812,10 +814,6 @@ def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     clear = _kind_mark(card, "fact", x1)
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 4
     card.ornament("divider", x0, x1)
-    if not card.fact_labeled and not card.in_group:
-        card.fact_labeled = True
-        c.solid(x0, c.y, "FUN FACT", 21)
-        c.y += ROW
 
 
 RENDERERS: dict[str, Callable[[Card, Mapping[str, Any], int, int], None]] = {

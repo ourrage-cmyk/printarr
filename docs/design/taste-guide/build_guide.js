@@ -268,10 +268,10 @@ mdTable(qRows, ['Question', 'r', 'AUC', 'Mean if liked', 'Mean if disliked'], ([
 const finals = [
   { id: 'B4-014', role: 'Morning, Yannic', note: 'Hello, rows, segmented bars, outlined radius 4' },
   { id: 'B4-003', role: 'Evening, Yannic', note: 'Hello, energy rows and line graph, segmented bars' },
-  { id: 'B4-010', role: 'Evening, dogs', note: 'Hello, Yannic vs Allyson comparison, dog rows' },
+  { id: 'B4-010', role: 'Evening, dogs', note: 'Hello, Yannic vs the second person comparison, dog rows' },
   { id: 'B4-012', role: 'Alert', note: 'Hello, filled alert pill, segmented bar' },
   { id: 'B2-031', role: 'Shopping list', note: 'Checkbox rows in an outlined card' },
-  { id: null, role: 'Morning, Allyson', note: 'Not rendered yet. Same as B4-014 with her fields (see handoff)' },
+  { id: null, role: 'Morning, the second person', note: 'Not rendered yet. Same as B4-014 with her fields (see handoff)' },
 ];
 const finalsHtml = finals
   .map((f) => {

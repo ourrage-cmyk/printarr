@@ -1,9 +1,9 @@
 # printarr
 
-printarr is a small service that prints receipt-style strips on an Epson TM-T88V
+printarr is a small service that prints receipt-style "strips" on an Epson TM-T88V
 (80 mm, ESC/POS). Home Assistant, Hermes and the web page send it messages, briefings,
-lists and alerts. It lays them out as tiles on one design grid, keeps each person's
-waiting items in their own pile, and prints the pile when Home Assistant releases it.
+lists and alerts. It lays them out in one design language, keeps each person's
+waiting items in their own pile, and prints on the right moment.
 
 <p align="center">
   <img src="docs/images/strip-morning-briefing.png" alt="Morning briefing strip" width="200">
@@ -11,23 +11,25 @@ waiting items in their own pile, and prints the pile when Home Assistant release
   <img src="docs/images/strip-alert.png" alt="Urgent alert strip" width="200">
 </p>
 
-<p align="center"><sub>Sample strips drawn by the app's own renderer (<code>scripts/render_readme_samples.py</code>). The sample images may lag the current layout; the ticket PNGs from the running service are the reference.</sub></p>
+<p align="center"><sub>Sample strips drawn by the app's own renderer (<code>scripts/render_readme_samples.py</code>).</sub></p>
 
 ## What it does
 
-- **Two recipients**, `yannic` and `wife` (Allyson). Each has a pile of waiting items. A release prints the pile as one piece
-  of paper, cut after each strip: in the morning when the phone is unplugged, and in the evening or on arrival when someone gets home.
-- **Tiles.** Every block is its own bordered tile on a three-column grid. Tiles fall together and pack like puzzle pieces, so
-  any pile of messages forms one cohesive ticket.
-- **Composed tickets.** A ticket is an ordered list of typed blocks: greeting, metric, metric rows, graph, dog counts, message,
-  alert, checklist, tip and fact. Each block has a mood, which shows as a band across the top of its tile.
-- **Briefing preset.** One fixed layout for Hermes' briefings: a greeting with the time of day, three metrics with sparklines,
-  one larger graph, a body and a fun fact.
+- **Two recipients**, `yannic` and `wife`, shown with the names set in the setup wizard. Each has a pile of waiting items that
+  prints as one continuous piece of paper, cut once at the end, when Home Assistant releases it:
+  in the morning when the phone is unplugged, and in the evening when someone arrives home.
+  The briefing goes on top and the rest follow in the order they were queued.
+- **Composed tickets.** A ticket is an ordered list of typed blocks: greeting, metric, metric rows,
+  graph, dog counts, message, alert, checklist, tip and fact. Every block is its own bordered tile on
+  a three-column grid, and the tiles fall together into rows. Each block has a mood that changes how it looks.
+- **Briefing preset.** `POST /api/v1/tickets/compose` with `preset: "briefing"` lays out the fixed morning
+  or evening briefing: greeting, three metrics with sparklines, one graph, a body and a fun fact.
 - **Three deliveries.** `on_release` waits in the pile, `at` prints at a time, and `now` prints straight away.
-- **Live data.** Entity values and sparklines are read from Home Assistant when the ticket prints, not when it is queued. A value Home Assistant does not give prints as `--`.
-- **Simple text too.** Plain messages go through `POST /api/v1/tickets`, and a classifier picks the layout (see the API guide).
+- **Live data.** Entity values and sparklines are read from Home Assistant when the ticket prints,
+  not when it is queued.
+- **Simple text too.** Plain messages go through `POST /tickets`, and the layout is picked for you.
 - **Web page** at `/` to write tickets, preview them, watch the inbox and history, and change settings.
-- **Built for agents.** Every request is validated against a schema, and a 4xx says what is wrong with it. [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) teaches an agent (Hermes) the whole API.
+- **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) teaches an agent (Hermes) the whole API.
 - **Telegram pings** for threads that need Yannic to act: `POST /api/v1/notify`, one message a minute per caller.
 - **Look at what printed.** Each ticket that reached the printer keeps a PNG, so a bad print can be checked from the API.
 - **Safe for the paper.** A ticket interrupted by a crash is marked `failed` rather than printed twice. The queue
@@ -37,18 +39,15 @@ waiting items in their own pile, and prints the pile when Home Assistant release
 
 ```
   Home Assistant ──REST──┐                 ┌── SQLite (/data/printarr.db)
-  Hermes agent ──REST────┼──► printarr API ─┼── scheduler (prints when due, releases piles)
-  Web page ──────────────┘   (FastAPI)     ├── ticket PNGs (newest 250)
-                                  │        └── backups (nightly, versioned schema)
+  Hermes agent ──REST────┼──► printarr API ─┼── scheduler (prints when due)
+  Web page ──────────────┘   (FastAPI)     └── backups (nightly, versioned schema)
                                   │
-                                  ├── Ollama (decision model, text clean-up)
                                   └── raw TCP 9100 ──► TM-T88V printer
                                                        (or the simulator on the laptop)
 ```
 
-- `app/main.py` holds the routes. `app/compose.py` validates blocks and the briefing preset. `app/templates.py` holds the
-  classifier that picks a layout for plain text. `app/render/` draws the tiles from `app/render/system/blocks.json`
-  (moods, mood bands, grid and rules).
+- `app/main.py` holds the routes. `app/compose.py` and `app/blocks.py` validate and fill blocks.
+  `app/render/` draws strips from the design tokens in `app/render/system/`.
 - `app/scheduler.py` prints due tickets and releases piles. `app/status.py` decodes the printer's DLE EOT status.
 - The SQLite store owns all state. Only one uvicorn worker may run, because the scheduler lives in the process.
 
@@ -79,26 +78,25 @@ PRINTARR_PRINTER_MODE=file PRINTARR_OUTPUT_DIR=./out uvicorn app.main:app --port
 ```bash
 curl -X POST localhost:8000/api/v1/tickets \
   -H 'Content-Type: application/json' \
-  -d '{"recipient":"wife","sender":"yannic","title":"Dinner","message":"Pasta at 7","delivery":"on_release"}'
+  -d '{"recipient":"wife","sender":"yannic","title":"Dinner","message":"Pasta at 7","send_at":"2026-10-24T18:00:00"}'
 ```
-
-The ticket waits in Allyson's pile until her next release. Use `"delivery":"now"` to print it straight away.
 
 ## Install on TrueNAS
 
 The one-file install, the upgrade steps and the rollback steps are in
 [`docs/deploy/truenas.md`](docs/deploy/truenas.md). In short:
 
-1. Create the data folder on your SSD dataset (the install uses `/mnt/SSDCAGE/printarr`) and give it to uid and gid 568, the TrueNAS app user:
-   `chown -R 568:568 /mnt/SSDCAGE/printarr`.
-2. In `docker-compose.yml`, change only the data folder if it is different. The file holds the image, memory, CPUs, ports and storage, and nothing secret. There is no `environment` section.
-3. In TrueNAS, go to Apps, then Custom App (Install via YAML), and paste the file.
-4. Open `http://<nas-ip>:30100/`. Port 30100 is published because port 8000 is taken on this NAS. The setup wizard asks for the printer, Home Assistant, the model server, Telegram, names and timezone. Each service has a Test button. Finishing setup saves everything in the data folder.
+1. Create the data folder (for example `/mnt/ssd/apps/printarr`) and give it to uid and gid 568, the TrueNAS app user:
+   `chown -R 568:568 /mnt/ssd/apps/printarr`.
+2. In `docker-compose.yml`, change only the data folder. The file holds the image, memory, ports and storage, and nothing secret.
+3. In TrueNAS, go to Apps, Install Custom App, and paste the file.
+4. Open `http://<nas-ip>:30100/`. The setup wizard asks for the printer, Home Assistant, the model server, Telegram,
+   names and timezone. Each service has a Test button. Finishing setup saves everything in the data folder.
    The setup code is printed in the container log, and the API stays closed until setup is finished.
 
 The image is built by [`.github/workflows/image.yml`](.github/workflows/image.yml) and pushed to
-`ghcr.io/ourrage-cmyk/printarr` on every push to `main`. Its version is `0.2.<workflow run>`, and `/healthz` shows that version with the commit it was built from. The package must be public for TrueNAS to pull it
-without a login. The compose file sets `pull_policy: always`, so a restart pulls the newest image.
+`ghcr.io/ourrage-cmyk/printarr` on every push to `main`. The package must be public for TrueNAS to pull it
+without a login.
 
 ## Connect Home Assistant and Hermes
 
@@ -117,13 +115,13 @@ The main routes:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/v1/blocks`, `/api/v1/blocks/{name}/schema` | Block types, moods and their slot schemas |
-| `POST` | `/api/v1/tickets/compose` | Queue a ticket made of blocks, or the briefing preset |
+| `POST` | `/api/v1/tickets/compose` | Queue a ticket made of blocks, or a briefing from `preset` and `slots` |
 | `POST` | `/api/v1/tickets/slots` | Queue a briefing (101) or note (102) from typed slots |
 | `POST` | `/api/v1/tickets` | Queue plain text |
 | `POST` | `/api/v1/tickets/preview` | See the text of a plain ticket without queueing it |
 | `GET` | `/api/v1/tickets`, `/api/v1/tickets/{id}` | List tickets, or read one with its status and last error |
 | `POST` | `/api/v1/tickets/{id}/cancel`, `/retry`, `/release` | Cancel, print again, or release a held ticket |
-| `POST` | `/api/v1/people/{person}/release` | Print a person's pile now. `trigger`: `morning`, `evening`, `arrival` or `request` |
+| `POST` | `/api/v1/people/{person}/release` | Print a person's pile now |
 | `POST` | `/api/v1/holds/{hold_key}/release` | Release every held ticket with that key |
 | `GET` | `/api/v1/insights/entities` | Ranked Home Assistant entities for a briefing |
 | `GET` | `/api/v1/log`, `/api/v1/log/summary`, `/api/v1/log/export` | History |
@@ -132,33 +130,35 @@ The main routes:
 | `GET` | `/api/v1/printer`, `/printer/self-check` | Printer status (the self-check prints nothing) |
 | `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, liveness, and the build (`version`, `git_sha`) |
 | `POST` | `/api/v1/notify` | Send a Telegram message to Yannic (one a minute per caller) |
-| `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs (newest 250), and the PNG of one ticket as sent to the printer |
+| `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs, and the PNG of one ticket as sent to the printer |
 | `GET` / `POST` | `/api/v1/backup/export`, `/backup/import` | Download or restore the database |
 
 Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 
-**There is no authentication.** The API is for the home LAN only. Do not expose port 30100 to the internet.
+**There is no authentication.** The API is for the home LAN only. Do not expose port 8000 to the internet.
 
 ## Design language
 
-Every block is a tile: a bordered card on a three-column grid, one card per block, and tiles fall together so a
-pile reads as one ticket. The grid, the rules and the mood bands come from `app/render/system/blocks.json`.
+Every block is its own outlined tile on a three-column grid, with no shell around the whole ticket.
+There are three text sizes and no others: large dot matrix (5x7, titles only, centred), medium solid (numbers),
+and small solid (everything else). A long title wraps to up to three lines at the one dot size, then ends in
+an ellipsis. The paper carries no blank of its own: the half inch before the cut is fed with the cut
+command, once at the end of the whole piece, so continuations and queued tickets flow with only a tile gap.
+A fun fact prints its text alone, with no label.
 
-- **Titles** use the dot-matrix font. It is used only for titles and headlines, centred. Body text and numbers use the solid font.
-- **Mood band:** one band across the top of a tile, 28 dots tall. Neutral and factual have none. Loving and happy show sparse dots,
-  excited and playful zigzag, reminder upright ticks, sad and confused stipple, gentle warning and upset diagonal hatch,
-  firm complaint blocks, urgent a barcode, and critical a solid black bar with an inverted title. The band carries the mood, so no mood word is printed.
-- **Outline:** `urgent`, `upset` and `firm_complaint` draw a heavy square outline, `critical` the heaviest. `loving`, `gentle_warning`, `playful` and `happy` draw rounder corners.
-- **Kind marks:** five block types wear a small mark at the top-right corner: a note (`message`) an envelope, an alert (`alert`) a bolt,
-  a reminder (`tip`) a clock, a fun fact (`fact`) a bulb, and a shopping list (`checklist`) a cart. The mark follows the block, not the `kind` field.
-- **Fun facts stand alone.** A fun fact is never printed under a label such as "Did you know" or "Fun fact". The message just stands
-  by itself. The words are not forbidden inside the sentence.
-- **Printed tickets never print the tone name** or the mood name.
+The tone sets the feeling at a glance, with one ornament and one icon per tone:
 
+Each card carries its mood in a band at the top, 28 dots tall (under 5 mm), never in words:
+
+- **Plain:** `neutral`, `factual`. **Dots:** `loving`, `happy`. **Zigzag:** `excited`, `playful`.
+- **Ticks:** `reminder`. **Stipple:** `sad`, `confused`. **Hatch:** `gentle_warning`, `upset`.
+- **Barcode:** `firm_complaint`, `urgent`. **Solid black bar with an inverted title:** `critical`, the only one.
+- **Heart:** only `loving` has a heart.
+
+Five block types wear a small mark at the top-right corner of their card: a note (`message`) an envelope, an alert (`alert`) a bolt, a reminder (`tip`) a clock, a fun fact (`fact`) a bulb, and a shopping list (`checklist`) a cart. The mark follows the block, not the `kind` field. The outline follows the tone: heavy square corners for `urgent`, `upset` and `firm_complaint`, the heaviest for `critical`, and rounder corners for `loving`, `gentle_warning`, `playful` and `happy`. Printed tickets never print the tone name.
 The rules and the reasons behind them are in [`docs/design/README.md`](docs/design/README.md), the
-mood and tone catalogue is in [`docs/design/tones.md`](docs/design/tones.md), the design tokens are in
-[`docs/design/system/tokens.json`](docs/design/system/tokens.json), and the taste guide is in
-[`docs/design/taste-guide/taste-guide.md`](docs/design/taste-guide/taste-guide.md).
+design tokens are in [`docs/design/system/tokens.json`](docs/design/system/tokens.json), and the taste
+guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide/taste-guide.html).
 
 ## Configuration
 
@@ -172,8 +172,7 @@ Home Assistant and Telegram tokens are stored there and are never returned by th
   when the printer is unreachable. Kuma polls the service, nothing is pushed.
 - **Telegram alerts:** enter the bot token and chat ID in the setup wizard or the settings page, then press Send test message. Alerts cover
   an unreachable printer, paper out, cover open, autocutter error, a rendering failure, a ticket that failed after
-  retries, and a decision model that is down. A model failure alerts only after three failures within 15 minutes.
-  Each problem alerts once, and a recovery message follows.
+  retries, and a decision model that is down. Each problem alerts once, and a recovery message follows.
 - **Printer status:** read with DLE EOT every minute. The bit layout comes from the Epson ESC/POS Command Reference.
 
 ## Data, upgrades and backups
@@ -183,14 +182,12 @@ Home Assistant and Telegram tokens are stored there and are never returned by th
 - A database from a newer version is refused, so an older image cannot damage it.
 - Download a copy at any time with `GET /api/v1/backup/export`. Restore with `POST /api/v1/backup/import?confirm=replace`.
 - With the API stopped, restore from a file in the container: `python -m app.backup restore /data/backups/<file>.db`.
-- Ticket PNGs are kept in `/data/tickets/images`, the newest 250.
 
 ## Printer facts
 
-- 80 mm paper, 512 printable dots at 180 dpi, Font A at 42 columns. Text is CP437. Characters outside it print as `?`.
+- 80 mm paper, 512 printable dots, Font A at 42 columns. Text is CP437. Characters outside it print as `?`.
 - Commands verified against the ESC/POS Command Reference: `GS !`, `GS V 1`, `GS ( L` function 112 and 50, and `DLE EOT` status 1 to 4.
-- A strip is cut with the partial-cut command. The space before the cut is fed with that command, so the picture has no blank of its own.
-- Still to check on the real unit: the USB ID, tone levels for multi-tone images, a status round trip, and the alert barcode and top margin.
+- Still to check on the real unit: the USB ID, tone levels for multi-tone images, and a status round trip.
 - The simulator is a TCP target too. Enter its address as the printer in the setup wizard, and send the sample jobs with
   `python -m app.send_sample <host> 9100`.
 
@@ -206,14 +203,13 @@ python scripts/render_readme_samples.py   # refreshes docs/images (needs pillow)
 Golden-byte tests in `tests/test_golden.py` pin the exact bytes for the sample jobs. They guard against changes
 to this encoder. They are not checks against Epson's programming guide.
 
-The test suite also checks that `docs/openapi.json` matches the code, that every route named in the README
-and the agent skill exists, and that the three copies of the agent skill are identical.
+The test suite also checks that `docs/openapi.json` matches the code, and that every route named in the README
+and the agent skill exists.
 
 ## Documentation
 
 - [`docs/STATUS.md`](docs/STATUS.md): what has been built, and what is still open.
-- [`docs/agents/printarr-api.md`](docs/agents/printarr-api.md): how an agent uses the API, the pile rules and the classifier.
-- [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md): the agent skill for the API (copies in `skills/printarr/` and `docs/integrations/hermes/`).
+- [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md): the agent skill for the API.
 - [`docs/deploy/truenas.md`](docs/deploy/truenas.md): install, upgrade, roll back and restore.
 - [`docs/integrations/`](docs/integrations/SETUP-CHECKLIST.md): Home Assistant and Hermes setup.
-- [`docs/design/`](docs/design/README.md): design system, tones, conformance and templates.
+- [`docs/design/`](docs/design/README.md): design system, taste profile and templates.

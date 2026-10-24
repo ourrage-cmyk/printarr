@@ -22,27 +22,27 @@ OUTSIDE = [8.4, 8.1, 8.0, 8.6, 9.5, 10.2, 11.0, 11.8, 12.4, 13.1, 13.6, 14.0, 14
 MOOD_TEXT = "The bin lorry came early today, so the blue bin is already out front."
 
 MORNING = [
-    Block("greeting", {"greeting": "Good morning, Yannic", "summary": "Cloudy, 12 C, rain after 3pm. Cheap energy until 16:00."}),
+    Block("greeting", {"greeting": "Good morning, Alex", "summary": "Cloudy, 12 C, rain after 3pm. Cheap energy until 16:00."}),
     Block("metric", {"label": "Body battery", "value": 72, "unit": "%"}, "factual"),
     Block("metric", {"label": "Steps", "value": "6,120"}, "factual"),
     Block("metric_rows", {"title": "Energy and house", "rows": [{"label": "Energy now", "value": "0.079", "unit": "GBP/kWh"}, {"label": "Energy 16:00", "value": "0.245", "unit": "GBP/kWh"}, {"label": "Inside / out", "value": "19.5 / 12", "unit": "C"}]}, "factual"),
     Block("graph", {"title": "Outside, 24 h", "series": OUTSIDE, "unit": "C"}, "factual"),
-    Block("dog_counts", {"dogs": [{"name": "Bridget", "pee": 3, "poop": 1, "food": 2, "run": 1}, {"name": "Kida", "pee": 2, "poop": 2, "food": 2, "run": 2}]}),
+    Block("dog_counts", {"dogs": [{"name": "Milo", "pee": 3, "poop": 1, "food": 2, "run": 1}, {"name": "Nala", "pee": 2, "poop": 2, "food": 2, "run": 2}]}),
 ]
 EVENING = [
-    Block("greeting", {"greeting": "Good evening, Allyson", "summary": "Welcome back. Here is the day."}, "happy"),
-    Block("dog_counts", {"dogs": [{"name": "Bridget", "pee": 5, "poop": 1, "food": 2, "run": 0}]}),
+    Block("greeting", {"greeting": "Good evening, Sam", "summary": "Welcome back. Here is the day."}, "happy"),
+    Block("dog_counts", {"dogs": [{"name": "Milo", "pee": 5, "poop": 1, "food": 2, "run": 0}]}),
     Block("metric_rows", {"title": "Today", "rows": [{"label": "Steps", "value": "8,430"}, {"label": "Saved", "value": "0.42", "unit": "GBP"}]}, "factual"),
-    Block("message", {"paragraph": "Thank you for the coffee this morning. It made the whole day easier. Love you.", "from": "Yannic"}, "loving"),
+    Block("message", {"paragraph": "Thanks for picking up the shopping. It made the whole day easier. See you tonight.", "from": "Alex"}, "loving"),
     Block("tip", {"tip": "Check the bins before you leave tomorrow."}, "reminder"),
 ]
 ALERT = [Block("alert", {"label": "Water leak", "paragraph": "Water leak under the kitchen sink. Turn off the stopcock now.", "action": "Stopcock"}, "urgent")]
 SHOPPING = [
     Block("checklist", {"title": "Shopping", "items": [{"text": "Milk (oat)"}, {"text": "Dog food, 2 bags"}, {"text": "Bread"}, {"text": "Eggs x6", "checked": True}]}),
-    Block("tip", {"tip": "Bin bags are in the cupboard under the sink."}),
+    Block("tip", {"tip": "Bin bags are in the hall cupboard."}),
 ]
 TODO = [Block("checklist", {"title": "To do", "items": [{"text": "Bins out"}, {"text": "Dentist 14:30 Fri"}, {"text": "Call bank"}]}, "reminder")]
-GALLERY = [Block("message", {"title": mood, "paragraph": MOOD_TEXT, "from": "Yannic"}, mood) for mood in MOODS]
+GALLERY = [Block("message", {"title": mood, "paragraph": MOOD_TEXT, "from": "Alex"}, mood) for mood in MOODS]
 
 STRIPS = {
     **{f"morning-briefing-{i + 1}": s for i, s in enumerate(split_strips(MORNING))},

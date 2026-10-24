@@ -11,7 +11,7 @@ info:
   title: printarr for Hermes
   version: 0.3.0
   description: >
-    Send receipts to Yannic (yannic) or Allyson (wife), fill slot templates for briefings and notes,
+    Send receipts to Yannic (yannic) or the second person (wife), fill slot templates for briefings and notes,
     list and cancel tickets, read history, and pick briefing entities. No authentication; LAN only.
 servers:
   - url: http://PRINTARR_URL/api/v1
@@ -159,7 +159,7 @@ paths:
   /tickets/compose:
     post:
       operationId: composeTicket
-      summary: "[live] Queue a ticket made of ordered blocks, or the briefing preset (preset plus slots). Every block needs a mood and slots. Supports delivery, idempotency_key and hold. Bad blocks return 422 with each problem."
+      summary: "[live] Queue a strip made of ordered blocks. Every block needs a mood and slots. Supports delivery, idempotency_key and hold. Bad blocks return 422 with each problem."
       requestBody:
         required: true
         content:
@@ -207,7 +207,7 @@ components:
     Recipient:
       type: string
       enum: [yannic, wife]
-      description: Yannic is yannic. Allyson is wife.
+      description: Yannic is yannic. the second person is wife.
     Status:
       type: string
       enum: [held, pending, printing, sent, failed, cancelled]

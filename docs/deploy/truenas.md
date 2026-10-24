@@ -5,14 +5,14 @@ install it from one YAML file. There is no env file and no second file.
 
 ## Before you start
 
-1. **Create the data folder on your SSD dataset**, for example `/mnt/SSDCAGE/printarr`. Everything
+1. **Create the data folder on your SSD dataset**, for example `/mnt/pool/printarr`. Everything
    printarr keeps lives in this one folder: the database (tickets, settings, the setup state and the
    saved secrets), the nightly backups and the output. Delete or rebuild the app and point it at the
    same folder, and it comes back configured, with no wizard.
 2. **Give it to the app's user (uid 568).** In the TrueNAS shell:
    ```sh
-   mkdir -p /mnt/SSDCAGE/printarr
-   chown -R 568:568 /mnt/SSDCAGE/printarr
+   mkdir -p /mnt/pool/printarr
+   chown -R 568:568 /mnt/pool/printarr
    ```
    If the folder is not writable, the app stops at once and writes a message to its logs.
 3. **Know the printer's IP address** (the Epson TM-T88V on the LAN, port 9100). Have the Home Assistant
@@ -75,12 +75,11 @@ The database holds the secrets too, so keep the data folder private, and do not 
 The database upgrades itself on start, and a copy is taken first, so an upgrade does not lose
 tickets or settings.
 
-1. Note the current build: `http://<nas-ip>:30100/healthz` shows `version` and `git_sha`.
-2. The compose file uses `ghcr.io/ourrage-cmyk/printarr:latest` with `pull_policy: always`, so a restart pulls
-   the newest build from main. To pin an exact build, edit the app and change the image to a `sha-...` tag from the
-   GitHub Actions run. Save.
-3. TrueNAS pulls the image and restarts the app.
-4. Check `/healthz` shows the new version and sha, read the logs, and run the smoke test.
+1. Note the current image tag (the `sha-` tag, shown on the app's **Edit** page).
+2. Edit the app. Change the image tag to the new one. Use `latest` to follow main, or a
+   `sha-...` tag to pin an exact build from the GitHub Actions run.
+3. Save. TrueNAS pulls the new image and restarts the app.
+4. Check the logs and run the smoke test.
 
 Every time an older database is upgraded, the app first writes
 `backups/pre-upgrade-v<n>-<time>.db` into the data folder. The last five are kept.
@@ -117,7 +116,7 @@ from `backups/`. The current database is kept as `backups/pre-import-*.db`, so t
 1. Stop the app in TrueNAS.
 2. In the TrueNAS shell, replace the database with the copy you want, and remove the journal files:
    ```sh
-   cd /mnt/SSDCAGE/printarr
+   cd /mnt/pool/printarr
    rm -f printarr.db-wal printarr.db-shm
    cp backups/<the-copy>.db printarr.db
    chown 568:568 printarr.db
@@ -166,7 +165,7 @@ docker compose -f docker-compose.dev.yml up --build
 
 ## Test with the laptop standing in for the printer
 
-Until the Epson TM-T88V is connected, the server can talk to the printer simulator on the laptop. The
+Until the Epson arrives, the server can talk to the printer simulator on the laptop. The
 server's printarr container sends raw ESC/POS to the laptop on TCP 9100, exactly as it would to
 the TM-T88V. The simulator shows each receipt in a browser on the laptop.
 
