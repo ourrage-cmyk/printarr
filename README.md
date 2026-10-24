@@ -1,205 +1,220 @@
 # printarr
 
-A Docker container that queues receipt tickets and prints them on an Epson TM-T88V
-(80 mm, ESC/POS). You post a ticket with a recipient, a message and an optional send
-time. A background scheduler prints it when it is due, and retries if the printer is
-unavailable. Home Assistant and Hermes will call the API later.
+printarr is a small service that prints receipt-style "strips" on an Epson TM-T88V
+(80 mm, ESC/POS). Home Assistant, Hermes and the web page send it messages, briefings,
+lists and alerts. It lays them out in one design language, keeps each person's
+waiting items in their own pile, and prints on the right moment.
 
-The web UI for writing and previewing receipts is planned for a later stage. The API
-already exposes the rendered receipt as text and as raw ESC/POS bytes so it can be
-built on.
+<p align="center">
+  <img src="docs/images/strip-morning-briefing.png" alt="Morning briefing strip" width="200">
+  <img src="docs/images/strip-shopping-list.png" alt="Shopping list strip" width="200">
+  <img src="docs/images/strip-alert.png" alt="Urgent alert strip" width="200">
+</p>
 
-## Install on TrueNAS (one file)
+<p align="center"><sub>Sample strips drawn by the app's own renderer (<code>scripts/render_readme_samples.py</code>).</sub></p>
 
-1. In TrueNAS, go to Apps > Install Custom App and paste [`docker-compose.yml`](docker-compose.yml).
-2. Open the app's Logs and copy the **setup code** printed at start.
-3. Open `http://<nas-ip>:8000/`, enter the setup code and finish the setup wizard: printer,
-   Home Assistant, model server, Telegram, names and timezone. Each one has a Test button.
-   Secrets are stored in the data folder, never in the YAML. See [docs/deploy/truenas.md](docs/deploy/truenas.md).
+## What it does
 
-Everything the service saves (tickets, model and alert settings) lives in one folder,
-`/data`. The YAML maps it to a folder on your SSD dataset, for example
-`/mnt/SSDCAGE/printarr`. Create that folder before you install.
+- **Two recipients**, `yannic` and `wife` (Allyson). Each has a pile of waiting items that
+  prints on one strip when Home Assistant releases it: in the morning when the phone is
+  unplugged, and in the evening when someone arrives home.
+- **Composed strips.** A strip is an ordered list of typed blocks: greeting, metric, metric rows,
+  graph, dog counts, message, alert, checklist, tip and fact. Each block has a mood that
+  changes how it looks.
+- **Three deliveries.** `on_release` waits in the pile, `at` prints at a time, and `now` prints straight away.
+- **Live data.** Entity values and sparklines are read from Home Assistant when the ticket prints,
+  not when it is queued.
+- **Simple text too.** Plain messages go through `POST /tickets`, and the layout is picked for you.
+- **Web page** at `/` to write tickets, preview them, watch the inbox and history, and change settings.
+- **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md) teaches an agent the whole API.
+- **Safe for the paper.** A ticket interrupted by a crash is marked `failed` rather than printed twice. The queue
+  pauses while the printer reports a fault, and held items wait until you release them.
 
-The image is built and pushed to `ghcr.io/ourrage-cmyk/printarr` by
-`.github/workflows/image.yml` on every push to `main`. The package must be public for
-TrueNAS to pull it without a login.
+## Architecture
 
-Docs: `http://<nas-ip>:8000/docs`, and the schema is in [`docs/openapi.json`](docs/openapi.json).
+```
+  Home Assistant ──REST──┐                 ┌── SQLite (/data/printarr.db)
+  Hermes agent ──REST────┼──► printarr API ─┼── scheduler (prints when due)
+  Web page ──────────────┘   (FastAPI)     └── backups (nightly, versioned schema)
+                                  │
+                                  └── raw TCP 9100 ──► TM-T88V printer
+                                                       (or the simulator on the laptop)
+```
 
-## Monitoring and alerts
+- `app/main.py` holds the routes. `app/compose.py` and `app/blocks.py` validate and fill blocks.
+  `app/render/` draws strips from the design tokens in `app/render/system/`.
+- `app/scheduler.py` prints due tickets and releases piles. `app/status.py` decodes the printer's DLE EOT status.
+- The SQLite store owns all state. Only one uvicorn worker may run, because the scheduler lives in the process.
 
-- **Health for Uptime Kuma:** `GET /api/v1/health`. It returns 200 when the database and
-  printer are fine, and 503 when the printer is unreachable. Add an HTTP monitor on that URL.
-  Nothing is pushed out. Kuma polls the service.
-- **Telegram alerts:** set the bot token and chat ID in the web page, then press Send test
-  message. Alerts are sent for: printer unreachable, paper out, cover open, autocutter
-  error, rendering failure, ticket failed after retries, and decision model down. Each
-  problem alerts once, and a recovery message follows when it clears. The printer's own
-  status (paper, cover, cutter) is read every minute with DLE EOT.
-- **Printer status bits:** taken from the ESC/POS Command Reference (`dle_eot`). Cover is
-  bit 2 of status 2, autocutter error is bit 3 of status 3, and paper end is bits 5-6 of
-  status 4. Check them on the real printer before trusting the alerts.
-- **Model outage:** the request still succeeds with the rule-based template, and the
-  ticket records `selection: rule`.
-- **Rendering failure:** the API rejects the request with HTTP 500 and queues nothing,
-  so the caller knows straight away.
+## Quick start
 
-## Live data from Home Assistant
+### On a laptop with the simulator
 
-Tickets can include `blocks`:
-- `value`: an entity's current state, with a label and unit.
-- `sparkline`: a 512-dot graph of an entity's history (`hours`, default 24), printed as a raster image.
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
 
-Set the Home Assistant URL and a long-lived access token in the web page. The data is
-fetched when the ticket prints, not when it is queued. A held or scheduled ticket
-therefore prints current values. If Home Assistant can't be reached at print time, the
-ticket still prints with "data unavailable" in place of the live data, and a Telegram
-alert fires. Requests that include blocks are rejected with 422 if Home Assistant is not
-configured, and the preview returns 502 if Home Assistant is unreachable.
+The web page is at <http://localhost:8000/>. The simulator is at <http://localhost:8080/>.
+Data is kept in `./dev-data`. On a fresh install, finish the setup wizard at `/` first. Until setup is done, the
+API answers only the setup routes and health.
 
-## Holds and Home Assistant
+### From source
 
-A ticket with `"hold": true` is queued but does not print. The template is still chosen
-when the request arrives. Release it with `POST /api/v1/tickets/{id}/release`, or release
-every ticket with a hold name using `POST /api/v1/holds/{hold_key}/release`. Home Assistant
-can call the hold endpoint when the user gets home. The ticket then prints at once.
+```bash
+pip install -r requirements-dev.txt
+pytest
+PRINTARR_PRINTER_MODE=file PRINTARR_OUTPUT_DIR=./out uvicorn app.main:app --port 8000
+```
 
-Each request takes a few milliseconds to render. A decision model adds its own response
-time, bounded by `PRINTARR_LLM_TIMEOUT` (default 5 s). The model is only used when the
-ticket arrives, so release and print never wait on it.
+`file` mode writes each job as a `.bin` file in `PRINTARR_OUTPUT_DIR`, which needs no printer.
 
-## Configuration
-
-All settings are set in the setup wizard at `/setup`, and saved in the data folder. The compose file
-holds only the image, memory, CPUs, ports and storage. Secrets (Home Assistant token, Telegram
-token) are typed into the wizard and stored in the database, never in environment variables.
-
-
-## Data, upgrades and backups
-
-- The database schema is versioned (SQLite `user_version`). Each start applies only the steps the
-  database has not had yet, and never drops data. Before an upgrade of an existing database, a copy
-  is written to `backups/pre-upgrade-v<n>-<time>.db` (the last five are kept).
-- A database from a newer version is refused, so an older image cannot damage it. To go back to an
-  older image, restore a backup taken by that version.
-- Nightly copies go to `backups/nightly-<date>-<time>.db`.
-- Download a copy at any time: `GET /api/v1/backup/export`.
-- Replace the database from a copy: `POST /api/v1/backup/import?confirm=replace` with the file as
-  the raw body. The current database is first kept as `backups/pre-import-*.db`.
-- With the API stopped, restore from a file inside the container:
-  `python -m app.backup restore /data/backups/<file>.db`
-
-## API
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/tickets` | Queue a ticket. Returns 201 with the ticket. |
-| `GET` | `/api/v1/tickets` | List tickets. Filter with `status`, `recipient`, `limit`, `offset`. |
-| `GET` | `/api/v1/tickets/{id}` | One ticket, including `status`, `attempts` and `last_error`. |
-| `POST` | `/api/v1/tickets/{id}/cancel` | Cancel a pending ticket. |
-| `POST` | `/api/v1/tickets/{id}/retry` | Print a failed or cancelled ticket again, now. |
-| `GET` | `/api/v1/tickets/{id}/preview` | The receipt as plain text. |
-| `GET` | `/api/v1/tickets/{id}/escpos` | The exact ESC/POS byte stream. |
-| `POST` | `/api/v1/tickets/preview` | Render a ticket body without queueing it. |
-| `POST` | `/api/v1/tickets/{id}/release` | Release a held ticket so it prints now. |
-| `POST` | `/api/v1/holds/{hold_key}/release` | Release every held ticket with that name. |
-| `GET` | `/api/v1/templates` | Templates and the recipient group each belongs to. |
-| `GET` / `PUT` | `/api/v1/settings/model` | Decision model URL, model name, on/off and timeout. Saved in the database. |
-| `GET` | `/api/v1/health` | Health for Uptime Kuma. 503 when the printer or database is down. |
-| `GET` / `PUT` | `/api/v1/settings/alerts` | Telegram bot token and chat ID. The token is never returned in full. |
-| `POST` | `/api/v1/alerts/test` | Send a test Telegram message. |
-| `GET` | `/` | Web page for writing tickets and changing the settings. |
-| `GET` | `/api/v1/printer` | Whether the printer is reachable. |
-| `POST` | `/api/v1/printer/test` | Print a test receipt now. Returns 502 if the printer is down. |
-| `GET` | `/healthz` | Liveness check. |
-
-Ticket statuses: `pending`, `printing`, `sent`, `failed`, `cancelled`.
-
-The API has no authentication. It is meant for the home LAN only, so do not expose
-port 8000 to the internet. `sender` is a free-text ID for the log, for example
-`home-assistant` or `hermes`.
-
-Example:
+### Try the API (after setup)
 
 ```bash
 curl -X POST localhost:8000/api/v1/tickets \
   -H 'Content-Type: application/json' \
-  -d '{"recipient":"Anna","sender":"Yannic","title":"Dinner","message":"Pasta at 7","send_at":"2026-10-24T18:00:00"}'
+  -d '{"recipient":"wife","sender":"yannic","title":"Dinner","message":"Pasta at 7","send_at":"2026-10-24T18:00:00"}'
 ```
 
-Limits: `sender` 40 characters, `title` 80, `message` 2000. Text is word-wrapped to
-42 columns. Characters outside the printer's code page (CP437) print as `?`.
+## Install on TrueNAS
 
-## Recipients and templates
+The one-file install, the upgrade steps and the rollback steps are in
+[`docs/deploy/truenas.md`](docs/deploy/truenas.md). In short:
 
-`recipient` is a fixed list: `yannic` or `wife` (shown as Allyson). Each recipient has a group of templates,
-listed by `GET /api/v1/templates`.
+1. Create the data folder (for example `/mnt/ssd/apps/printarr`) and give it to uid and gid 568, the TrueNAS app user:
+   `chown -R 568:568 /mnt/ssd/apps/printarr`.
+2. In `docker-compose.yml`, change only the data folder. The file holds the image, memory, ports and storage, and nothing secret.
+3. In TrueNAS, go to Apps, Install Custom App, and paste the file.
+4. Open `http://<nas-ip>:8000/`. The setup wizard asks for the printer, Home Assistant, the model server, Telegram,
+   names and timezone. Each service has a Test button. Finishing setup saves everything in the data folder.
+   The setup code is printed in the container log, and the API stays closed until setup is finished.
 
-Template choice happens when the ticket is queued:
+The image is built by [`.github/workflows/image.yml`](.github/workflows/image.yml) and pushed to
+`ghcr.io/ourrage-cmyk/printarr` on every push to `main`. The package must be public for TrueNAS to pull it
+without a login.
 
-1. If `template` is a number, it must belong to the recipient's group. Otherwise the request
-   fails with 422.
-   `template` defaults to `auto`.
-2. If the decision model is configured and scores a template at least 0.5, it is used.
-   The template's default decorations apply.
-3. Otherwise a fixed rule picks the template. The rule is deterministic and works without
-   the model. If the model is slow, unreachable, or returns something invalid, the rule
-   is used and the ticket records `selection: rule`.
+## Connect Home Assistant and Hermes
 
-Every ticket stores `template_id`, `decorations` and `selection`, so you can see which
-path chose it.
+- **Home Assistant:** create a long-lived access token, paste it into the setup wizard or the settings page, and press Test.
+  The setup steps and the example automations are in [`docs/integrations/`](docs/integrations/SETUP-CHECKLIST.md).
+- **Hermes:** give the agent [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md) as its instructions and
+  [`docs/integrations/hermes/openapi.yaml`](docs/integrations/hermes/openapi.yaml) as its tool definition.
+  [`docs/integrations/hermes/example-morning-briefing.md`](docs/integrations/hermes/example-morning-briefing.md)
+  shows one briefing from start to finish.
 
-## Printer facts and verification
+## API
 
-Layout constants come from the Epson TM-T88V Technical Reference Guide: 80 mm paper,
-512 dots, Font A 42 columns, Font B 56 columns.
+The full schema is [`docs/openapi.json`](docs/openapi.json). The running service also serves `/docs`.
+The main routes:
 
-Command bytes are checked against the ESC/POS Command Reference (revision 3.40, TM printers):
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/blocks`, `/api/v1/blocks/{name}/schema` | Block types, moods and their slot schemas |
+| `POST` | `/api/v1/tickets/compose` | Queue a strip made of blocks |
+| `POST` | `/api/v1/tickets/slots` | Queue a briefing (101) or note (102) from typed slots |
+| `POST` | `/api/v1/tickets` | Queue plain text |
+| `POST` | `/api/v1/tickets/preview` | See the text of a plain ticket without queueing it |
+| `GET` | `/api/v1/tickets`, `/api/v1/tickets/{id}` | List tickets, or read one with its status and last error |
+| `POST` | `/api/v1/tickets/{id}/cancel`, `/retry`, `/release` | Cancel, print again, or release a held ticket |
+| `POST` | `/api/v1/people/{person}/release` | Print a person's pile now |
+| `POST` | `/api/v1/holds/{hold_key}/release` | Release every held ticket with that key |
+| `GET` | `/api/v1/insights/entities` | Ranked Home Assistant entities for a briefing |
+| `GET` | `/api/v1/log`, `/api/v1/log/summary`, `/api/v1/log/export` | History |
+| `GET` / `PUT` | `/api/v1/settings/ha`, `/settings/model`, `/settings/alerts` | Settings (tokens are never returned in full) |
+| `POST` | `/api/v1/settings/ha/test`, `/alerts/test`, `/printer/test` | Check Home Assistant, Telegram and the printer |
+| `GET` | `/api/v1/printer`, `/printer/self-check` | Printer status (the self-check prints nothing) |
+| `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, and liveness |
+| `GET` / `POST` | `/api/v1/backup/export`, `/backup/import` | Download or restore the database |
 
-- Verified: `GS !` (double size), `GS V 1` (partial cut), `GS ( L` function 112 (raster)
-  and function 50 (print), and `DLE EOT` status 1 to 4.
-- Not yet read: `ESC @`, `ESC E`, `ESC a`, `ESC d`, `ESC t`. These are in the command index
-  and are standard, but their pages still need checking.
-- Obsolete and not used by default: `GS v 0` (see `PRINTARR_RASTER_MODE`), and `ESC i` and
-  `ESC m` for partial cuts.
+Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 
-Still to check on the real unit: the USB ID, the number of tone levels for multi-tone
-images, and a status round trip.
+**There is no authentication.** The API is for the home LAN only. Do not expose port 8000 to the internet.
 
-## Simulator bridge
+## Design language
 
-Point the service at the simulator over TCP, the same way as the real printer:
+Every strip uses the same shell: outlined cards, a dot-matrix main font (5x7), and a secondary font
+(IBM Plex Mono, Inter or DM Sans) at 18 to 22 points. Ornaments are chosen per block and per mood.
+The rules and the reasons behind them are in [`docs/design/README.md`](docs/design/README.md), the
+design tokens are in [`docs/design/system/tokens.json`](docs/design/system/tokens.json), and the taste
+guide is in [`docs/design/taste-guide/taste-guide.html`](docs/design/taste-guide/taste-guide.html).
 
-```bash
-PRINTARR_PRINTER_MODE=tcp PRINTARR_PRINTER_HOST=<simulator-host> PRINTARR_PRINTER_PORT=9100
-```
+## Configuration
 
-To send the sample jobs (text, raster, full receipt) to any target and check the output:
+Settings are entered in the setup wizard (the web page at `/`) and saved in the data folder. Secrets such as the
+Home Assistant and Telegram tokens are stored there and are never returned by the API. Environment variables with
+the `PRINTARR_` prefix only set defaults, and a saved value wins. The compose files set no secrets.
 
-```bash
-python -m app.send_sample <host> 9100
-```
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PRINTARR_PRINTER_MODE` | `tcp` | `tcp` sends to the printer. `file` writes `.bin` files to `PRINTARR_OUTPUT_DIR`. |
+| `PRINTARR_PRINTER_HOST` | _(empty)_ | Printer IP or hostname in `tcp` mode. |
+| `PRINTARR_PRINTER_PORT` | `9100` | Raw TCP port. |
+| `PRINTARR_PRINTER_TIMEOUT` | `5` | Seconds to wait for connect and send. |
+| `PRINTARR_RASTER_MODE` | `gs_l` | Image command. `gs_l` is GS ( L function 112. `gs_v0` is for a unit that rejects it. |
+| `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. |
+| `PRINTARR_TIMEZONE` | `Europe/London` | Used for `send_at` without an offset, and for the date on the receipt. |
+| `PRINTARR_DB_PATH` | `/data/printarr.db` | SQLite database file. |
+| `PRINTARR_OUTPUT_DIR` | `/data/output` | Where `file` mode writes jobs. |
+| `PRINTARR_SCHEDULER` | `on` | Set to `off` to disable the background printing worker. |
+| `PRINTARR_POLL_INTERVAL` | `5` | Seconds between scheduler checks. |
+| `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is `failed`. |
+| `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
+| `PRINTARR_STRIP_MAX_BLOCKS` | `5` | Blocks per strip. A composed ticket with more prints as several strips. |
+| `PRINTARR_STRIP_MARGIN_DOTS` | `90` | Margin above and below a strip, in dots. |
+| `PRINTARR_LLM_ENABLED` | `on` | Set to `off` to use the fixed rules only. |
+| `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Used on first start only. |
+| `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model that scores templates. |
+| `PRINTARR_LLM_TEXT_MODEL` | `granite4.2:3b` | Text model that tidies unformatted text. |
+| `PRINTARR_LLM_TIMEOUT` | `5` | Seconds before the model is skipped. |
+| `PRINTARR_BACKUP` | `on` | Nightly copy of the database to `backups/` next to it. |
+| `PRINTARR_BACKUP_HOUR` | `3` | Local hour (0 to 23) for the nightly copy. |
+| `PRINTARR_BACKUP_KEEP` | `7` | Nightly copies kept. |
+| `PRINTARR_LOG_LEVEL` | `INFO` | Python log level. |
 
-Golden-byte tests in `tests/test_golden.py` pin the exact bytes for these jobs. They are
-regression tests against this encoder, not checks against Epson's Programming Guide.
+## Monitoring and alerts
 
-The earlier `file` mode still works too: it writes each job as a `.bin` file in
-`PRINTARR_OUTPUT_DIR`.
+- **Health for Uptime Kuma:** `GET /api/v1/health` returns 200 when the database and printer are fine, and 503
+  when the printer is unreachable. Kuma polls the service, nothing is pushed.
+- **Telegram alerts:** enter the bot token and chat ID in the setup wizard or the settings page, then press Send test message. Alerts cover
+  an unreachable printer, paper out, cover open, autocutter error, a rendering failure, a ticket that failed after
+  retries, and a decision model that is down. Each problem alerts once, and a recovery message follows.
+- **Printer status:** read with DLE EOT every minute. The bit layout comes from the Epson ESC/POS Command Reference.
 
-### Older note
+## Data, upgrades and backups
 
-Run with `PRINTARR_PRINTER_MODE=file`. Each job lands in `PRINTARR_OUTPUT_DIR` as a
-`.bin` file, and `GET /api/v1/tickets/{id}/escpos` returns the same bytes. The printer
-simulator can use either source.
+- The database schema is versioned (SQLite `user_version`). Each start applies only the steps that are missing, and
+  never drops data. Before an upgrade, a copy is written to `backups/pre-upgrade-v<n>-<time>.db`.
+- A database from a newer version is refused, so an older image cannot damage it.
+- Download a copy at any time with `GET /api/v1/backup/export`. Restore with `POST /api/v1/backup/import?confirm=replace`.
+- With the API stopped, restore from a file in the container: `python -m app.backup restore /data/backups/<file>.db`.
+
+## Printer facts
+
+- 80 mm paper, 512 printable dots, Font A at 42 columns. Text is CP437. Characters outside it print as `?`.
+- Commands verified against the ESC/POS Command Reference: `GS !`, `GS V 1`, `GS ( L` function 112 and 50, and `DLE EOT` status 1 to 4.
+- Still to check on the real unit: the USB ID, tone levels for multi-tone images, and a status round trip.
+- The simulator is a TCP target too. Point `PRINTARR_PRINTER_HOST` at it, and send the sample jobs with
+  `python -m app.send_sample <host> 9100`.
 
 ## Development
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
-python -m app.openapi_export   # refreshes docs/openapi.json
+python -m app.openapi_export        # refreshes docs/openapi.json
+python scripts/render_readme_samples.py   # refreshes docs/images (needs pillow)
 ```
 
-Run one uvicorn worker only. The scheduler lives inside the process, so a second worker
-would print each ticket twice.
+Golden-byte tests in `tests/test_golden.py` pin the exact bytes for the sample jobs. They guard against changes
+to this encoder. They are not checks against Epson's programming guide.
+
+The test suite also checks that `docs/openapi.json` matches the code, and that every route named in the README
+and the agent skill exists.
+
+## Documentation
+
+- [`docs/STATUS.md`](docs/STATUS.md): what has been built, and what is still open.
+- [`skills/printarr/SKILL.md`](skills/printarr/SKILL.md): the agent skill for the API.
+- [`docs/deploy/truenas.md`](docs/deploy/truenas.md): install, upgrade, roll back and restore.
+- [`docs/integrations/`](docs/integrations/SETUP-CHECKLIST.md): Home Assistant and Hermes setup.
+- [`docs/design/`](docs/design/README.md): design system, taste profile and templates.

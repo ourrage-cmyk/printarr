@@ -1068,7 +1068,7 @@
           "setup"
         ],
         "summary": "Setup Complete",
-        "description": "Check every service that was filled in, then save everything and open the API.\n\nA failed check returns 422 with what to fix. Nothing is saved unless every check passes.",
+        "description": "Check every service that was filled in, then save everything. Also used to change settings later.\n\nThe first call finishes setup and opens the API. After that, the same call saves changes, and a\nblank secret keeps the saved one (list it in `clear` to remove it). A failed check returns 422\nwith what to fix. Nothing is saved unless every check passes.",
         "operationId": "setup_complete_api_v1_setup_complete_post",
         "parameters": [
           {
@@ -2400,6 +2400,18 @@
             "minLength": 1,
             "title": "Wife Name",
             "default": "Allyson"
+          },
+          "clear": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "ha_token",
+                "telegram_token"
+              ]
+            },
+            "type": "array",
+            "title": "Clear",
+            "description": "Secrets to remove. A blank secret keeps the saved one, so use this to clear it."
           }
         },
         "additionalProperties": false,

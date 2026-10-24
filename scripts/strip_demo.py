@@ -45,7 +45,7 @@ TODO = [Block("checklist", {"title": "To do", "items": [{"text": "Bins out"}, {"
 GALLERY = [Block("message", {"title": mood, "paragraph": MOOD_TEXT, "from": "Yannic"}, mood) for mood in MOODS]
 
 STRIPS = {
-    "morning-briefing": MORNING,
+    **{f"morning-briefing-{i + 1}": s for i, s in enumerate(split_strips(MORNING))},
     "evening-rundown": EVENING,
     "alert-urgent": ALERT,
     "shopping": SHOPPING,
