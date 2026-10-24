@@ -1765,6 +1765,96 @@
         }
       }
     },
+    "/api/v1/ticket-images": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "List Ticket Images",
+        "description": "Recent tickets that have a saved PNG, newest first. Fetch one with GET /tickets/{id}/image.",
+        "operationId": "list_ticket_images_api_v1_ticket_images_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 250,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Ticket Images Api V1 Ticket Images Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tickets/{ticket_id}/image": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Ticket Image",
+        "description": "The PNG of what was sent to the printer for this ticket, from its last print or failed attempt.",
+        "operationId": "ticket_image_api_v1_tickets__ticket_id__image_get",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/printer": {
       "get": {
         "tags": [

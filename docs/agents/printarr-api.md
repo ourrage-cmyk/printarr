@@ -86,6 +86,17 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 - `GET /api/v1/log` and `GET /api/v1/log/summary`: what happened, with timings, moods and strip ids.
 - `GET /api/v1/log/export?format=csv`: the same as a file.
 - `GET /api/v1/tickets/{id}/preview`: the text of the printed ticket.
+- `GET /api/v1/tickets/{id}/preview`: the text of the printed ticket.
+
+### Looking at what a ticket looked like
+
+Printarr keeps a PNG of every ticket as it reached the printer: each printed ticket, and each ticket whose print failed. The picture is decoded from the exact bytes sent to the printer, so images, dot matrix titles and charts are exact. Text lines are drawn with an approximation of Font A, so check text on the real paper or the simulator. A strip is saved ticket by ticket, without the blank between tickets.
+
+- `GET /api/v1/ticket-images?limit=50`: recent tickets that have an image, newest first. Each row gives `id`, `kind`, `template_id`, `template`, `recipient`, `status`, `created_at`, `printed_at` and `image_url`. Up to 250 are kept, and older ones are deleted.
+- `GET /api/v1/tickets/{id}/image`: the PNG (`image/png`) for one ticket. A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
+- The printer log names the image path when a print fails, so a failure can be opened straight away.
+
+To diagnose a ticket that looks wrong: find its id in the log or the ticket list, fetch the image, and compare it with the template and the blocks in `GET /api/v1/tickets/{id}`.
 
 ## Settings
 
