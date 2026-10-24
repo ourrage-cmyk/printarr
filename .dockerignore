@@ -6,3 +6,5 @@ tests
 *.db
 *.db-*
 data
+.venv
+scripts/*.local
