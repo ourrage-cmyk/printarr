@@ -16,7 +16,7 @@ from app.escpos import encode
 from app.ha import HAError, client_from_store
 from app.metrics import Metrics
 from app.printer import PrinterError, PrintInterrupted, Transport
-from app.receipt import Line, render_ticket_lines, ticket_feed
+from app.receipt import Line, render_ticket_lines, sender_label, ticket_feed
 from app.status import FAULT_TEXT, PrinterStatus, decode
 from app.render.registry import design_line
 from app.text import printable
@@ -147,7 +147,7 @@ class Scheduler:
             client = client_from_store(self.store)
         except HAError:
             client = None
-        lines = ticket_lines(slots, client)
+        lines = ticket_lines(slots, client, template_id=int(ticket["template_id"]), sender=sender_label(ticket))
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return lines
@@ -176,7 +176,7 @@ class Scheduler:
             lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
             # Lines drawn as images (names outside CP437): log the source text, so the printed
             # bitmap can be matched to what was sent.
-            glyph_sources = [line.text for line in lines if line.raster is None and printable(line.text)[1]]
+            glyph_sources = [line.text for line in lines if line.text and printable(line.text)[1]]
             if glyph_sources:
                 logger.info("ticket %s: %d line(s) drawn as images: %s", ticket["id"], len(glyph_sources), glyph_sources)
             payload = encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
