@@ -46,7 +46,8 @@ from app.compose import (
     BlockProblem,
     catalogue as compose_catalogue,
     block_schema as compose_block_schema,
-    compose_lines,
+    compose_render,
+    summary as compose_summary,
     validate_blocks as compose_validate,
 )
 from app.slots import (
@@ -291,6 +292,7 @@ class TicketOut(BaseModel):
     strip_id: str | None = None
     strip_trigger: str | None = None
     moods: str = ""
+    notes: list[str] = Field(default_factory=list, description="What was shortened to fit, for composed tickets.")
 
 
 class ChoiceOut(BaseModel):
@@ -826,21 +828,20 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except BlockProblem as exc:
             raise HTTPException(status_code=422, detail=exc.problems) from None
         render_started = time.perf_counter()
-        try:  # check the layout now, so a queued ticket always prints
-            encode(compose_lines(checked), feed=template_by_id(103).feed, raster_mode=settings.raster_mode)
+        try:  # draw the strips now, so a queued ticket always prints; notes say what was shortened
+            lines, notes = compose_render(checked, None)
+            encode(lines, feed=template_by_id(103).feed, raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("composed rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         render_ms = round((time.perf_counter() - render_started) * 1000)
-        first = checked[0]["slots"]
-        summary = str(first.get("text") or first.get("label") or "(composed)")
-        return store.create(
+        ticket = store.create(
             kind=body.kind or "note",
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
             to_user=body.to_user,
             recipient=body.recipient,
-            message=summary,
+            message=compose_summary(checked),
             sender=body.sender,
             title=None,
             send_at_ms=_resolve_send_at(body.send_at, settings.tzinfo),
@@ -856,6 +857,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             idempotency_key=body.idempotency_key,
             moods=",".join(block["mood"] for block in checked),
         )
+        return {**ticket, "notes": notes}
 
     @api.post("/people/{person}/release", tags=["tickets"])
     def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:
