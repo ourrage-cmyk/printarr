@@ -204,6 +204,12 @@ what the paper showed. The newest 250 are kept.
 curl -sS -o ticket.png http://192.0.2.231:30100/api/v1/tickets/<id>/image
 ```
 
+- Every print ends with a small line under the last ticket: the print time and a 6-character code, for example
+  `2026-10-24 21:05  a3f9c2`. When Yannic quotes a code, call `GET /api/v1/prints/{code}` (4 to 32 hex characters). It
+  returns the print time, the image of the whole piece and every ticket on it (`id`, `recipient`, `kind`, `title`,
+  `message`). A piece printed together shares one code; a ticket printed alone uses the start of its id. Tickets and the
+  image list also carry `print_code`. The image of any ticket in a piece is the whole piece.
+
 A ticket still waiting, cancelled before printing, or older than the kept images returns 404 with a hint.
 Text is drawn from an approximation of Font A, so check the wording against the real paper or the simulator.
 

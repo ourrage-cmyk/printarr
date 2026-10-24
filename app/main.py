@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import logging
 import os
 import time
@@ -395,6 +396,7 @@ class TicketOut(BaseModel):
     delivery: str = "now"
     strip_id: str | None = None
     strip_trigger: str | None = None
+    print_code: str = Field(default="", description="The short code printed under the cut, with the print time. GET /api/v1/prints/{code} finds the piece.")
     moods: str = ""
     notes: list[str] = Field(default_factory=list, description="What was shortened to fit.")
     truncated: bool = Field(default=False, description="True when some of the text did not fit and was shortened. Read notes for what.")
@@ -1491,6 +1493,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 "created_at": ticket["created_at"],
                 "printed_at": ticket["printed_at"],
                 "image_url": f"/api/v1/tickets/{ticket['id']}/image",
+                "print_code": ticket["print_code"],
             })
         return rows
 
@@ -1513,6 +1516,29 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 "GET /api/v1/ticket-images lists the images kept.",
             )
         return Response(content=path.read_bytes(), media_type="image/png")
+
+    @api.get("/prints/{code}", tags=["tickets"])
+    def find_print(code: str) -> dict[str, Any]:
+        """Look up a piece of paper by the code printed under its cut (4 to 32 hex characters).
+
+        Returns the print time, the image of the piece and every ticket on it, so you can name the exact ticket.
+        """
+        code = code.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{4,32}", code):
+            raise ApiProblem(422, "a print code is 4 to 32 hex characters", hint="Use the code printed under the cut.")
+        tickets = store.find_print(code)
+        if not tickets:
+            raise ApiProblem(404, "no printed piece has this code", hint="Only printed tickets have a code.")
+        return {
+            "print_code": tickets[0]["print_code"],
+            "printed_at": tickets[0]["printed_at"],
+            "strip_id": tickets[0]["strip_id"],
+            "image_url": f"/api/v1/tickets/{tickets[0]['id']}/image",
+            "tickets": [
+                {key: t[key] for key in ("id", "recipient", "kind", "tone", "title", "message", "status", "printed_at")}
+                for t in tickets
+            ],
+        }
 
     @api.get("/printer", response_model=PrinterStatus, tags=["printer"])
     def printer_status() -> PrinterStatus:
