@@ -869,6 +869,50 @@
         }
       }
     },
+    "/api/v1/notify": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Notify",
+        "description": "Send a short message to Yannic's Telegram. One message per caller every 60 seconds.",
+        "operationId": "notify_api_v1_notify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Notify Api V1 Notify Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings/ha": {
       "get": {
         "tags": [
@@ -2380,6 +2424,23 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ModelSettingsPatch"
+      },
+      "NotifyIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text",
+            "description": "The message. Plain text, up to 1000 characters."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "NotifyIn"
       },
       "PersonRelease": {
         "properties": {
