@@ -23,8 +23,8 @@ def test_split_holds_at_most_five_blocks():
 def test_greeting_always_starts_a_new_strip():
     blocks = [tip("a"), tip("b"), greeting(), tip("c")]
     strips_out = split_strips(blocks)
-    assert len(strips_out) == 2 and [b.type for b in strips_out[0]] == ["group"]
-    assert [p.type for p in strips_out[1][0].slots["parts"]] == ["greeting", "tip"]
+    assert len(strips_out) == 2 and [b.type for b in strips_out[0]] == ["tip", "tip"]
+    assert [b.type for b in strips_out[1]] == ["greeting", "tip"]
 
 
 def test_strip_has_top_and_bottom_margins():
@@ -102,9 +102,9 @@ def test_one_and_two_column_row():
     assert [p.span for p in rows[0]] == [1, 2]
 
 
-def test_text_needs_two_columns():
+def test_a_headline_needs_all_three_columns():
     with pytest.raises(ValueError):
-        render_strip([Block("message", {"paragraph": "Hi"}, span=1)])
+        render_strip([Block("greeting", {"greeting": "Hi"}, span=1)])
 
 
 def test_fluid_height_grows_with_text():
