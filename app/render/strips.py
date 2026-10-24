@@ -525,20 +525,54 @@ def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
                     c.bits[yy * 64 + (xx >> 3)] &= (~(0x80 >> (xx & 7))) & 0xFF
 
 
-def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
-    """A title in the dot font, larger than body text. Always the heavy face (scale 6, a multiple of 3, so the
-    dots are the same 2 x 2 squares as every other title): one line when it fits, else wrapped at word
-    boundaries. Only a single word wider than the line falls back to scale 4."""
+def _fit_title(text: str, max_w: int) -> tuple[int, list[str], bool]:
+    """A title in the dot font, larger than body text. The heavy face (scale 6, a multiple of 3, so the dots are
+    the same 2 x 2 squares as every other title) on one line, else wrapped on two; a title that still does not fit
+    steps down to scale 4 on two lines; only past that is it cut at a word boundary and ends in "...". Returns
+    (scale, lines, cut)."""
     label = str(text)
     if text_width(label, NUMERAL) <= max_w:
-        return NUMERAL, [label]
-    if all(text_width(word, NUMERAL) <= max_w for word in label.split()):
-        lines = wrap_lines(label, NUMERAL, max_w)
-        if len(lines) > MAX_TITLE_LINES:  # a title is a label: two lines, the rest is abbreviated, never five lines
-            lines = lines[:MAX_TITLE_LINES]
-            lines[-1] = lines[-1][: max(1, max_w // (6 * NUMERAL) - 1)].rstrip() + "."
-        return NUMERAL, lines
-    return TITLE, wrap_lines(label, TITLE, max_w)
+        return NUMERAL, [label], False
+    for scale in (NUMERAL, TITLE):
+        if all(text_width(word, scale) <= max_w for word in label.split()):
+            lines = wrap_lines(label, scale, max_w)
+            if len(lines) <= MAX_TITLE_LINES:
+                return scale, lines, False
+    scale = TITLE
+    per_line = max(4, max_w // (6 * scale))
+    words = label.split()
+    lines = []
+    cur = ""
+    while words:
+        word = words[0]
+        if len(word) > per_line:  # one word wider than the line is broken
+            word_part, words[0] = word[:per_line], word[per_line:]
+            word = word_part
+            if cur:
+                lines.append(cur)
+                cur = ""
+            lines.append(word)
+        else:
+            trial = f"{cur} {word}" if cur else word
+            if len(trial) > per_line:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = trial
+            words.pop(0)
+        if len(lines) >= MAX_TITLE_LINES:
+            break
+    if cur and len(lines) < MAX_TITLE_LINES:
+        lines.append(cur)
+    lines = lines[:MAX_TITLE_LINES]
+    last = lines[-1]
+    lines[-1] = (last[: per_line - 3] if len(last) > per_line - 3 else last).rstrip() + "..."
+    return scale, lines, True
+
+
+def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
+    scale, lines, _ = _fit_title(text, max_w)
+    return scale, lines
 
 
 MAX_TITLE_LINES = 2
@@ -1057,14 +1091,11 @@ def spill(blocks: Sequence[Block]) -> list[Block]:
 
 
 def _cont_title(base: str) -> str:
-    """The original title with CONT. after it, with words dropped from the title until it fits two lines."""
+    """The original title with CONT. after it, with words dropped from the title only when it would be cut."""
     words = base.upper().split()
     while words:
         text = " ".join(words) + " CONT."
-        scale, lines = title_lines(text, 380)
-        if scale == NUMERAL and len(lines) <= MAX_TITLE_LINES and not lines[-1].endswith("."):
-            return text
-        if scale == NUMERAL and len(lines) <= MAX_TITLE_LINES and text_width(lines[-1], NUMERAL) <= 380 and " ".join(lines) == text:
+        if not _fit_title(text, 380)[2]:
             return text
         words.pop()
     return "CONT."

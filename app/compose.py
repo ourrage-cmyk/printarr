@@ -366,8 +366,8 @@ def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: s
     blocks: list[dict[str, Any]] = []
     head = slots.get("title") or slots.get("greeting")  # a title, when sent, is the headline; the greeting leads the text
     text = slots.get("paragraph")
-    if slots.get("title") and slots.get("greeting"):
-        text = f"{slots['greeting']}. {text}" if text else slots["greeting"]
+    if slots.get("title") and slots.get("greeting") and not text:
+        text = slots["greeting"]  # a title and a greeting with no text: the greeting is the subtitle; with text it is dropped
     if head or text:
         greeting: dict[str, Any] = {"greeting": head or "TODAY"}
         if text:
