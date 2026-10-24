@@ -35,6 +35,8 @@ class Template:
     rule: str
     allowed: tuple[str, ...]  # decorations the model may pick from
     default: tuple[str, ...]  # decorations the rule-based path uses
+    design: str | None = None  # an image design (app/render/registry.py) instead of text
+    feed: int = 4  # lines fed before the cut; image tickets use 1
 
 
 TEMPLATES: tuple[Template, ...] = (
@@ -44,6 +46,7 @@ TEMPLATES: tuple[Template, ...] = (
     Template(4, "Note", "wife", True, "left", "-", ("footer", "stars"), ()),
     Template(5, "Bold", "wife", True, "center", "#", ("frame",), ("frame",)),
     Template(6, "Plain", "wife", False, "left", "-", ("footer",), ()),
+    Template(7, "Morning", "yannic", False, "left", "-", (), (), design="morning", feed=1),
 )
 
 _BY_ID = {template.id: template for template in TEMPLATES}

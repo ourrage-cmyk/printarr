@@ -1,13 +1,13 @@
 # Handoff: image-based receipt templates for printarr
 
-For the API thread. Six designs to implement first. They use round 4 (B4-xxx on the rating page) and the taste profile in notes/taste-profile.md. Entity IDs come from ha-entities.md in this folder. Items marked **rendered** were drawn and checked in the simulator. Items marked **derived** follow the same rules but were not rendered yet.
+For the API thread. Six designs to implement first. They use round 4 (B4-xxx on the rating page) and the taste profile in docs/design/taste-profile.md. Entity IDs come from ha-entities.md in this folder. Items marked **rendered** were drawn and checked in the simulator. Items marked **derived** follow the same rules but were not rendered yet.
 
 ## Print facts (all designs)
 - Paper: 80 mm, 512 dots wide at 180 dpi (about 72 mm of print). One dot is about 0.14 mm.
 - Each ticket is one 1-bit bitmap, 512 dots wide and 250 to 700 rows tall.
 - Send it with GS ( L function 112. Body `48, 112, 48, 1, 1, 49`, then width and height as 16-bit little-endian, then the rows packed MSB first, 1 = black. Follow with GS ( L `2, 0, 48, 50` (print buffer). printarr's `app/escpos.py` `_raster` already does this, and `Line.raster` takes `(width_bytes, height, data)`.
 - End with one feed line, then a partial cut (`ESC d 1`, `GS V 1`). Do not use the usual 4-line feed, which leaves a blank strip on a raster ticket.
-- Text is drawn with the 5x7 dot font in `receipt-lab/lib/raster.js`. Do not mix it with the printer's Font A on one ticket.
+- Text is drawn with the 5x7 dot font in `design-lab/lib/raster.js`. Do not mix it with the printer's Font A on one ticket.
 
 ## Type on the 1-bit grid
 | Role | Scale | Cap height | Used for |
@@ -27,7 +27,7 @@ Do not go below scale 2. Scale 1 is about 1 mm and does not print legibly.
 - Card height is set by its content (**rendered**). No fixed heights.
 - Section heading inside the card, then rows.
 - Rows: label on the left, dot leaders, value right-aligned at the card edge (**rendered**).
-- Segmented bar: 10 segments, 20 dots tall, 4-dot gap, empty segments as dots (**rendered**).
+- Segmented bar: 20 segments, 10 dots tall, 4-dot gap, empty segments as dots (**rendered**).
 - Line graph: 56 dots tall, axes and dotted gridlines, no area fill (**rendered**).
 - Alert pill: filled rounded box with the label in white (**rendered**).
 

@@ -13,7 +13,9 @@ from app.config import Settings
 from app.escpos import encode
 from app.ha import HAError, client_from_store
 from app.printer import PrinterError, Transport
-from app.receipt import Line, render_ticket_lines
+from app.receipt import Line, render_ticket_lines, ticket_feed
+from app.render.registry import design_line
+from app.templates import template_by_id
 from app.blocks import resolve_blocks
 from app.store import TicketStore, now_ms
 
@@ -48,6 +50,9 @@ class Scheduler:
 
     def live_lines(self, ticket: dict) -> list[Line]:
         """Fetch Home Assistant data now, so a held or scheduled ticket prints current values."""
+        template = template_by_id(int(ticket["template_id"]))
+        if template.design:
+            return self.design_lines(ticket, template.design)
         blocks = parse_blocks(ticket.get("blocks_json"))
         if not blocks:
             return []
@@ -63,13 +68,24 @@ class Scheduler:
             self.notifier.recovered("home_assistant", "Home Assistant answers again")
         return lines
 
+    def design_lines(self, ticket: dict, design: str) -> list[Line]:
+        """Draw an image design with the entities read now. Missing values print NO DATA."""
+        client = client_from_store(self.store)
+        line, all_missing = design_line(design, ticket["message"], client)
+        if client is not None and self.notifier:
+            if all_missing:
+                self.notifier.problem("home_assistant", "Home Assistant gave no values for a design ticket")
+            else:
+                self.notifier.recovered("home_assistant", "Home Assistant answers again")
+        return [line]
+
     def _print(self, ticket: dict) -> None:
         try:
             started = time.perf_counter()
             live = self.live_lines(ticket)
             fetched = time.perf_counter()
             lines = render_ticket_lines(ticket, self.settings.tzinfo, self.settings.paper_width, live)
-            payload = encode(lines, raster_mode=self.settings.raster_mode)
+            payload = encode(lines, feed=ticket_feed(ticket), raster_mode=self.settings.raster_mode)
             rendered = time.perf_counter()
             self.transport.send(payload)
             sent = time.perf_counter()
