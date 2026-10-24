@@ -11,7 +11,7 @@ Files in this folder:
 | `scripts.yaml` | Buttons for the shopping list, and for leaving a message for the other person. |
 | `automations.yaml` | Morning strip (phone unplugged), evening strip (arriving home, from 16:00), and notification-to-print. |
 
-Replace `PRINTARR_URL` with the printarr address, for example `http://192.168.1.10:8000`.
+Replace `PRINTARR_URL` with the printarr address from the setup wizard. Never hard-code it elsewhere.
 
 ## Before you start
 
@@ -29,7 +29,10 @@ Each person gets their own strip. Nothing is shared between Yannic and Allyson o
 - **Arriving home** (from 16:00): that person's evening rundown is created and released, with the same
   waiting messages.
 - **Standalone items** (shopping lists, reminders, a note at a set time, alerts) print at once, or at
-  `send_at`, and are never merged into a strip.
+  `send_at`, and are never merged into a strip. The shopping list button prints only when pressed.
+  A scheduled shopping list is set up outside printarr, by Hermes or another scheduled job, not here.
+
+printarr keeps no schedules of its own. Anything timed is created with its time, or released by a trigger.
 
 Messages between the two of you use `delivery: on_release`. They wait in the recipient's pile until
 their next strip.
