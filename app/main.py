@@ -820,15 +820,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         return HAClient(url, token) if url and token else None
 
     def prepare_blocks(body: TicketCreate) -> list[Line]:
-        """Check the layout with Home Assistant data now. An unreachable Home Assistant never blocks a ticket:
-        the data is read again at print time, and the layout check falls back to an unavailable mark."""
+        """Fetch Home Assistant data now, for the preview. An unreachable Home Assistant rejects the preview."""
         if not body.blocks:
             return []
         try:
             return resolve_blocks(body.blocks, home_assistant())
         except HAError as exc:
-            logger.warning("home assistant data unavailable at queue time: %s", exc)
-            return unavailable_lines(body.blocks)
+            logger.warning("home assistant data unavailable: %s", exc)
+            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
 
     def render_preview(body: TicketCreate, choice: Choice, message: str, extra: list[Line]) -> str:
         receipt = Receipt(
