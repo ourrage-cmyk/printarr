@@ -29,13 +29,25 @@ SETUP_UI = r"""<!doctype html>
   .result.ok { color:var(--ok); } .result.bad { color:var(--bad); }
   .check { display:flex; align-items:center; gap:10px; margin-top:6px; }
   input[type="checkbox"] { width:auto; }
+  .edit-only { display:none; }
+  body.editing .edit-only { display:block; }
+  body.editing .edit-only.check { display:flex; }
   #finish-msg { margin-top:12px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Set up printarr</h1>
-  <p class="lead">Enter the setup code from the printarr log (<code>docker logs</code> or the Logs tab in TrueNAS). Each service is checked before you continue. Secrets are saved in the printarr data folder and are never shown again.</p>
+  <h1 id="title">Set up printarr</h1>
+  <p class="lead" id="lead">Enter the setup code from the printarr log (<code>docker logs</code> or the Logs tab in TrueNAS). Each service is checked before you continue. Secrets are saved in the printarr data folder and are never shown again.</p>
+
+  <fieldset>
+    <legend>Printer</legend>
+    <label for="printer_host">IP address or host name</label>
+    <input id="printer_host" placeholder="192.168.1.50">
+    <label for="printer_port">Port</label>
+    <input id="printer_port" type="number" min="1" max="65535">
+    <div class="row"><button type="button" data-check="printer">Test</button><span class="result" data-result="printer"></span></div>
+  </fieldset>
 
   <fieldset>
     <legend>Setup code</legend>
@@ -48,8 +60,9 @@ SETUP_UI = r"""<!doctype html>
     <label for="ha_url">Address</label>
     <input id="ha_url" placeholder="http://192.168.1.10:8123">
     <label for="ha_token">Long-lived access token</label>
-    <input id="ha_token" type="password" autocomplete="off">
+    <input id="ha_token" type="password" autocomplete="off" placeholder="paste to set or replace">
     <div class="hint" id="ha_token_state"></div>
+    <div class="check edit-only"><input id="clear_ha_token" type="checkbox"><label for="clear_ha_token" style="margin:0">Remove the saved token</label></div>
     <div class="row"><button type="button" data-check="home_assistant">Test</button><span class="result" data-result="home_assistant"></span></div>
   </fieldset>
 
@@ -66,19 +79,11 @@ SETUP_UI = r"""<!doctype html>
   </fieldset>
 
   <fieldset>
-    <legend>Printer</legend>
-    <label for="printer_host">IP address or host name</label>
-    <input id="printer_host" placeholder="192.168.1.50">
-    <label for="printer_port">Port</label>
-    <input id="printer_port" type="number" min="1" max="65535">
-    <div class="row"><button type="button" data-check="printer">Test</button><span class="result" data-result="printer"></span></div>
-  </fieldset>
-
-  <fieldset>
     <legend>Telegram alerts (optional)</legend>
     <label for="telegram_token">Bot token</label>
-    <input id="telegram_token" type="password" autocomplete="off">
+    <input id="telegram_token" type="password" autocomplete="off" placeholder="paste to set or replace">
     <div class="hint" id="telegram_token_state"></div>
+    <div class="check edit-only"><input id="clear_telegram_token" type="checkbox"><label for="clear_telegram_token" style="margin:0">Remove the saved bot token</label></div>
     <label for="telegram_chat_id">Chat ID</label>
     <input id="telegram_chat_id">
     <div class="row"><button type="button" data-check="telegram">Test</button><span class="result" data-result="telegram"></span></div>
@@ -98,6 +103,7 @@ SETUP_UI = r"""<!doctype html>
   <div class="row">
     <button type="button" class="primary" id="finish">Finish setup</button>
   </div>
+  <p class="hint edit-only">Changes are saved after every service you filled in passes its check. The timezone takes effect after a restart of printarr.</p>
   <p id="finish-msg" class="result"></p>
 </main>
 <script>
@@ -109,6 +115,7 @@ function values() {
   const out = {
     llm_enabled: $("llm_enabled").checked,
     printer_port: Number($("printer_port").value || 9100),
+    clear: ["ha_token", "telegram_token"].filter((f) => $("clear_" + f).checked),
   };
   for (const f of FIELDS) if (f !== "printer_port") out[f] = $(f).value.trim();
   return out;
@@ -165,9 +172,9 @@ $("finish").addEventListener("click", async () => {
     const done = await response.json();
     msg.className = "result ok";
     msg.textContent = done.restart_needed
-      ? "Setup is saved. Restart printarr once so the timezone takes effect. Opening the web page..."
-      : "Setup is saved. Opening the web page...";
-    setTimeout(() => { location.href = "/"; }, 2500);
+      ? "Saved. Restart printarr once so the timezone takes effect."
+      : "Saved.";
+    setTimeout(() => { location.href = "/"; }, done.restart_needed ? 6000 : 2000);
   } catch (err) {
     msg.className = "result bad"; msg.textContent = "The printarr server did not answer.";
   } finally {
@@ -179,7 +186,13 @@ $("finish").addEventListener("click", async () => {
   try {
     const response = await fetch("/api/v1/setup/status");
     const status = await response.json();
-    if (status.complete) { location.href = "/"; return; }
+    if (status.complete) {
+      document.body.classList.add("editing");
+      $("title").textContent = "printarr settings";
+      $("lead").textContent = "Change any value below. Each service you filled in is checked before anything is saved. Leave a secret blank to keep the saved one.";
+      $("finish").textContent = "Save settings";
+      $("finish-msg").insertAdjacentHTML("afterend", '<p class="hint"><a href="/">Back to the printarr web page</a></p>');
+    }
     for (const [key, value] of Object.entries(status.fields)) {
       const el = $(key);
       if (!el) continue;

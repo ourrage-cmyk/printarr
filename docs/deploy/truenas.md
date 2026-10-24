@@ -36,8 +36,14 @@ install it from one YAML file. There is no env file and no second file.
 **Secrets never go in the YAML or in environment variables.** The Home Assistant token and the
 Telegram bot token are typed into the wizard and stored in the database in the data folder. No
 endpoint returns them. Until setup is finished, the API answers 503, except health and the wizard.
-The setup code changes at every start until setup is finished. Once setup is finished, the code is
-gone and the wizard closes. Change settings later in the web page.
+The setup code changes at every start. Once setup is finished, the same code opens the wizard at
+`http://<nas-ip>:8000/setup`, where you can change any value later, including the printer's IP
+address. Each service is checked before anything is saved. A blank token keeps the saved one. Tick
+"Remove the saved token" to clear it.
+
+**Moving from the laptop simulator to the real printer:** open `/setup`, enter the code from the
+latest log line, change **Printer IP address** to the TM-T88V's address, press **Test**, then **Save
+settings**. The printer switches at once, with no restart.
 
 If the timezone changes in the wizard, restart the app once so it takes effect.
 

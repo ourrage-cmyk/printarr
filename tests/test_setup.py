@@ -110,8 +110,10 @@ def test_completion_opens_the_api_and_hides_secrets(wizard, monkeypatch):
         assert client.get("/api/v1/tickets").status_code == 200
         assert "Printarr" in client.get("/").text and "Set up printarr" not in client.get("/").text
 
-        again = client.post("/api/v1/setup/complete", json=form(), headers=headers)
-        assert again.status_code == 409
+        # After setup the same code still opens /setup, so settings can be changed later.
+        assert client.get("/setup").status_code == 200
+        wrong = client.post("/api/v1/setup/complete", json=form(), headers={"X-Setup-Code": "guess"})
+        assert wrong.status_code == 401
 
         everything = " ".join(
             [
@@ -182,3 +184,45 @@ def test_model_server_check_needs_both_models(monkeypatch):
     monkeypatch.setattr(setup_flow.urllib.request, "urlopen", lambda url, timeout: Reply())
     result = setup_flow.check_model_server("http://ollama:11434/v1", ["d1:latest", "granite4.2:3b"])
     assert result.ok is False and "granite4.2:3b" in result.detail
+
+
+def test_settings_can_be_changed_after_setup(wizard, monkeypatch):
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(), headers=headers)
+        # A blank token keeps the saved one; the printer moves to the real device.
+        changed = client.post(
+            "/api/v1/setup/complete",
+            json=form(printer_host="192.168.1.77", ha_token=""),
+            headers=headers,
+        )
+        assert changed.status_code == 200
+        store = TicketStore(wizard.db_path)
+        assert store.get_setting("printer_host") == "192.168.1.77"
+        assert store.get_setting("ha_token") == SECRET
+
+
+def test_clear_removes_a_saved_secret(wizard, monkeypatch):
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(), headers=headers)
+        client.post(
+            "/api/v1/setup/complete",
+            json=form(ha_url="", ha_token="", clear=["ha_token"]),
+            headers=headers,
+        )
+        assert TicketStore(wizard.db_path).get_setting("ha_token") == ""
+
+
+def test_fill_secrets_keeps_saved_values_only_when_blank(wizard):
+    store = TicketStore(wizard.db_path)
+    store.init()
+    store.set_setting("ha_token", SECRET)
+    kept = setup_flow.fill_secrets(SetupValues(ha_token=""), store)
+    assert kept.ha_token == SECRET
+    replaced = setup_flow.fill_secrets(SetupValues(ha_token="new-token"), store)
+    assert replaced.ha_token == "new-token"
