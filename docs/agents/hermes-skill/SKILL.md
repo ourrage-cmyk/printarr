@@ -134,7 +134,7 @@ curl -sS -X POST http://192.168.1.231:30100/api/v1/tickets/compose \
 - `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING and so on.
 - `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
-- `body` is the text. `fun_fact` is one line. Never put "Did you know" in the body.
+- `body` is the text. `fun_fact` is one line. Printarr adds no heading or label to a fun fact; write just the fact.
 - Do not send `blocks` with `preset`. A bad slot returns 422 and names it as `preset.slots.field`.
 
 The older slot briefing (template 101, `POST /api/v1/tickets/slots`) still works, but use the preset for new briefings.
@@ -215,7 +215,7 @@ To diagnose a ticket that looks wrong: find its id, fetch the image, and compare
 - **Say the headline once.** Use `title` or the block's heading, and do not repeat it in the body.
 - **Title plus a short body.** One message in one box. Do not split a single message across two blocks.
 - **Greetings belong to briefings.** A single-topic ticket (bins, a reminder, a note) has no greeting block.
-- **"Did you know" only in a `fact` block with mood `playful`, as a fun fact.** Never on a reminder, note or alert.
+- **A fun fact is a `fact` block with mood `playful`.** Printarr prints its text alone, with no "Did you know" or "FUN FACT" label. Do not use a `fact` block for a reminder, note or alert.
 - **Shopping lists are checklists**, one item per block entry. Never put items in one paragraph.
 - **Pick the mood to match the intent.** Read the mood list in section 3 and choose what the paper will say at a glance:
   - `loving` (heart ornament): messages between Yannic and Allyson.

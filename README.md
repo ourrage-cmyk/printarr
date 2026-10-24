@@ -16,11 +16,14 @@ waiting items in their own pile, and prints on the right moment.
 ## What it does
 
 - **Two recipients**, `yannic` and `wife` (Allyson). Each has a pile of waiting items that
-  prints on one strip when Home Assistant releases it: in the morning when the phone is
-  unplugged, and in the evening when someone arrives home.
-- **Composed strips.** A strip is an ordered list of typed blocks: greeting, metric, metric rows,
-  graph, dog counts, message, alert, checklist, tip and fact. Each block has a mood that
-  changes how it looks.
+  prints as one continuous piece of paper, cut once at the end, when Home Assistant releases it:
+  in the morning when the phone is unplugged, and in the evening when someone arrives home.
+  The briefing goes on top and the rest follow in the order they were queued.
+- **Composed tickets.** A ticket is an ordered list of typed blocks: greeting, metric, metric rows,
+  graph, dog counts, message, alert, checklist, tip and fact. Every block is its own bordered tile on
+  a three-column grid, and the tiles fall together into rows. Each block has a mood that changes how it looks.
+- **Briefing preset.** `POST /api/v1/tickets/compose` with `preset: "briefing"` lays out the fixed morning
+  or evening briefing: greeting, three metrics with sparklines, one graph, a body and a fun fact.
 - **Three deliveries.** `on_release` waits in the pile, `at` prints at a time, and `now` prints straight away.
 - **Live data.** Entity values and sparklines are read from Home Assistant when the ticket prints,
   not when it is queued.
@@ -112,7 +115,7 @@ The main routes:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/v1/blocks`, `/api/v1/blocks/{name}/schema` | Block types, moods and their slot schemas |
-| `POST` | `/api/v1/tickets/compose` | Queue a strip made of blocks |
+| `POST` | `/api/v1/tickets/compose` | Queue a ticket made of blocks, or a briefing from `preset` and `slots` |
 | `POST` | `/api/v1/tickets/slots` | Queue a briefing (101) or note (102) from typed slots |
 | `POST` | `/api/v1/tickets` | Queue plain text |
 | `POST` | `/api/v1/tickets/preview` | See the text of a plain ticket without queueing it |
@@ -136,15 +139,21 @@ Ticket statuses: `held`, `pending`, `printing`, `sent`, `failed`, `cancelled`.
 
 ## Design language
 
-Every strip uses the same shell: outlined cards, light weight, and a full-line font for text and numbers.
-The dot-matrix font (5x7) is used only for titles and headlines, never for body text or numbers.
+Every block is its own outlined tile on a three-column grid, with no shell around the whole ticket.
+There are three text sizes and no others: large dot matrix (5x7, titles only, centred), medium solid (numbers),
+and small solid (everything else). A long title wraps to up to three lines at the one dot size, then ends in
+an ellipsis. The paper carries no blank of its own: the half inch before the cut is fed with the cut
+command, once at the end of the whole piece, so continuations and queued tickets flow with only a tile gap.
+A fun fact prints its text alone, with no label.
 
 The tone sets the feeling at a glance, with one ornament and one icon per tone:
 
-- **Heart:** `loving`. The only tone with a heart.
-- **Zigzag:** `gentle_warning`. A soft heads-up.
-- **Barcode border:** `urgent`. Needs attention.
-- **White on black title:** `critical`. The only inverted title, for things that need attention now.
+Each card carries its mood in a band at the top, 28 dots tall (under 5 mm), never in words:
+
+- **Plain:** `neutral`, `factual`. **Dots:** `loving`, `happy`. **Zigzag:** `excited`, `playful`.
+- **Ticks:** `reminder`. **Stipple:** `sad`, `confused`. **Hatch:** `gentle_warning`, `upset`.
+- **Barcode:** `firm_complaint`, `urgent`. **Solid black bar with an inverted title:** `critical`, the only one.
+- **Heart:** only `loving` has a heart.
 
 Five block types wear a small mark at the top-right corner of their card: a note (`message`) an envelope, an alert (`alert`) a bolt, a reminder (`tip`) a clock, a fun fact (`fact`) a bulb, and a shopping list (`checklist`) a cart. The mark follows the block, not the `kind` field. The outline follows the tone: heavy square corners for `urgent`, `upset` and `firm_complaint`, the heaviest for `critical`, and rounder corners for `loving`, `gentle_warning`, `playful` and `happy`. Printed tickets never print the tone name.
 The rules and the reasons behind them are in [`docs/design/README.md`](docs/design/README.md), the
