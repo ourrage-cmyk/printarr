@@ -1843,6 +1843,66 @@
               }
             ],
             "title": "Send At"
+          },
+          "hold": {
+            "type": "boolean",
+            "title": "Hold",
+            "description": "Keep the ticket until released, as for /tickets.",
+            "default": false
+          },
+          "hold_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Key",
+            "examples": [
+              "user-home"
+            ]
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key",
+            "description": "A second request with the same key returns the first ticket and prints nothing new.",
+            "examples": [
+              "morning:yannic:2026-10-26"
+            ]
+          },
+          "blocks": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ValueBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/SparklineBlock"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "sparkline": "#/components/schemas/SparklineBlock",
+                  "value": "#/components/schemas/ValueBlock"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Blocks",
+            "description": "Home Assistant blocks printed after the slots, read at print time, as for /tickets."
           }
         },
         "additionalProperties": false,
