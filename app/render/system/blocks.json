@@ -279,11 +279,11 @@
       "sprite_set": "alert"
     },
     "firm_complaint": {
-      "header": "doubleHairline",
+      "header": "barcode",
       "divider": "doubleHairline",
       "footer": "barcode",
       "icon": "warn",
-      "accent": "outline",
+      "accent": "firm",
       "sprite_set": "alert"
     },
     "critical": {

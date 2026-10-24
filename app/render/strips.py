@@ -66,11 +66,11 @@ LAYOUT: dict[str, dict[str, int]] = {
     "metric": {"span": 1, "min_span": 1, "min_units": 2, "max_units": 5},
     "metric_rows": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
     "graph": {"span": 3, "min_span": 2, "min_units": 3, "max_units": 8},
-    "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 5},
+    "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
     "message": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 16},
-    "alert": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
+    "alert": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
     "checklist": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 10},
-    "tip": {"span": 3, "min_span": 2, "min_units": 1, "max_units": 4},
+    "tip": {"span": 3, "min_span": 2, "min_units": 1, "max_units": 6},
     "fact": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
 }
 
@@ -334,7 +334,7 @@ class Card:
 
 
 def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
-    """A pill for moods that ask for one, otherwise the icon with the label."""
+    """A pill for moods that ask for one, otherwise the icon at the left with the title centred."""
     label = _label(text)
     c = card.c
     if MOODS[card.mood]["accent"] == "pill":
@@ -342,17 +342,18 @@ def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
         pill = next((s for s in (NUMERAL, TITLE, BODY) if text_width(label, s) + 28 <= x1 - x0), BODY)
         w = min(text_width(label, pill) + 28, x1 - x0)
         h = 7 * pill + 14
-        c.round_box(x0, c.y, x0 + w, c.y + h, h // 2, 2)
-        c.fill(x0 + 4, c.y + 4, x0 + w - 4, c.y + h - 4)
-        c.text(x0 + 14, c.y + 7, label, pill)
-        _erase_glyphs(c, x0 + 14, c.y + 7, label, pill)
+        left = x0 + (x1 - x0 - w) // 2
+        c.round_box(left, c.y, left + w, c.y + h, h // 2, 2)
+        c.fill(left + 4, c.y + 4, left + w - 4, c.y + h - 4)
+        c.text(left + 14, c.y + 7, label, pill)
+        _erase_glyphs(c, left + 14, c.y + 7, label, pill)
         c.y += h + 8
     else:
         card.icon(x0, c.y)
-        scale, lines = title_lines(label, x1 - x0 - 36)
+        scale, lines = title_lines(label, x1 - x0 - 30)
         step = 7 * scale + 6
         for i, line in enumerate(lines):
-            c.text(x0 + 36, c.y + i * step, line, scale)
+            c.text(x0 + 30 + (x1 - x0 - 30 - text_width(line, scale)) // 2, c.y + i * step, line, scale)
         c.y += len(lines) * step + 2
 
 
@@ -366,10 +367,14 @@ def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
 
 
 def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
-    """A title in the dot font, larger than body text: NUMERAL on one line when it fits, else TITLE, wrapped."""
+    """A title in the dot font, larger than body text. Always the heavy face (scale 6, a multiple of 3, so the
+    dots are the same 2 x 2 squares as every other title): one line when it fits, else wrapped at word
+    boundaries. Only a single word wider than the line falls back to scale 4."""
     label = str(text)
     if text_width(label, NUMERAL) <= max_w:
         return NUMERAL, [label]
+    if all(text_width(word, NUMERAL) <= max_w for word in label.split()):
+        return NUMERAL, wrap_lines(label, NUMERAL, max_w)
     return TITLE, wrap_lines(label, TITLE, max_w)
 
 
@@ -378,7 +383,8 @@ EDGE_GAP = 10  # the least clear space between a line of text and the card borde
 
 def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -> int:
     """A label with its value at the right: on one line when the two fit with an edge gap and some leaders,
-    else the value goes on the line under the label, so nothing runs into the border. Returns its height."""
+    else the value goes under the label, left aligned and wrapped, so nothing runs into the border.
+    Returns its height."""
     from app.render.canvas import solid_width
 
     width = x1 - EDGE_GAP - (x0 + indent)
@@ -386,16 +392,18 @@ def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -
         c.row_solid(x0 + indent, x1 - EDGE_GAP, c.y, label, value, 21)
         return ROW
     c.solid(x0 + indent, c.y, label, 21)
-    c.solid(x1 - EDGE_GAP - solid_width(value, 21), c.y + ROW, value, 21)
-    return 2 * ROW
+    lines = solid_wrap(value, width)
+    for i, line in enumerate(lines):
+        c.solid(x0 + indent, c.y + (i + 1) * ROW, line, 21)
+    return (1 + len(lines)) * ROW
 
 
 def _heading(c: Canvas, x: int, text: str, x1: int = OUTER_R) -> None:
-    """A title: the dot font at a size larger than body text. Long titles wrap onto more lines."""
+    """A title: the dot font at a size larger than body text, centred between x and x1."""
     scale, lines = title_lines(text, x1 - x)
     step = 7 * scale + 6
     for i, line in enumerate(lines):
-        c.text(x, c.y + i * step, line, scale)
+        c.text(x + (x1 - x - text_width(line, scale)) // 2, c.y + i * step, line, scale)
     c.y += len(lines) * step + 2
 
 
@@ -414,7 +422,9 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if unit.strip().upper() == str(s.get("label", "")).strip().upper():
         unit = ""  # "750 STEPS" under the label STEPS says it twice
     # The label wraps inside the tile, so a long label never runs over the border.
-    for line in wrap_lines(_label(s.get("label", "")), BODY, x1 - x0) or [""]:
+    scope = str(s.get("scope") or "").strip().upper()
+    label = _label(s.get("label", "")) + (f" {scope}" if scope in ("IN", "OUT") else "")
+    for line in wrap_lines(label, BODY, x1 - x0) or [""]:
         c.solid(x0, c.y, line, 21)
         c.y += 7 * BODY + 4
     c.y += 4
@@ -422,7 +432,7 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     from app.render.canvas import solid_width
 
     # Numbers are full-line text (Inter): display size (cap 42) when the value fits the tile, else body size.
-    cap = 42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21
+    cap = int(s.get("_cap") or (42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21))
     scale = cap
     c.solid(x0, c.y, value, cap)
     unit_x = x0 + text_width(value, scale) + 6
@@ -444,6 +454,9 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + 36, series)
         c.y += 36 + 4
         _time_axis(c, x0, x1, _span(s))
+    if s.get("as_of"):
+        c.solid(x0, c.y, f"AS OF {str(s['as_of']).upper()}", AXIS_CAP)
+        c.y += AXIS_CAP + 8
 
 
 def _span(s: Mapping[str, Any]) -> str:
@@ -488,14 +501,33 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 
 def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
+    """One entry per dog: the name with leaders to the first two counters, the other two on the line under,
+    the counters in two right-aligned columns so they read as a table. Nothing is cut."""
     c = card.c
-    _heading(c, x0, "DOGS TODAY", x1)
+    _heading(c, x0, _label(s.get("title") or "DOGS TODAY"), x1)
+    right = x1 - EDGE_GAP
+    col_b = right
+    col_a = right - 118  # the second column is the wider "N POOP"/"N FOOD"/"N RUN" and ends at the edge gap
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
-        c.y += _row(c, x0, x1, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", indent=28)
-        c.solid(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", 21)
-        c.y += ROW
+        name = _label(d.get("name", ""))
+        pairs = (
+            (f"{d.get('pee', 0)} PEE", f"{d.get('poop', 0)} POOP"),
+            (f"{d.get('food', 0)} FOOD", f"{d.get('run', 0)} RUN"),
+        )
+        for i, (a, b) in enumerate(pairs):
+            y = c.y + i * ROW
+            left = x0 + 28
+            if i == 0:
+                c.solid(left, y, name, 21)
+                left += solid_width(name, 21)
+            wa, wb = solid_width(a, 21), solid_width(b, 21)
+            for xx in range(left + 8, col_a - wa - 8, 6):
+                c.fill_rect(xx, y + 18, 2, 2)  # leaders on both lines
+            c.solid(col_a - wa, y, a, 21)
+            c.solid(col_b - wb, y, b, 21)
+        c.y += 2 * ROW + 4
 
 
 def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -503,7 +535,7 @@ def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     clear = _kind_mark(card, "message", x1)
     if s.get("title"):
-        _title_line(card, x0, x1 - clear, str(s["title"]))
+        _title_line(card, x0, x1 - clear + 5, str(s["title"]))
         clear = 0  # the title line is as tall as the mark, so the body below has the full width
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 6
     if s.get("tip"):
@@ -518,12 +550,15 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
     clear = _kind_mark(card, "alert", x1)
-    _title_line(card, x0, x1 - clear, str(s.get("label", "")))
+    _title_line(card, x0, x1 - clear + 5, str(s.get("label", "")))
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
         c.y += _row(c, x0, x1, "ACTION", _label(s["action"]))
     card.ornament("divider", x0, x1)
+    if s.get("from"):
+        c.solid(x0, c.y + 4, f"- {_label(s['from'])}", 21)
+        c.y += ROW + 4
 
 
 def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -535,15 +570,22 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         clear = 0
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
-        c.solid(x0 + 26, c.y + 2, _label(item.get("text", "")), 21)
-        c.y += ROW
+        for line in solid_wrap(_label(item.get("text", "")), x1 - x0 - 26 - EDGE_GAP) or [""]:
+            c.solid(x0 + 26, c.y + 2, line, 21)
+            c.y += ROW
 
 
 def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
-    clear = _kind_mark(card, "tip", x1)
-    card.icon(x0, card.c.y)
-    # The tone icon is up to 27 dots wide, so the text starts 7 dots clear of it.
-    card.c.y += paragraph(card.c, x0 + 34, card.c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2
+    """One line of advice, centred between the tone icon and the kind mark; the card centres it vertically."""
+    c = card.c
+    _kind_mark(card, "tip", x1)
+    card.icon(x0, c.y)
+    inner_l, inner_r = x0 + 36, x1 - 36
+    lines = solid_wrap(str(s.get("tip", "")), inner_r - inner_l)
+    for line in lines:
+        c.solid(inner_l + (inner_r - inner_l - solid_width(line, 21)) // 2, c.y, line, 21)
+        c.y += ROW
+    c.y += 2
 
 
 def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -656,34 +698,67 @@ def _shorten(block: Block, slots: dict[str, Any], x0: int, x1: int, max_h: int) 
     return trimmed
 
 
-def _pack(row: list[Placed]) -> list[Placed]:
-    """A row with an empty column gives its last card the spare columns, so no row has a gap."""
-    used = sum(p.span for p in row)
-    if len(row) < 2 or used >= COLS:
-        return row
-    last = row[-1]
-    if last.block.span is not None:
-        return row
-    widened = Block(last.block.type, last.block.slots, mood=last.block.mood, span=last.span + (COLS - used))
-    lay = LAYOUT[widened.type]
-    x0, x1 = span_x(last.col, widened.span or lay["span"])
-    slots = dict(widened.slots)
-    content = _measure(widened, slots, x0, x1)
-    units, _ = _units_for(content, lay)
-    return row[:-1] + [Placed(widened, last.col, widened.span, x0, x1, units, content, slots)]
+SALUTATIONS = ("HELLO", "HI ", "HEY", "GOOD MORNING", "GOOD EVENING", "GOOD AFTERNOON", "GOOD NIGHT", "DEAR", "PSYCH", "MORNING")
+TITLED = ("message", "checklist", "metric_rows", "graph", "dog_counts")
 
 
-def _widen_lone(row: list[Placed]) -> list[Placed]:
-    """A row of one card that is narrower than the page takes the full width, so it is centred on the paper."""
-    if len(row) != 1 or row[0].span >= COLS or row[0].block.span is not None:
-        return row
-    block = row[0].block
-    lay = LAYOUT[block.type]
-    x0, x1 = span_x(0, COLS)
-    slots = dict(block.slots)
+def _is_salutation(text: str) -> bool:
+    words = f"{str(text).upper().strip()} "
+    return words.startswith(SALUTATIONS) or str(text).upper().strip() in ("HI", "HEY", "HELLO")
+
+
+def fuse(blocks: Sequence[Block]) -> list[Block]:
+    """A headline with no text of its own is the title of the card after it, not a card of its own: one thought,
+    one box. A salutation (HELLO LOVE, PSYCH!) is not a title, so it is dropped and the card keeps its own."""
+    out: list[Block] = []
+    items = list(blocks)
+    i = 0
+    while i < len(items):
+        block = items[i]
+        nxt = items[i + 1] if i + 1 < len(items) else None
+        if block.type == "greeting" and not block.slots.get("summary") and nxt is not None and nxt.type != "greeting":
+            heading = str(block.slots.get("greeting", ""))
+            if nxt.type in TITLED and not _is_salutation(heading):
+                key = "label" if nxt.type == "alert" else "title"
+                nxt = Block(nxt.type, {**nxt.slots, key: heading}, mood=nxt.mood, span=nxt.span)
+            items[i + 1] = nxt
+            i += 1
+            continue
+        out.append(block)
+        i += 1
+    return out
+
+
+def _place(block: Block, slots: dict[str, Any], x0: int, x1: int, col: int = 0, span: int = COLS) -> Placed:
     content = _measure(block, slots, x0, x1)
-    units, _ = _units_for(content, lay)
-    return [Placed(block, 0, COLS, x0, x1, units, content, slots)]
+    units, _ = _units_for(content, LAYOUT[block.type])
+    return Placed(block, col, span, x0, x1, units, content, slots)
+
+
+def _equalise(row: list[Placed]) -> list[Placed]:
+    """A row that does not fill the page is split evenly across it, so no row has a gap. Metric tiles in one row
+    share one numeral size, so their numbers, charts and axes line up."""
+    used = sum(p.span for p in row)
+    if used < COLS:
+        n = len(row)
+        width = (OUTER_R - OUTER_L - (n - 1) * COL_GAP) // n
+        placed = []
+        for k, p in enumerate(row):
+            x0 = OUTER_L + k * (width + COL_GAP)
+            x1 = OUTER_R if k == n - 1 else x0 + width
+            placed.append(_place(p.block, dict(p.slots), x0, x1, p.col, p.span))
+        row = placed
+    metrics = [p for p in row if p.block.type == "metric"]
+    if len(metrics) > 1:
+        from app.render.canvas import solid_width
+
+        fits = all(
+            solid_width(str(p.slots.get("value", "--")), 42) + solid_width(str(p.slots.get("unit") or ""), 21) + 6 <= p.x1 - p.x0 - 2 * PAD_H
+            for p in metrics
+        )
+        cap = 42 if fits else 21
+        row = [_place(p.block, {**p.slots, "_cap": cap}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
+    return row
 
 
 def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
@@ -692,7 +767,7 @@ def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
     notes: list[str] = []
     row: list[Placed] = []
     used = 0
-    for block in blocks:
+    for block in fuse(blocks):
         validate(block)
         lay = LAYOUT[block.type]
         span = block.span or lay["span"]
@@ -712,8 +787,7 @@ def layout(blocks: Sequence[Block]) -> tuple[list[list[Placed]], list[str]]:
         used += span
     if row:
         rows.append(row)
-    rows = [_widen_lone(row) for row in rows]
-    rows = [_pack(row) for row in rows]
+    rows = [_equalise(row) for row in rows]
     return rows, notes
 
 
@@ -725,6 +799,8 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
         # A graph takes the spare height of its card: the card height less padding, heading and footer.
         card = Card(c, p.block.mood, plot_h=GRAPH_PLOT)
         c.y = top + PAD_V
+        if p.block.type == "tip" or (p.block.type == "greeting" and not p.slots.get("summary")):
+            c.y = top + max(PAD_V, (height - p.content_h) // 2)  # one line or one title: centred in its card
         RENDERERS[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
         mood = p.block.mood
         c.round_box(p.x0, top, p.x1, top + height, RADIUS_BY_MOOD.get(mood, RADIUS), STROKE_BY_MOOD.get(mood, STROKE))
