@@ -77,7 +77,7 @@ def test_scheduler_prints_and_serves_escpos(settings):
 
         payload = client.get(f"/api/v1/tickets/{ticket['id']}/escpos").content
         assert payload.startswith(INITIALIZE)
-        assert b"Hello" in payload
+        assert b"\x1d(L" in payload  # the note is drawn as a message card, not plain text
 
 
 def test_preview_does_not_queue(settings):
@@ -88,7 +88,7 @@ def test_preview_does_not_queue(settings):
         )
         assert preview.status_code == 200
         body = preview.json()
-        assert "TO: Yannic" in body["text"]
+        assert "Pasta" in body["text"]
         assert body["width"] == 42
         assert client.get("/api/v1/tickets").json() == []
 
