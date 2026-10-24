@@ -142,8 +142,11 @@ def resolve_choice(
     if model is not None:
         try:
             extra = {"deadline": deadline} if deadline is not None else {}  # test doubles take no deadline
-            chosen_id, decorations = model.choose(templates_for(recipient), recipient, title, message, **extra)
-            template = next(t for t in templates_for(recipient) if t.id == chosen_id)
+            # The image designs (the morning stats card) are only ever chosen by explicit template id.
+            # A note or speech ticket must never be drawn as the morning card.
+            options = tuple(t for t in templates_for(recipient) if t.design is None)
+            chosen_id, decorations = model.choose(options, recipient, title, message, **extra)
+            template = next(t for t in options if t.id == chosen_id)
             picked = tuple(d for d in DECORATIONS if d in decorations and d in template.allowed)
             if on_model_result:
                 on_model_result(None)
