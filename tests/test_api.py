@@ -238,3 +238,17 @@ def test_unformatted_text_is_sent_as_is_when_text_model_is_down(settings, monkey
         ).json()
         assert body["message"] == "um dinner"
         assert any("text model down" in text for text in sent)
+
+
+def test_a_held_ticket_can_be_cancelled(settings):
+    with TestClient(create_app(settings)) as client:
+        held = client.post("/api/v1/tickets", json={"recipient": "yannic", "message": "wait", "template": 3, "hold": True}).json()
+        cancelled = client.post(f"/api/v1/tickets/{held['id']}/cancel")
+        assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
+
+
+def test_since_hours_has_an_upper_bound(settings):
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/v1/log", params={"since_hours": 10**17}).status_code == 422
+        assert client.get("/api/v1/log/summary", params={"since_hours": 10**17}).status_code == 422
+        assert client.get("/api/v1/log", params={"since_hours": 24}).status_code == 200

@@ -390,6 +390,7 @@ def _choice_out(choice: Choice) -> ChoiceOut:
 
 
 MAX_IMPORT_BYTES = 200 * 1024 * 1024  # a database larger than this is refused
+SINCE_HOURS_MAX = 24 * 365 * 10  # ten years; larger values overflow the SQLite integer range
 PAPER_WARN_LINES = 20  # a receipt longer than this uses a lot of paper; warn, do not block
 
 
@@ -1037,7 +1038,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         tone: str | None = None,
         template_id: int | None = None,
         status: Status | None = None,
-        since_hours: int | None = Query(None, ge=1),
+        since_hours: int | None = Query(None, ge=1, le=SINCE_HOURS_MAX),
         limit: int = Query(200, ge=1, le=1000),
         offset: int = Query(0, ge=0),
     ) -> list[dict[str, Any]]:
@@ -1050,7 +1051,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.get("/log/summary", tags=["log"])
     def log_summary(
         recipient: Recipient | None = None,
-        since_hours: int | None = Query(None, ge=1),
+        since_hours: int | None = Query(None, ge=1, le=SINCE_HOURS_MAX),
     ) -> dict[str, dict[str, int]]:
         """Counts by kind, tone, template, status and choice source, to see what is used."""
         filters = log_filters(recipient, since_hours)
@@ -1066,7 +1067,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def log_export(
         format: Literal["csv", "json"] = "csv",
         recipient: Recipient | None = None,
-        since_hours: int | None = Query(None, ge=1),
+        since_hours: int | None = Query(None, ge=1, le=SINCE_HOURS_MAX),
     ) -> Response:
         """Every ticket in the log as CSV or JSON, for tuning the templates from real use."""
         rows = store.log(limit=1000000, **log_filters(recipient, since_hours))
