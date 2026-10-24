@@ -18,7 +18,9 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
+import threading
+
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from starlette.concurrency import run_in_threadpool
@@ -33,7 +35,10 @@ from app.config import Settings, load_settings
 from app.insights import InsightCache, collect
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
-from app.printer import PrinterError, Transport, build_transport
+from app.printer import PrinterError, SwitchableTransport, Transport, build_transport
+from app import setup as setup_flow
+from app.setup import CheckName, SetupValues, check_item, run_checks
+from app.setup_page import SETUP_UI
 from app.metrics import Metrics
 from app.status import FAULT_TEXT, REQUESTS_FOR_KEY, decode
 from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
@@ -476,12 +481,17 @@ def preview_warnings(text: str) -> list[str]:
     return warnings
 
 
+# Paths that answer while setup is open: the wizard page, health, the setup routes and the docs.
+SETUP_OPEN_PATHS = ("/", "/healthz", "/api/v1/health", "/docs", "/openapi.json", "/redoc")
+
+
 def create_app(settings: Settings | None = None, transport: Transport | None = None) -> FastAPI:
-    settings = settings or load_settings()
-    transport = transport or build_transport(settings)
+    settings = settings or setup_flow.stored_overrides(load_settings())
+    transport = SwitchableTransport(transport or build_transport(settings))
     store = TicketStore(settings.db_path)
     width = settings.paper_width
-    runtime = {"scheduler": False}
+    runtime = {"scheduler": False, "setup_open": settings.setup_required}
+    setup_lock = threading.Lock()
 
     def read_alert_settings() -> AlertSettings:
         return AlertSettings(
@@ -566,9 +576,29 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         if "paper_near_end" in status.known:
             runtime["paper_near_end"] = "paper_near_end" in status.warnings  # shown in health, not alerted
 
+    def start_setup() -> None:
+        """First run: print a new setup code. Legacy installs already have settings, so they skip the wizard."""
+        if not settings.setup_required:
+            return
+        if store.get_setting(setup_flow.COMPLETE_KEY) is None and setup_flow.is_legacy_install(store):
+            store.set_setting(setup_flow.COMPLETE_KEY, "true")
+        if store.get_setting(setup_flow.COMPLETE_KEY) == "true":
+            runtime["setup_open"] = False
+            return
+        code = setup_flow.new_code()
+        store.set_setting(setup_flow.CODE_HASH_KEY, setup_flow.code_hash(code))
+        app.state.setup_code = code
+        logger.warning(
+            "printarr setup: open this printarr's web page in a browser and enter setup code %s. "
+            "A new code is printed at each start until setup is finished.",
+            code,
+        )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         store.init()
+        setup_flow.make_private(settings.db_path)
+        start_setup()
         seed_model_settings()
         interrupted = store.fail_interrupted()
         if interrupted:
@@ -608,7 +638,26 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     )
     app.state.scheduler = scheduler
 
+    @app.middleware("http")
+    async def setup_gate(request: Request, call_next):
+        path = request.url.path
+        if runtime["setup_open"] and not (path in SETUP_OPEN_PATHS or path.startswith("/api/v1/setup/")):
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Setup is not finished. Open the printarr web page and complete the setup wizard.",
+                    "setup": "/",
+                },
+            )
+        return await call_next(request)
+
     api = APIRouter(prefix="/api/v1")
+
+    def require_setup_code(code: str | None) -> None:
+        if not runtime["setup_open"]:
+            raise HTTPException(status_code=409, detail="setup is already finished")
+        if not setup_flow.code_matches(code, store.get_setting(setup_flow.CODE_HASH_KEY)):
+            raise HTTPException(status_code=401, detail="setup code is wrong. Copy it from the printarr log.")
 
     def ticket_or_404(ticket_id: str) -> dict[str, Any]:
         ticket = store.get(ticket_id)
@@ -1075,9 +1124,47 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=502, detail=str(exc)) from None
         return {"reachable": True}
 
+    @api.get("/setup/status", tags=["setup"])
+    def setup_status() -> dict[str, Any]:
+        """The wizard's starting values. Secrets are only reported as set or not set."""
+        return {"complete": not runtime["setup_open"], **setup_flow.status_view(store, settings)}
+
+    @api.post("/setup/check/{item}", tags=["setup"], responses={401: {"description": "Setup code is wrong"}})
+    def setup_check(
+        item: CheckName,
+        values: SetupValues,
+        x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
+    ) -> dict[str, Any]:
+        """Test one service with the values in the wizard. Nothing is saved."""
+        require_setup_code(x_setup_code)
+        result = check_item(item, values)
+        return {"item": item, "ok": result.ok, "detail": result.detail}
+
+    @api.post("/setup/complete", tags=["setup"], responses={422: {"description": "A check failed"}})
+    def setup_complete(
+        values: SetupValues,
+        x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
+    ) -> dict[str, Any]:
+        """Check every service that was filled in, then save everything and open the API.
+
+        A failed check returns 422 with what to fix. Nothing is saved unless every check passes.
+        """
+        with setup_lock:
+            require_setup_code(x_setup_code)
+            failed = {name: r.detail for name, r in run_checks(values).items() if not r.ok}
+            if failed:
+                raise HTTPException(status_code=422, detail=failed)
+            setup_flow.save_values(store, values)
+            store.delete_setting(setup_flow.CODE_HASH_KEY)
+            store.set_setting(setup_flow.COMPLETE_KEY, "true")
+            runtime["setup_open"] = False
+            transport.swap(build_transport(setup_flow.printer_settings(settings, values)))
+        logger.info("printarr setup finished")
+        return {"complete": True, "restart_needed": values.timezone != settings.timezone}
+
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def web_ui() -> str:
-        return WEB_UI
+        return SETUP_UI if runtime["setup_open"] else WEB_UI
 
     @api.get("/tickets", response_model=list[TicketOut], tags=["tickets"])
     def list_tickets(

@@ -11,10 +11,11 @@ built on.
 
 ## Install on TrueNAS (one file)
 
-1. Open [`docker-compose.yml`](docker-compose.yml) and change `PRINTARR_PRINTER_HOST` to
-   your printer's IP address.
-2. In TrueNAS, go to Apps > Install Custom App and paste the whole file.
-3. Open `http://<nas-ip>:8000/` to write tickets and change the decision model.
+1. In TrueNAS, go to Apps > Install Custom App and paste [`docker-compose.yml`](docker-compose.yml).
+2. Open the app's Logs and copy the **setup code** printed at start.
+3. Open `http://<nas-ip>:8000/`, enter the setup code and finish the setup wizard: printer,
+   Home Assistant, model server, Telegram, names and timezone. Each one has a Test button.
+   Secrets are stored in the data folder, never in the YAML. See [docs/deploy/truenas.md](docs/deploy/truenas.md).
 
 Everything the service saves (tickets, model and alert settings) lives in one folder,
 `/data`. The YAML maps it to a folder on your SSD dataset, for example
@@ -70,7 +71,10 @@ ticket arrives, so release and print never wait on it.
 
 ## Configuration
 
-All settings are environment variables with the `PRINTARR_` prefix.
+Non-secret settings are environment variables with the `PRINTARR_` prefix. They are starting
+defaults: once the setup wizard has saved a value (printer host and port, timezone, model
+server), the saved value wins. Secrets (Home Assistant token, Telegram token) have no
+environment variable. They are typed into the wizard and stored in the database.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -86,7 +90,7 @@ All settings are environment variables with the `PRINTARR_` prefix.
 | `PRINTARR_MAX_ATTEMPTS` | `5` | Print attempts before a ticket is marked `failed`. |
 | `PRINTARR_RETRY_BASE_SECONDS` | `30` | First retry delay. It doubles on each attempt. |
 | `PRINTARR_PAPER_WIDTH` | `42` | Characters per line in Font A on 80 mm paper. Epson TRG: 512 dots, Font A 12 dots wide, so 42 columns. |
-| `PRINTARR_LLM_BASE_URL` | _(empty)_ | OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. Used on first start only; then change it in the web page. |
+| `PRINTARR_LLM_BASE_URL` | _(empty)_ | Starting default for the wizard: an OpenAI-compatible base URL, for example `http://ollama:11434/v1`. Empty means rules only. After setup, the saved value wins. |
 | `PRINTARR_LLM_MODEL` | `d1:latest` | Decision model. It is sent to `/v1/systemone` (without the `/v1` in the base URL) to score questions about the message. A template is picked from the highest score, at least 0.5, else the rules choose. Decorations come from the template. |
 | `PRINTARR_LLM_TEXT_MODEL` | `granite4.2:3b` | Text model for paragraphs (used later). |
 | `PRINTARR_LLM_ENABLED` | `on` | The decision model is used when a base URL is set. Set to `off` to disable it. |

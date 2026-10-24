@@ -306,6 +306,10 @@ class TicketStore:
                 (key, value),
             )
 
+    def delete_setting(self, key: str) -> None:
+        with closing(self._connect()) as conn:
+            conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
     def requeue(self, ticket_id: str) -> dict[str, Any]:
         """Try a failed or cancelled ticket again. A pile ticket goes back to its pile, not the queue."""
         return self._guarded_update(
