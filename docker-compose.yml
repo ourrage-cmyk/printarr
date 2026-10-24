@@ -9,6 +9,7 @@
 services:
   printarr:
     image: ghcr.io/ourrage-cmyk/printarr:latest   # pin to a sha-... tag to stay on one build
+    user: "568:568"                               # TrueNAS's app user; the data folder must be owned by 568
     restart: unless-stopped
     stop_grace_period: 30s                        # time allowed to finish a print on shutdown
     mem_limit: 512m
@@ -16,6 +17,6 @@ services:
     ports:
       - "8000:8000"                               # web page and API at http://<nas-ip>:8000/
     volumes:
-      # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 1000
-      # (chown 1000:1000 /mnt/ssd/apps/printarr). The app refuses to start otherwise, and says so in the logs.
-      - /mnt/ssd/apps/printarr:/data
+      # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 568
+      # (chown -R 568:568 /mnt/SSDCAGE/printarr). The app refuses to start otherwise, and says so in the logs.
+      - /mnt/SSDCAGE/printarr:/data

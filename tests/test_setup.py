@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -237,3 +238,36 @@ def test_compose_files_hold_no_settings():
         text = (root / name).read_text()
         assert "environment:" not in text, name
         assert "PRINTARR_" not in text, name
+
+
+def test_recreated_container_on_the_same_folder_comes_back_configured(wizard, monkeypatch):
+    """The data folder is the whole state: a new process on it needs no wizard and keeps the secrets."""
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(printer_host="10.0.0.9"), headers=headers)
+
+    data_dir = Path(wizard.db_path).parent
+    assert {p.name for p in data_dir.iterdir()} >= {"printarr.db"}
+    assert all(p.is_relative_to(data_dir) for p in data_dir.rglob("*"))
+
+    # A brand-new app on the same folder, with the environment left empty, as after a rebuild.
+    recreated = stored_overrides(replace(wizard, printer_host="", llm_base_url=""))
+    assert recreated.printer_host == "10.0.0.9"
+    app2 = create_app(recreated)
+    with TestClient(app2) as client:
+        status = client.get("/api/v1/setup/status").json()
+        assert status["complete"] is True
+        assert status["secrets"]["ha_token"] == "set"
+        assert client.get("/api/v1/tickets").status_code == 200
+        assert client.get("/").text.find("Set up printarr") == -1
+    assert TicketStore(wizard.db_path).get_setting("ha_token") == SECRET
+
+
+def test_image_and_compose_run_as_the_truenas_app_user():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    assert "USER 568:568" in (root / "Dockerfile").read_text()
+    assert 'user: "568:568"' in (root / "docker-compose.yml").read_text()

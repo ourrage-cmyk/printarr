@@ -19,7 +19,7 @@ built on.
 
 Everything the service saves (tickets, model and alert settings) lives in one folder,
 `/data`. The YAML maps it to a folder on your SSD dataset, for example
-`/mnt/ssd/apps/printarr`. Create that folder before you install.
+`/mnt/SSDCAGE/printarr`. Create that folder before you install.
 
 The image is built and pushed to `ghcr.io/ourrage-cmyk/printarr` by
 `.github/workflows/image.yml` on every push to `main`. The package must be public for

@@ -5,11 +5,14 @@ install it from one YAML file. There is no env file and no second file.
 
 ## Before you start
 
-1. **Create the data folder on your SSD dataset**, for example `/mnt/ssd/apps/printarr`.
-2. **Give it to the app's user (uid 1000).** In the TrueNAS shell:
+1. **Create the data folder on your SSD dataset**, for example `/mnt/SSDCAGE/printarr`. Everything
+   printarr keeps lives in this one folder: the database (tickets, settings, the setup state and the
+   saved secrets), the nightly backups and the output. Delete or rebuild the app and point it at the
+   same folder, and it comes back configured, with no wizard.
+2. **Give it to the app's user (uid 568).** In the TrueNAS shell:
    ```sh
-   mkdir -p /mnt/ssd/apps/printarr
-   chown -R 1000:1000 /mnt/ssd/apps/printarr
+   mkdir -p /mnt/SSDCAGE/printarr
+   chown -R 568:568 /mnt/SSDCAGE/printarr
    ```
    If the folder is not writable, the app stops at once and writes a message to its logs.
 3. **Know the printer's IP address** (the Epson TM-T88V on the LAN, port 9100). Have the Home Assistant
@@ -109,10 +112,10 @@ from `backups/`. The current database is kept as `backups/pre-import-*.db`, so t
 1. Stop the app in TrueNAS.
 2. In the TrueNAS shell, replace the database with the copy you want, and remove the journal files:
    ```sh
-   cd /mnt/ssd/apps/printarr
+   cd /mnt/SSDCAGE/printarr
    rm -f printarr.db-wal printarr.db-shm
    cp backups/<the-copy>.db printarr.db
-   chown 1000:1000 printarr.db
+   chown 568:568 printarr.db
    ```
 3. Start the app.
 
@@ -142,7 +145,7 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 
 | Symptom in the logs | Cause and fix |
 | --- | --- |
-| `data folder /data is not writable by uid 1000` | Run `chown -R 1000:1000` on the data folder, then restart. |
+| `data folder /data is not writable by uid 568` | Run `chown -R 568:568` on the data folder, then restart. |
 | `schema is version N, but this printarr supports up to M` | The data came from a newer version. Roll back the image, or restore the matching backup. |
 | Health returns 503 | The printer is not reachable. Check the IP address, the printer's power and the LAN switch. |
 | The web page loads but a ticket is `failed` | Open the ticket in the web page. Its `last_error` says why. |
