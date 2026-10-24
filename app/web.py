@@ -581,7 +581,7 @@ async function loadTickets() {
     $('queued').textContent = `${queued} waiting`;
     const rows = tickets.map((t) => {
       const actions = [];
-      if (t.status === 'held') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/release">Release</button>`);
+      if (t.status === 'held' && t.delivery !== 'on_release') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/release">Release</button>`);
       if (t.status === 'pending' || t.status === 'held') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/cancel">Cancel</button>`);
       if (t.status === 'failed' || t.status === 'cancelled') actions.push(`<button class="btn small" data-act="/tickets/${t.id}/retry">Retry</button>`);
       const text = (t.title ? t.title + ': ' : '') + t.message;

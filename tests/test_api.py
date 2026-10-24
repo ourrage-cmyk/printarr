@@ -252,3 +252,9 @@ def test_since_hours_has_an_upper_bound(settings):
         assert client.get("/api/v1/log", params={"since_hours": 10**17}).status_code == 422
         assert client.get("/api/v1/log/summary", params={"since_hours": 10**17}).status_code == 422
         assert client.get("/api/v1/log", params={"since_hours": 24}).status_code == 200
+
+
+def test_web_ui_offers_no_single_release_for_pile_tickets(settings):
+    with TestClient(create_app(settings)) as client:
+        html = client.get("/").text
+        assert "t.delivery !== 'on_release'" in html
