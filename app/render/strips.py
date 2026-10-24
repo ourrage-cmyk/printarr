@@ -6,10 +6,11 @@ width) or narrower, and tall in whole units. Short blocks can sit side by side, 
 need, within a min and a max. Anything beyond the max is shortened with "..." so cards never overlap.
 
 Rules, from design-system/blocks.json:
-- one ornament per card
-- at most five blocks per strip, and a greeting always starts a new strip
-- blank margins at the top and bottom of each strip, for a clean cut
-- moods change the ornament, icon and accent only
+- one band per card, at the top (the mood), 28 dots tall, never a mood word
+- a strip is cut by height (MAX_STRIP_H) or at 12 tickets, not by block count; a briefing nests, every other block is its own card
+- no blank in the picture: the half inch before the cut is fed with the cut command, once at the end of the piece
+- three text sizes only: large dot matrix for titles, medium solid for numbers, small solid for the rest
+- moods change the band, icon, outline weight and corner only, never the size or the grid
 
 Port of the grid in receipt-lab/lib/blocks.js (the Node reference). Keep the constants in step.
 """
