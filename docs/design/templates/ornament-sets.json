@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "note": "Ornament sets per tone for the round 5 templates. Names match the arena ornament winners and the drawers in lib/ornaments.js. The d1 decision model picks one tone per ticket, then uses that tone's set. Only the mood, the header and the divider change between tones. The grid and the fonts stay the same.",
+  "grid": { "width": 512, "margin": 14, "card_radius": [4, 8], "gap": 10, "stroke": 2 },
+  "fonts": { "headline": "dot5x7@3", "numerals": "dot5x7@3-5", "body": "dot5x7@2", "label": "dot5x7@2 uppercase", "secondary": "optional mono or sans cap 18-22, only where needed" },
+  "tones": {
+    "loving": {
+      "header": "heart",
+      "divider": "dottedWave",
+      "footer": "dashedRule",
+      "icons": ["heart", "sun"],
+      "mood": "warm, slow, one line of praise or thanks",
+      "d1_questions": ["is_loving", "is_positive"]
+    },
+    "neutral": {
+      "header": "hairline",
+      "divider": "hairline",
+      "footer": "dashedRule",
+      "icons": ["box"],
+      "mood": "plain note, no emotion words",
+      "d1_questions": ["is_neutral"]
+    },
+    "reminder": {
+      "header": "tapeTicks",
+      "divider": "dashedRule",
+      "footer": "tapeTicks",
+      "icons": ["check", "box"],
+      "mood": "one task, one time",
+      "d1_questions": ["is_reminder"]
+    },
+    "playful": {
+      "header": "sunStrip",
+      "divider": "tapeTicks",
+      "footer": "dottedWave",
+      "icons": ["star", "bolt"],
+      "mood": "light joke or fun fact, short sentences",
+      "d1_questions": ["is_playful", "is_fun_fact"]
+    },
+    "gentle_warning": {
+      "header": "dottedWave",
+      "divider": "dashedRule",
+      "footer": "hairline",
+      "icons": ["drop", "warn"],
+      "mood": "calm heads-up, says what to do",
+      "d1_questions": ["is_gentle_warning"]
+    },
+    "firm_complaint": {
+      "header": "perforation",
+      "divider": "doubleHairline",
+      "footer": "barcode",
+      "icons": ["warn"],
+      "mood": "direct, names the problem and the ask, no insults",
+      "d1_questions": ["is_negative", "is_complaint"]
+    },
+    "urgent": {
+      "header": "barcode",
+      "divider": "perforation",
+      "footer": "barcode",
+      "icons": ["warn", "bolt"],
+      "mood": "alert, short, one action",
+      "d1_questions": ["is_urgent"]
+    }
+  },
+  "families": {
+    "morning_briefing": { "tone": "neutral", "d1_questions": ["is_briefing"] },
+    "evening_rundown": { "tone": "neutral", "d1_questions": ["is_briefing", "is_evening"] },
+    "shopping_list": { "tone": "neutral", "d1_questions": ["is_list"] },
+    "todo_list": { "tone": "reminder", "d1_questions": ["is_list", "is_reminder"] },
+    "alert_normal": { "tone": "gentle_warning", "d1_questions": ["is_alert", "is_urgent"] },
+    "alert_urgent": { "tone": "urgent", "d1_questions": ["is_alert", "is_urgent"] },
+    "note_fun_fact": { "tone": "playful", "d1_questions": ["is_fun_fact", "is_playful"] }
+  }
+}
