@@ -280,6 +280,14 @@ def _band_hatch(c: Canvas, x0: int, x1: int, y: int) -> int:
     return BAND_H
 
 
+def _band_blocks(c: Canvas, x0: int, x1: int, y: int) -> int:
+    """Firm family: two rows of chunky blocks, like caution tape: heavier than a hatch, lighter than the barcode."""
+    for row, yy in enumerate((y + 3, y + 11)):
+        for x in range(x0 + (8 if row else 0), x1 - 11, 16):
+            c.fill_rect(x, yy, 10, 6)
+    return BAND_H
+
+
 def _band_barcode(c: Canvas, x0: int, x1: int, y: int) -> int:
     """Urgent family: a tall barcode."""
     widths = [2, 1, 3, 1, 1, 2, 4, 1, 2, 1, 3, 2, 1, 1, 2, 3, 1, 2]
@@ -301,6 +309,7 @@ ORNAMENTS: dict[str, Callable[[Canvas, int, int, int], int]] = {
     "bandStipple": _band_stipple,
     "bandHatch": _band_hatch,
     "bandBarcode": _band_barcode,
+    "bandBlocks": _band_blocks,
     "sunStrip": _sun_strip,
     "dottedWave": _dotted_wave,
     "starRow": _star_row,
@@ -613,8 +622,9 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     series = s.get("series")
     if isinstance(series, list) and len(series) > 1:
         c.y += 4
-        line_graph(c, x0 + 4, c.y, x1 - 4, c.y + 36, series)
-        c.y += 36 + 4
+        plot = 36 + int(s.get("_extra") or 0)  # a tile with a shorter label grows its chart, so the axes line up
+        line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
+        c.y += plot + 4
         _time_axis(c, x0, x1, _span(s))
     if s.get("as_of"):
         c.solid(x0, c.y, f"AS OF {str(s['as_of']).upper()}", AXIS_CAP)
@@ -1097,6 +1107,14 @@ def _equalise(row: list[Placed], left: int = OUTER_L, right: int = OUTER_R) -> l
         )
         cap = 42 if fits else 21
         row = [_place(p.block, {**p.slots, "_cap": cap}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
+        heights = {id(p): _measure(p.block, p.slots, p.x0, p.x1) for p in row if p.block.type == "metric"}
+        tallest = max(heights.values())
+        row = [
+            _place(p.block, {**p.slots, "_extra": tallest - heights[id(p)]}, p.x0, p.x1, p.col, p.span)
+            if id(p) in heights and p.slots.get("series") and tallest > heights[id(p)]
+            else p
+            for p in row
+        ]
     return row
 
 
