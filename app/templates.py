@@ -16,6 +16,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from app.alerts import describe_failure
+
 logger = logging.getLogger("printarr.templates")
 
 Recipient = Literal["yannic", "wife"]
@@ -131,6 +133,19 @@ def resolve_choice(
     return rule_choice(recipient, title)
 
 
+class ModelError(RuntimeError):
+    """A model call failed. The message says which call and why, in words an alert reader can act on."""
+
+
+WARM_EVERY_S = 240.0  # warm-up pings every 4 minutes, inside Ollama's default 5-minute unload
+WARM_KEEP_ALIVE = "30m"  # for native Ollama calls; d1 rejects them, so d1 is warmed through /v1/systemone
+
+
+def ollama_root(base_url: str) -> str:
+    root = base_url.rstrip("/")
+    return root[: -len("/v1")] if root.endswith("/v1") else root
+
+
 class OpenAICompatibleModel:
     """Calls any OpenAI-compatible chat endpoint, such as Ollama's /v1 or OpenRouter."""
 
@@ -144,6 +159,7 @@ class OpenAICompatibleModel:
             {
                 "model": self.model,
                 "temperature": 0,
+                "max_tokens": 1024,  # small budgets leave the answer empty: reasoning spends them first
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -153,8 +169,11 @@ class OpenAICompatibleModel:
         request = urllib.request.Request(
             self.url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            reply = json.loads(response.read())
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                reply = json.loads(response.read())
+        except Exception as exc:
+            raise ModelError(describe_failure(exc, f"the text model {self.model} at {self.url}", self.timeout)) from None
         return reply["choices"][0]["message"]["content"]
 
     def rewrite(self, text: str) -> str:
@@ -229,8 +248,11 @@ class SystemOneModel:
         request = urllib.request.Request(
             self.url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            reply = json.loads(response.read())
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                reply = json.loads(response.read())
+        except Exception as exc:
+            raise ModelError(describe_failure(exc, f"the decision model {self.model} at {self.url}", self.timeout)) from None
         answers = reply.get("answers", {})
         result: dict[str, float] = {}
         for name in QUESTIONS:
@@ -252,3 +274,31 @@ class SystemOneModel:
                 # The template's own default decorations; resolve_choice keeps the ones it allows.
                 return chosen.id, list(chosen.default)
         raise ValueError(f"no kind scored at least {MIN_SCORE}")
+
+
+def warm_models(base_url: str, decision_model: str, text_model: str, timeout: float) -> list[str]:
+    """Load both models so the first real call is warm. Returns the models that could not be warmed."""
+    failed: list[str] = []
+    root = ollama_root(base_url)
+    calls = {
+        # d1 answers only /v1/systemone, so its warm-up is one cheap scoring call.
+        decision_model: (root + "/v1/systemone", {
+            "model": decision_model,
+            "state": "warm-up",
+            "questions": {"is_alert": {"type": "noul", "instructions": QUESTIONS["is_alert"]}},
+        }),
+        # Granite is a normal chat model: a call without a prompt loads it and keeps it for 30 minutes.
+        text_model: (root + "/api/generate", {"model": text_model, "keep_alive": WARM_KEEP_ALIVE}),
+    }
+    for model, (url, payload) in calls.items():
+        request = urllib.request.Request(
+            url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response.read()
+        except Exception as exc:
+            logger.warning("warm-up of %s failed: %s", model, describe_failure(exc, f"{model} at {url}", timeout))
+            failed.append(model)
+    return failed
+

@@ -72,6 +72,8 @@ from app.slots import schema as slot_schema
 from app.slots import validate as validate_slots
 from app.templates import (
     RECIPIENTS,
+    WARM_EVERY_S,
+    warm_models,
     TEMPLATES,
     Choice,
     template_by_id,
@@ -527,6 +529,19 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             timeout=float(store.get_setting("llm_timeout") or settings.llm_timeout),
         )
 
+    def warm_loop() -> None:
+        """Keep both models loaded: at start, then every WARM_EVERY_S. A failed warm-up is logged, never alerted."""
+        while True:
+            try:
+                current = read_model_settings()
+                if current.enabled and current.base_url:
+                    warm_models(current.base_url, current.model, current.text_model, timeout=current.timeout)
+            except Exception:
+                logger.exception("model warm-up loop error; trying again next round")
+            time.sleep(WARM_EVERY_S)
+
+    threading.Thread(target=warm_loop, name="model-warmer", daemon=True).start()
+
     def current_model() -> SystemOneModel | None:
         current = read_model_settings()
         if not (current.enabled and current.base_url):
@@ -707,9 +722,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             return body.message
         try:
             cleaned = model.rewrite(body.message)
-        except Exception as exc:
-            logger.warning("text model unusable, sending text as sent: %s", exc)
-            notifier.problem("text_model", f"text model down, sent text uncleaned: {exc}")
+        except Exception as exc:  # the text is printed as sent; a model problem never blocks a print
+            notifier.repeated("text_model", f"text model failed, sent text uncleaned: {exc}")
             return body.message
         notifier.recovered("text_model", "text model answers again")
         return cleaned
@@ -717,8 +731,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def on_model_result(error: Exception | None) -> None:
         if error is None:
             notifier.recovered("model", "decision model answers again")
-        else:
-            notifier.problem("model", f"decision model down, using rules: {error}")
+        else:  # one slow answer is logged; an alert needs repeated failures (see Notifier.repeated)
+            notifier.repeated("model", f"decision model failed, using rules: {error}")
 
     def choose(body: TicketCreate) -> Choice:
         template_id = None if body.template == "auto" else body.template
