@@ -247,7 +247,13 @@ class TicketStore:
         )
 
     def release(self, ticket_id: str) -> dict[str, Any]:
-        """Release a held ticket so it prints now. Its receipt time becomes the release time."""
+        """Release a held ticket so it prints now. Its receipt time becomes the release time.
+
+        A pile ticket (delivery on_release) is refused: it prints only in its person's strip.
+        """
+        existing = self.get(ticket_id)
+        if existing is not None and existing["delivery"] == "on_release":
+            raise TicketStateError("ticket waits in its recipient's pile; release the person instead")
         now = now_ms()
         return self._guarded_update(
             ticket_id,
@@ -265,7 +271,8 @@ class TicketStore:
                 ids = [
                     row["id"]
                     for row in conn.execute(
-                        "SELECT id FROM tickets WHERE status = 'held' AND hold_key = ?",
+                        "SELECT id FROM tickets WHERE status = 'held' AND hold_key = ? "
+                        "AND delivery != 'on_release'",
                         (hold_key,),
                     ).fetchall()
                 ]
@@ -299,10 +306,12 @@ class TicketStore:
             )
 
     def requeue(self, ticket_id: str) -> dict[str, Any]:
+        """Try a failed or cancelled ticket again. A pile ticket goes back to its pile, not the queue."""
         return self._guarded_update(
             ticket_id,
             ("failed", "cancelled"),
-            "status = 'pending', attempts = 0, last_error = NULL, next_attempt_ms = ?",
+            "status = CASE WHEN delivery = 'on_release' THEN 'held' ELSE 'pending' END, "
+            "attempts = 0, last_error = NULL, next_attempt_ms = ?",
             (now_ms(),),
         )
 
