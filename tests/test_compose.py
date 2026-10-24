@@ -65,3 +65,20 @@ def test_compose_text_layout_stacks_blocks_in_order():
     ])
     texts = [line.text for line in compose_lines(checked)]
     assert texts == ["Hello", "[x] Bins"]
+
+
+def test_malformed_dog_counts_and_todo_items_are_refused_not_crashed(settings):
+    with TestClient(create_app(settings)) as client:
+        dogs = {"type": "dog_counts", "mood": "happy", "slots": {"label": "Dogs", "items": [{"label": "Ada"}]}}
+        response = client.post("/api/v1/tickets/compose", json={"recipient": "yannic", "blocks": [dogs]})
+        assert response.status_code == 422
+        todo = {"type": "todo", "mood": "happy", "slots": {"items": [{"done": True}]}}
+        response = client.post("/api/v1/tickets/compose", json={"recipient": "yannic", "blocks": [todo]})
+        assert response.status_code == 422
+
+
+def test_composed_ticket_cannot_be_held_with_send_at(settings):
+    with TestClient(create_app(settings)) as client:
+        block = {"type": "paragraph", "mood": "neutral", "slots": {"text": "later"}}
+        body = {"recipient": "yannic", "blocks": [block], "hold": True, "send_at": "2026-10-30T10:00:00"}
+        assert client.post("/api/v1/tickets/compose", json=body).status_code == 422

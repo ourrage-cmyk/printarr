@@ -64,9 +64,14 @@ class GraphSlots(_Strict):
     metric: Metric
 
 
+class DogCount(_Strict):
+    label: str = Field(min_length=1, max_length=20)
+    count: int | float | str = Field(description="The number to print, as a number or text.")
+
+
 class DogCountsSlots(_Strict):
     label: str = Field(min_length=1, max_length=20)
-    items: list[dict[str, Any]] = Field(min_length=1, max_length=6, description="Each {label, count}.")
+    items: list[DogCount] = Field(min_length=1, max_length=6, description="Each {label, count}.")
 
 
 class ListSlots(_Strict):
@@ -74,9 +79,14 @@ class ListSlots(_Strict):
     items: list[str] = Field(min_length=1, max_length=10)
 
 
+class TodoItem(_Strict):
+    text: str = Field(min_length=1, max_length=120)
+    done: bool = False
+
+
 class TodoSlots(_Strict):
     title: str | None = Field(default=None, max_length=40)
-    items: list[dict[str, Any]] = Field(min_length=1, max_length=10, description="Each {text, done}.")
+    items: list[TodoItem] = Field(min_length=1, max_length=10, description="Each {text, done}.")
 
 
 class AlertSlots(_Strict):
