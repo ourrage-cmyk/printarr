@@ -935,8 +935,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             delivery=delivery,
             hold_key=body.hold_key,
             idempotency_key=body.idempotency_key,
+            notes=notes,
+            strip_count=len(lines),
         )
-        return {**ticket, "notes": notes, "truncated": bool(notes), "strip_count": len(lines)}
+        return ticket
 
     @api.post("/tickets/{ticket_id}/release", response_model=TicketOut, tags=["tickets"])
     def release_ticket(ticket_id: str) -> dict[str, Any]:
@@ -1000,8 +1002,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             hold_key=body.hold_key,
             idempotency_key=body.idempotency_key,
             moods=",".join(block["mood"] for block in checked),
+            notes=notes,
+            strip_count=len(lines),
         )
-        return {**ticket, "notes": notes, "truncated": bool(notes), "strip_count": len(lines)}
+        return ticket
 
     @api.post("/people/{person}/release", tags=["tickets"])
     def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:

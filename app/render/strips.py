@@ -58,7 +58,7 @@ NEUTRAL = "neutral"
 
 # The card outline says the tone before a word is read: urgent tones draw a heavier, squarer outline,
 # soft tones a rounder one. Tones not listed use the shell's own stroke and radius.
-STROKE_BY_MOOD: dict[str, int] = {"urgent": 4, "critical": 5, "upset": 4, "firm_complaint": 4}
+STROKE_BY_MOOD: dict[str, int] = {"urgent": 4, "critical": 5, "upset": 4, "firm_complaint": 3}
 RADIUS_BY_MOOD: dict[str, int] = {"urgent": 2, "critical": 2, "upset": 2, "firm_complaint": 2, "loving": 12, "gentle_warning": 12, "playful": 12, "happy": 8}
 
 # Layout per block type: span in columns and height in units. Text is fluid; metric tiles are fluid up to 3.
@@ -95,12 +95,14 @@ SPRITES: dict[str, tuple[str, ...]] = {
     "cart": ("##.......", ".#.......", ".#######.", ".#.#.#.#.", "..#####..", "..#...#..", "..##.##.."),
     "clock": ("..#####..", ".#.....#.", "#...#...#", "#...#...#", "#...###.#", "#.......#", ".#.....#.", "..#####.."),
     "bulb": ("..###..", ".#...#.", "#.....#", "#.....#", ".#...#.", "..###..", "..###..", "..###.."),
+    "bell": ("...#...", "..###..", ".#####.", ".#####.", "#######", "#######", "...#..."),
     "envelope": ("#########", "##.....##", "#.#...#.#", "#..###..#", "#.......#", "#########"),
 }
 
 # The mark each block type wears, so a note, an alert, a reminder, a fun fact and a shopping list
 # are told apart at a glance by something other than their words. Tones change the header and the
 # icon; the kind mark is separate and sits at the top-right.
+URGENT_MOODS = {"urgent", "critical", "firm_complaint", "upset"}
 KIND_MARKS: dict[str, str] = {"message": "envelope", "alert": "bolt", "checklist": "cart", "tip": "clock", "fact": "bulb"}
 
 
@@ -114,8 +116,11 @@ def stamp_sprite(c: Canvas, x: int, y: int, name: str, scale: int = 3) -> None:
 def _kind_mark(card: "Card", kind: str, x1: int) -> int:
     """Stamps the kind mark at the card's top-right corner. Returns the width the text beside it must leave."""
     name = KIND_MARKS.get(kind)
-    if name is None:
+    if kind == "alert" and card.mood not in URGENT_MOODS:
+        name = "bell"  # a bolt says urgent; a gentle heads-up must not look urgent
+    if name is None or name in card.marked:
         return 0
+    card.marked.add(name)
     width = len(SPRITES[name][0]) * 3
     stamp_sprite(card.c, x1 - width, card.c.y, name)
     return width + 8
@@ -232,6 +237,13 @@ def solid_wrap(text: str, max_w: int) -> list[str]:
     lines: list[str] = []
     cur = ""
     for word in text.split():
+        while solid_width(word, 21) > max_w and len(word) > 1:  # a URL or code wider than the line breaks by character
+            cut = max(1, next((i for i in range(len(word), 0, -1) if solid_width(word[:i], 21) <= max_w), 1))
+            if cur:
+                lines.append(cur)
+                cur = ""
+            lines.append(word[:cut])
+            word = word[cut:]
         trial = f"{cur} {word}" if cur else word
         if cur and solid_width(trial, 21) > max_w:
             lines.append(cur)
@@ -323,6 +335,9 @@ class Card:
     mood: str
     ornamented: bool = False
     plot_h: int = 56  # graph height, set from the card's height
+    in_group: bool = False  # the card holds several regions: a tip leads with its icon instead of centring
+    fact_labeled: bool = False
+    marked: set[str] = field(default_factory=set)  # kind marks already stamped: one of each per card
 
     def ornament(self, slot: str, x0: int, x1: int) -> None:
         if self.ornamented:
@@ -348,27 +363,35 @@ class Card:
             stamp_sprite(self.c, x, y, name)
 
 
+# Moods whose header ornament already is the icon (a heart over the title, a sun over it): no second one at the left.
+HEADER_IS_ICON = {"loving", "happy"}
+
+
 def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
-    """A pill for moods that ask for one, otherwise the icon at the left with the title centred."""
+    """A full-width inverted band for moods that ask for one, otherwise the icon at the left with the title centred."""
     label = _label(text)
     c = card.c
     if MOODS[card.mood]["accent"] == "pill":
-        # The pill label is one line at the largest title size that fits beside its padding.
         pill = next((s for s in (NUMERAL, TITLE, BODY) if text_width(label, s) + 28 <= x1 - x0), BODY)
-        w = min(text_width(label, pill) + 28, x1 - x0)
         h = 7 * pill + 14
-        left = x0 + (x1 - x0 - w) // 2
-        c.round_box(left, c.y, left + w, c.y + h, h // 2, 2)
-        c.fill(left + 4, c.y + 4, left + w - 4, c.y + h - 4)
-        c.text(left + 14, c.y + 7, label, pill)
-        _erase_glyphs(c, left + 14, c.y + 7, label, pill)
+        c.round_box(x0, c.y, x1, c.y + h, 6, 2)
+        c.fill(x0 + 4, c.y + 4, x1 - 4, c.y + h - 4)
+        tx = x0 + (x1 - x0 - text_width(label, pill)) // 2
+        c.text(tx, c.y + 7, label, pill)
+        _erase_glyphs(c, tx, c.y + 7, label, pill)
         c.y += h + 8
     else:
-        card.icon(x0, c.y)
-        scale, lines = title_lines(label, x1 - x0 - 30)
+        icon = card.mood not in HEADER_IS_ICON
+        room = x1 - x0 - (30 if icon else 0)
+        if icon and text_width(label.split()[0] if label.split() else label, NUMERAL) > room:
+            icon, room = False, x1 - x0  # a long word needs the width more than the icon does
+        if icon:
+            card.icon(x0, c.y)
+        scale, lines = title_lines(label, room)
+        left = x0 + (30 if icon else 0)
         step = 7 * scale + 6
         for i, line in enumerate(lines):
-            c.text(x0 + 30 + (x1 - x0 - 30 - text_width(line, scale)) // 2, c.y + i * step, line, scale)
+            c.text(left + (room - text_width(line, scale)) // 2, c.y + i * step, line, scale)
         c.y += len(lines) * step + 2
 
 
@@ -389,10 +412,15 @@ def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
     if text_width(label, NUMERAL) <= max_w:
         return NUMERAL, [label]
     if all(text_width(word, NUMERAL) <= max_w for word in label.split()):
-        return NUMERAL, wrap_lines(label, NUMERAL, max_w)
+        lines = wrap_lines(label, NUMERAL, max_w)
+        if len(lines) > MAX_TITLE_LINES:  # a title is a label: two lines, the rest is abbreviated, never five lines
+            lines = lines[:MAX_TITLE_LINES]
+            lines[-1] = lines[-1][: max(1, max_w // (6 * NUMERAL) - 1)].rstrip() + "."
+        return NUMERAL, lines
     return TITLE, wrap_lines(label, TITLE, max_w)
 
 
+MAX_TITLE_LINES = 2
 EDGE_GAP = 10  # the least clear space between a line of text and the card border, in dots
 
 
@@ -403,7 +431,7 @@ def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -
     from app.render.canvas import solid_width
 
     width = x1 - EDGE_GAP - (x0 + indent)
-    if solid_width(label, 21) + solid_width(value, 21) + 8 + 24 <= width:
+    if solid_width(label, 21) + solid_width(value, 21) + 8 + 14 <= width:
         c.row_solid(x0 + indent, x1 - EDGE_GAP, c.y, label, value, 21)
         return ROW
     c.solid(x0 + indent, c.y, label, 21)
@@ -437,8 +465,8 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if unit.strip().upper() == str(s.get("label", "")).strip().upper():
         unit = ""  # "750 STEPS" under the label STEPS says it twice
     # The label wraps inside the tile, so a long label never runs over the border.
-    scope = str(s.get("scope") or "").strip().upper()
-    label = _label(s.get("label", "")) + (f" {scope}" if scope in ("IN", "OUT") else "")
+    scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(s.get("scope") or "").strip().upper(), "")
+    label = _label(s.get("label", "")) + (f" {scope}" if scope else "")
     for line in wrap_lines(label, BODY, x1 - x0) or [""]:
         c.solid(x0, c.y, line, 21)
         c.y += 7 * BODY + 4
@@ -516,13 +544,12 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 
 def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
-    """One entry per dog: the name with leaders to the first two counters, the other two on the line under,
-    the counters in two right-aligned columns so they read as a table. Nothing is cut."""
+    """One entry per dog: the name with leaders to the first column on its first line, and the four counters in
+    two left-aligned columns, so the second line sits on the same grid as the first. Nothing is cut."""
     c = card.c
     _heading(c, x0, _label(s.get("title") or "DOGS TODAY"), x1)
-    right = x1 - EDGE_GAP
-    col_b = right
-    col_a = right - 118  # the second column is the wider "N POOP"/"N FOOD"/"N RUN" and ends at the edge gap
+    col_b = x1 - EDGE_GAP - 118  # the second column starts here and holds "N POOP" / "N RUN"
+    col_a = col_b - 118  # the first column holds "N PEE" / "N FOOD"
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
@@ -531,17 +558,12 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
             (f"{d.get('pee', 0)} PEE", f"{d.get('poop', 0)} POOP"),
             (f"{d.get('food', 0)} FOOD", f"{d.get('run', 0)} RUN"),
         )
+        c.solid(x0 + 28, c.y, name, 21)
+        for xx in range(x0 + 28 + solid_width(name, 21) + 8, col_a - 8, 6):
+            c.fill_rect(xx, c.y + 18, 2, 2)  # leaders run from the name to the counters
         for i, (a, b) in enumerate(pairs):
-            y = c.y + i * ROW
-            left = x0 + 28
-            if i == 0:
-                c.solid(left, y, name, 21)
-                left += solid_width(name, 21)
-            wa, wb = solid_width(a, 21), solid_width(b, 21)
-            for xx in range(left + 8, col_a - wa - 8, 6):
-                c.fill_rect(xx, y + 18, 2, 2)  # leaders on both lines
-            c.solid(col_a - wa, y, a, 21)
-            c.solid(col_b - wb, y, b, 21)
+            c.solid(col_a, c.y + i * ROW, a, 21)
+            c.solid(col_b, c.y + i * ROW, b, 21)
         c.y += 2 * ROW + 4
 
 
@@ -569,7 +591,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
-        c.y += _row(c, x0, x1, "ACTION", _label(s["action"]))
+        c.y += _row(c, x0, x1, "ACTION", _label(s["action"])) + 4
     card.ornament("divider", x0, x1)
     if s.get("from"):
         c.solid(x0, c.y + 4, f"- {_label(s['from'])}", 21)
@@ -591,16 +613,22 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
 
 
 def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
-    """One line of advice, centred between the tone icon and the kind mark; the card centres it vertically."""
+    """One line of advice. On its own card it is centred between the tone icon and the kind mark and the card
+    centres it vertically; inside a bigger card it leads with its icon like the rest of the text."""
     c = card.c
-    _kind_mark(card, "tip", x1)
+    clear = _kind_mark(card, "tip", x1)
     card.icon(x0, c.y)
-    inner_l, inner_r = x0 + 36, x1 - 36
-    lines = solid_wrap(str(s.get("tip", "")), inner_r - inner_l)
-    for line in lines:
-        c.solid(inner_l + (inner_r - inner_l - solid_width(line, 21)) // 2, c.y, line, 21)
-        c.y += ROW
-    c.y += 2
+    if card.in_group:
+        c.y += paragraph(c, x0 + 34, c.y, str(s.get("tip", "")), BODY, x1 - x0 - 34 - clear) + 2
+    else:
+        inner_l, inner_r = x0 + 36, x1 - 36
+        for line in solid_wrap(str(s.get("tip", "")), inner_r - inner_l):
+            c.solid(inner_l + (inner_r - inner_l - solid_width(line, 21)) // 2, c.y, line, 21)
+            c.y += ROW
+        c.y += 2
+    if s.get("from"):
+        c.solid(x0, c.y + 4, f"- {_label(s['from'])}", 21)
+        c.y += ROW + 4
 
 
 def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -609,8 +637,10 @@ def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     clear = _kind_mark(card, "fact", x1)
     c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0 - clear) + 4
     card.ornament("divider", x0, x1)
-    c.solid(x0, c.y, "FUN FACT", 21)
-    c.y += ROW
+    if not card.fact_labeled and not card.in_group:
+        card.fact_labeled = True
+        c.solid(x0, c.y, "FUN FACT", 21)
+        c.y += ROW
 
 
 RENDERERS: dict[str, Callable[[Card, Mapping[str, Any], int, int], None]] = {
@@ -676,8 +706,8 @@ def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[
     cur: list[Block] = []
     for block in blocks:
         validate(block)
-    for block in group(fuse(blocks)):  # a headline, its tiles and the closing line are one card, so one block
-        if cur and (len(cur) >= max_blocks or block.type == "greeting"):
+    for block in prepare(blocks):  # a headline and what follows it are one card, so one block
+        if cur and (len(cur) >= max_blocks or block.type == "greeting" or block.type == "group" or cur[-1].type == "group" or block.slots.get("_cont")):
             strips.append(cur)
             cur = []
         cur.append(block)
@@ -686,12 +716,22 @@ def split_strips(blocks: Sequence[Block], max_blocks: int = MAX_BLOCKS) -> list[
     return strips
 
 
+FOOTER_MOODS = {"urgent", "critical"}  # a second barcode closes the card, so urgent never looks like a firm complaint
+
+
+def _draw_block(card: Card, block_type: str, slots: Mapping[str, Any], x0: int, x1: int) -> None:
+    DRAW[block_type](card, slots, x0, x1)
+    if card.mood in FOOTER_MOODS:
+        card.c.y += 6
+        card.c.y += _barcode(card.c, x0, x1, card.c.y) + 2
+
+
 def _measure(block: Block, slots: Mapping[str, Any], x0: int, x1: int, plot_h: int = 56) -> int:
     """Height the content needs, at the card's width. Measured on a scratch canvas."""
     scratch = Canvas()
     scratch.y = 0
     card = Card(scratch, block.mood, plot_h=plot_h)
-    DRAW[block.type](card, slots, x0 + PAD_H, x1 - PAD_H)
+    _draw_block(card, block.type, slots, x0 + PAD_H, x1 - PAD_H)
     return scratch.y
 
 
@@ -747,50 +787,151 @@ def fuse(blocks: Sequence[Block]) -> list[Block]:
     return out
 
 
-GROUP_TAILS = ("tip", "message")
+def _group_mood(run: Sequence[Block]) -> str:
+    """The card's tone: an alert's if there is one, else the closing note's, else the last block's."""
+    for kinds in (("alert",), ("message",)):
+        for block in reversed(run):
+            if block.type in kinds:
+                return block.mood
+    return next((b.mood for b in reversed(run) if b.type != "greeting"), run[-1].mood)
+
+
+def _make_group(run: Sequence[Block]) -> Block:
+    parts = list(run)
+    last_signed = max((i for i, b in enumerate(parts) if b.type in ("message", "alert", "tip") and b.slots.get("from")), default=-1)
+    parts = [  # one signature on a card, the last one
+        Block(b.type, {k: v for k, v in b.slots.items() if k != "from"}, mood=b.mood, span=b.span)
+        if b.slots.get("from") and i != last_signed
+        else b
+        for i, b in enumerate(parts)
+    ]
+    return Block("group", {"parts": parts}, mood=_group_mood(parts), span=COLS)
+
+
+def _overflows(block: Block) -> bool:
+    content = _measure(block, dict(block.slots), OUTER_L, OUTER_R)
+    return _units_for(content, LAYOUTS[block.type])[1]
 
 
 def group(blocks: Sequence[Block]) -> list[Block]:
-    """Metric tiles are content of the card that follows them, not siblings above it: a headline (if any), the
-    tiles and the closing tip or note become one card with the tiles nested inside."""
+    """One strip, one card: a headline and the blocks after it are regions of one card, not boxes stacked on
+    each other. A new headline, or a card that would be taller than the strip allows, starts the next card."""
     out: list[Block] = []
-    items = list(blocks)
-    i = 0
-    while i < len(items):
-        start = i
-        head = items[i] if items[i].type == "greeting" else None
-        j = i + 1 if head else i
-        metrics: list[Block] = []
-        while j < len(items) and items[j].type == "metric":
-            metrics.append(items[j])
-            j += 1
-        if metrics and j < len(items) and items[j].type in GROUP_TAILS:
-            tail = items[j]
-            out.append(Block("group", {"head": head, "metrics": metrics, "tail": tail}, mood=tail.mood, span=COLS))
-            i = j + 1
+    run: list[Block] = []
+
+    def flush() -> None:
+        if len(run) >= 2:
+            out.append(_make_group(run))
         else:
-            out.append(items[start])
-            i = start + 1
+            out.extend(run)
+        run.clear()
+
+    for block in blocks:
+        if block.type == "group":
+            flush()
+            out.append(block)
+            continue
+        if block.type == "greeting" and run:
+            flush()
+        run.append(block)
+        if len(run) >= 2 and _overflows(_make_group(run)):
+            last = run.pop()
+            flush()
+            run.append(last)
+    flush()
     return out
 
 
 def _group(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
-    """Draws the headline, the nested tiles and the closing line inside one card."""
+    """Draws every part in one card: headline, nested metric tiles, then the other blocks, 8 dots apart."""
     c = card.c
-    head, tail = s.get("head"), s["tail"]
-    if head is not None:
-        _greeting(card, head.slots, x0, x1)
-        c.y += 4
-    else:
-        card.ornament("header", x0, x1)
-    rows, _ = layout(s["metrics"], x0, x1, grouped=True)
-    for row in rows:
-        _draw_row(c, row)
-    DRAW[tail.type](card, tail.slots, x0, x1)
+    card.in_group = True
+    parts: list[Block] = list(s["parts"])
+    i = 0
+    first = True
+    while i < len(parts):
+        part = parts[i]
+        if not first:
+            c.y += 8
+        if part.type == "metric":
+            j = i
+            while j < len(parts) and parts[j].type == "metric":
+                j += 1
+            if first:
+                card.ornament("header", x0, x1)
+            rows, _ = layout(parts[i:j], x0, x1, grouped=True)
+            for row in rows:
+                _draw_row(c, row)
+            i = j
+        else:
+            DRAW[part.type](card, part.slots, x0, x1)
+            i += 1
+        first = False
 
 
 LAYOUTS = {**LAYOUT, "group": {"span": 3, "min_span": 3, "min_units": 2, "max_units": 18}}
 DRAW = {**RENDERERS, "group": _group}  # RENDERERS is the catalogue; a group is made by the layout, never sent
+
+
+SPILL = {"message": "paragraph", "alert": "paragraph", "fact": "paragraph"}
+
+
+def spill(blocks: Sequence[Block]) -> list[Block]:
+    """Text that is too long for one card continues on the next one, split between sentences: nothing is cut. The
+    continuation is titled CONT. and only the last card carries the signature and the action."""
+    out: list[Block] = []
+    for block in blocks:
+        key = SPILL.get(block.type)
+        if key is None or not block.slots.get(key) or not _overflows(block):
+            out.append(block)
+            continue
+        paras = [p for p in re.split(r"\n\s*\n", str(block.slots[key])) if p.strip()]
+        units: list[tuple[str, str]] = []  # (text, separator before it)
+        for pi, para in enumerate(paras):
+            for si, sentence in enumerate(re.split(r"(?<=[.!?])\s+", para.strip())):
+                for wi, chunk in enumerate(_hard_words(sentence)):
+                    units.append((chunk, "\n\n" if pi and not si and not wi else " "))
+        head_key = "label" if block.type == "alert" else "title"
+        tail_keys = ("from", "action", "tip")
+
+        def piece(text: str, first: bool, last: bool) -> Block:
+            slots = {k: v for k, v in block.slots.items() if last or k not in tail_keys}
+            slots[key] = text
+            if not first:
+                base = str(block.slots.get(head_key) or "")
+                slots[head_key] = f"{base} CONT." if 0 < len(base) <= 8 else "CONT."  # a long title is not repeated
+                slots["_cont"] = True
+            return Block(block.type, slots, mood=block.mood, span=block.span)
+
+        text, pieces = "", []
+        for chunk, sep in units:
+            trial = f"{text}{sep}{chunk}" if text else chunk
+            if text and _overflows(piece(trial, not pieces, False)):
+                pieces.append(text)
+                text = chunk
+            else:
+                text = trial
+        pieces.append(text)
+        out.extend(piece(t, i == 0, i == len(pieces) - 1) for i, t in enumerate(pieces))
+    return out
+
+
+def _hard_words(sentence: str, longest: int = 400) -> list[str]:
+    """A sentence longer than a card is cut between words, so it can still be placed."""
+    words, chunks, cur = sentence.split(), [], ""
+    for word in words:
+        if cur and len(cur) + 1 + len(word) > longest:
+            chunks.append(cur)
+            cur = word
+        else:
+            cur = f"{cur} {word}" if cur else word
+    return chunks + [cur] if cur else chunks
+
+
+def prepare(blocks: Sequence[Block]) -> list[Block]:
+    """What the printer draws from what was sent: headlines fused into titles, long text continued on the next
+    card, and blocks gathered into one card per strip."""
+    return group(spill(fuse(blocks)))
 
 
 def _place(block: Block, slots: dict[str, Any], x0: int, x1: int, col: int = 0, span: int = COLS) -> Placed:
@@ -831,7 +972,7 @@ def layout(blocks: Sequence[Block], left: int = OUTER_L, right: int = OUTER_R, g
     notes: list[str] = []
     row: list[Placed] = []
     used = 0
-    for block in (list(blocks) if grouped else group(fuse(blocks))):
+    for block in (list(blocks) if grouped else fuse(blocks)):
         validate(block)
         lay = LAYOUTS[block.type]
         span = block.span or lay["span"]
@@ -865,7 +1006,7 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
         c.y = top + PAD_V
         if p.block.type == "tip" or (p.block.type == "greeting" and not p.slots.get("summary")):
             c.y = top + max(PAD_V, (height - p.content_h) // 2)  # one line or one title: centred in its card
-        DRAW[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
+        _draw_block(card, p.block.type, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
         mood = p.block.mood
         c.round_box(p.x0, top, p.x1, top + height, RADIUS_BY_MOOD.get(mood, RADIUS), STROKE_BY_MOOD.get(mood, STROKE))
     c.y = top + row_units * UNIT_H
@@ -892,7 +1033,7 @@ def render_strip_with_notes(
         raise ValueError("a strip needs at least one block")
     if len(blocks) > MAX_BLOCKS:
         raise ValueError(f"a strip holds at most {MAX_BLOCKS} blocks")
-    rows, notes = layout(blocks)
+    rows, notes = layout(prepare(blocks))
     c = Canvas()
     c.y = margin_top
     for row in rows:

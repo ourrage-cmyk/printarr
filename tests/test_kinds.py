@@ -30,8 +30,13 @@ def stamped(monkeypatch):
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
 def test_each_kind_stamps_its_own_mark(kind, stamped):
-    strips.render_strip([Block(kind, KINDS[kind])])
+    strips.render_strip([Block(kind, KINDS[kind], mood="urgent" if kind == "alert" else "neutral")])
     assert strips.KIND_MARKS[kind] in stamped
+
+
+def test_a_soft_alert_does_not_wear_the_urgent_bolt(stamped):
+    strips.render_strip([Block("alert", KINDS["alert"], mood="gentle_warning")])
+    assert "bolt" not in stamped and "bell" in stamped
 
 
 def test_kind_marks_are_all_different():

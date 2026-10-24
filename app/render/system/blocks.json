@@ -226,7 +226,7 @@
       "header": "dottedWave",
       "divider": "tapeTicks",
       "footer": "dottedWave",
-      "icon": "star",
+      "icon": "bone",
       "accent": "outline",
       "sprite_set": "bright"
     },
@@ -234,7 +234,7 @@
       "header": "tapeTicks",
       "divider": "dashedRule",
       "footer": "tapeTicks",
-      "icon": "check",
+      "icon": "clock",
       "accent": "outline",
       "sprite_set": "neutral"
     },
@@ -242,7 +242,7 @@
       "header": "doubleHairline",
       "divider": "hairline",
       "footer": "hairline",
-      "icon": "box",
+      "icon": "thermo",
       "accent": "outline",
       "sprite_set": "neutral"
     },
@@ -274,7 +274,7 @@
       "header": "dottedWave",
       "divider": "dashedRule",
       "footer": "hairline",
-      "icon": "drop",
+      "icon": "cloud",
       "accent": "outline",
       "sprite_set": "alert"
     },

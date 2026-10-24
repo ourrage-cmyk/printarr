@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Sequence, Callable
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,6 +73,8 @@ def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
     data["created_at"] = _iso(data["created_at_ms"])
     data["updated_at"] = _iso(data["updated_at_ms"])
     data["printed_at"] = _iso(data["printed_at_ms"])
+    data["truncated"] = bool(data.get("truncated"))
+    data["notes"] = [n for n in str(data.pop("render_notes", "") or "").split("\n") if n]
     return data
 
 
@@ -123,6 +125,8 @@ class TicketStore:
         slots_json: str = "",
         delivery: str = "now",
         moods: str = "",
+        notes: Sequence[str] = (),
+        strip_count: int = 1,
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once.
 
@@ -145,14 +149,16 @@ class TicketStore:
                                      send_at_ms, next_attempt_ms, template_id, text_state,
                                      blocks_json, decorations, selection, created_at_ms, updated_at_ms,
                                      kind, tone, from_user, to_user, inbox_state, render_ms,
-                                     choice_source, model_scores, idempotency_key, slots_json, delivery, moods)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     choice_source, model_scores, idempotency_key, slots_json, delivery, moods,
+                                     truncated, strip_count, render_notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
                     choice_source or selection, model_scores, idempotency_key, slots_json, delivery, moods,
+                    1 if notes else 0, strip_count, "\n".join(notes),
                 ),
             )
             except sqlite3.IntegrityError:
