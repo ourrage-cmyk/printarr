@@ -955,6 +955,170 @@
         }
       }
     },
+    "/api/v1/setup/status": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Setup Status",
+        "description": "The wizard's starting values. Secrets are only reported as set or not set.",
+        "operationId": "setup_status_api_v1_setup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Setup Status Api V1 Setup Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/setup/check/{item}": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Setup Check",
+        "description": "Test one service with the values in the wizard. Nothing is saved.",
+        "operationId": "setup_check_api_v1_setup_check__item__post",
+        "parameters": [
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "home_assistant",
+                "model_server",
+                "printer",
+                "telegram",
+                "timezone"
+              ],
+              "type": "string",
+              "title": "Item"
+            }
+          },
+          {
+            "name": "x-setup-code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The setup code from the log.",
+              "title": "X-Setup-Code"
+            },
+            "description": "The setup code from the log."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupValues"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Setup Check Api V1 Setup Check  Item  Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Setup code is wrong"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/setup/complete": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Setup Complete",
+        "description": "Check every service that was filled in, then save everything and open the API.\n\nA failed check returns 422 with what to fix. Nothing is saved unless every check passes.",
+        "operationId": "setup_complete_api_v1_setup_complete_post",
+        "parameters": [
+          {
+            "name": "x-setup-code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The setup code from the log.",
+              "title": "X-Setup-Code"
+            },
+            "description": "The setup code from the log."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupValues"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Setup Complete Api V1 Setup Complete Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A check failed"
+          }
+        }
+      }
+    },
     "/api/v1/tickets/preview": {
       "post": {
         "tags": [
@@ -2140,6 +2304,108 @@
           "reachable"
         ],
         "title": "PrinterStatus"
+      },
+      "SetupValues": {
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Timezone",
+            "default": "Europe/London",
+            "examples": [
+              "Europe/London"
+            ]
+          },
+          "printer_host": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Printer Host",
+            "default": "",
+            "examples": [
+              "192.168.1.50"
+            ]
+          },
+          "printer_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Printer Port",
+            "default": 9100
+          },
+          "ha_url": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Ha Url",
+            "default": "",
+            "examples": [
+              "http://192.168.1.10:8123"
+            ]
+          },
+          "ha_token": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Ha Token",
+            "description": "Home Assistant long-lived access token. Stored, never returned.",
+            "default": ""
+          },
+          "llm_enabled": {
+            "type": "boolean",
+            "title": "Llm Enabled",
+            "default": true
+          },
+          "llm_base_url": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Llm Base Url",
+            "default": "",
+            "examples": [
+              "http://192.0.2.231:11434/v1"
+            ]
+          },
+          "llm_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Llm Model",
+            "default": "d1:latest"
+          },
+          "llm_text_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Llm Text Model",
+            "default": "granite4.2:3b"
+          },
+          "telegram_token": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Telegram Token",
+            "description": "Telegram bot token. Stored, never returned.",
+            "default": ""
+          },
+          "telegram_chat_id": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Telegram Chat Id",
+            "default": ""
+          },
+          "yannic_name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Yannic Name",
+            "default": "Yannic"
+          },
+          "wife_name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Wife Name",
+            "default": "Allyson"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SetupValues",
+        "description": "Everything the wizard collects. Blank secrets and URLs mean \"not used\"."
       },
       "SlotTicketCreate": {
         "properties": {
