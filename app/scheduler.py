@@ -12,7 +12,7 @@ from collections.abc import Callable
 from app.alerts import Notifier
 from app.blocks import parse_blocks, unavailable_lines
 from app.config import Settings
-from app.escpos import encode
+from app.escpos import CUT_FEED, encode
 from app.escpos_image import payload_to_png
 from app.ha import HAError, client_from_store
 from app.metrics import Metrics
@@ -307,7 +307,7 @@ class Scheduler:
             parts: list[list[Line]] = []
             try:
                 parts = [self._ticket_lines(ticket) for ticket in tickets]
-                self.transport.send(encode(self._strip_lines(parts), feed=1, raster_mode=self.settings.raster_mode))
+                self.transport.send(encode(self._strip_lines(parts), feed=CUT_FEED, raster_mode=self.settings.raster_mode))
             except Exception as exc:
                 self.store.unclaim(won)
                 # Each ticket in the failed strip keeps its own image, drawn as its own ticket.
