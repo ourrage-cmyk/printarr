@@ -48,7 +48,7 @@ class MetricRow(_Strict):
     @model_validator(mode="after")
     def _has_value(self) -> MetricRow:
         if self.value is None and self.entity_id is None:
-            raise ValueError("give a value or an entity_id")
+            raise ValueError("send a value (a number or text) or an entity_id (a Home Assistant entity, such as sensor.steps)")
         return self
 
 
@@ -170,11 +170,16 @@ def block_schema(name: str) -> dict[str, Any]:
     }
 
 
+def plain_message(message: str) -> str:
+    """A validation message without Pydantic's wording."""
+    return message.removeprefix("Value error, ")
+
+
 def _slot_problems(where: str, exc: ValidationError) -> list[dict[str, str]]:
     problems = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error["loc"]) or "slots"
-        problems.append({"slot": f"{where}.slots.{location}", "problem": error["msg"]})
+        problems.append({"slot": f"{where}.slots.{location}", "problem": plain_message(error["msg"])})
     return problems
 
 
