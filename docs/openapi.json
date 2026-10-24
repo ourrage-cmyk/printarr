@@ -1899,6 +1899,51 @@
         }
       }
     },
+    "/api/v1/prints/{code}": {
+      "get": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Find Print",
+        "description": "Look up a piece of paper by the code printed under its cut (4 to 32 hex characters).\n\nReturns the print time, the image of the piece and every ticket on it, so you can name the exact ticket.",
+        "operationId": "find_print_api_v1_prints__code__get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Find Print Api V1 Prints  Code  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/printer": {
       "get": {
         "tags": [
@@ -3470,6 +3515,12 @@
               }
             ],
             "title": "Strip Trigger"
+          },
+          "print_code": {
+            "type": "string",
+            "title": "Print Code",
+            "description": "The short code printed under the cut, with the print time. GET /api/v1/prints/{code} finds the piece.",
+            "default": ""
           },
           "moods": {
             "type": "string",
