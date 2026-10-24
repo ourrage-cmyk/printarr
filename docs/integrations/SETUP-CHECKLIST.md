@@ -24,7 +24,7 @@ Plain steps, in the order to do them. Each step says who does it. Most of it is 
 - [ ] Yannic: in Home Assistant, search for each `# CONFIRM` line in `automations.yaml`. Replace these with your real names:
   - `binary_sensor.yannic_pixel_is_charging` and `binary_sensor.allyson_pixel_is_charging` (phone charging)
   - `device_tracker.yannic_phone` and `device_tracker.allyson_phone` (home presence)
-- [ ] Yannic: do the same for Allyson's phone entities.
+- [ ] Yannic: do the same for the second person's phone entities.
 
 ## 5. Turn the automations on
 
@@ -35,12 +35,12 @@ Plain steps, in the order to do them. Each step says who does it. Most of it is 
 ## 6. Hermes
 
 - [ ] Yannic: give Hermes the file `docs/integrations/hermes/openapi.yaml` as its tool definition, and `SKILL.md` as its instructions.
-- [ ] Yannic: ask Hermes for a test note to Allyson. It should wait for her strip, not print now.
+- [ ] Yannic: ask Hermes for a test note to the second person. It should wait for her strip, not print now.
 
 ## 7. Things Yannic decides
 
 - [ ] Which metrics appear on the briefing (Hermes chooses, you can override).
-- [ ] Whether Allyson's strip uses the same tone defaults.
+- [ ] Whether the second person's strip uses the same tone defaults.
 - [ ] Whether the printer should cut after each strip (the default) or once per day.
 
 ## If something goes wrong

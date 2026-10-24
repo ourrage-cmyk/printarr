@@ -126,7 +126,7 @@ To diagnose a ticket that looks wrong: find its id in the log or the ticket list
 - 502 means Telegram did not accept the message. The reply never includes the bot token, and the log records only the kind of error.
 
 ```
-curl -sS -X POST http://192.168.1.231:30100/api/v1/notify \
+curl -sS -X POST http://192.0.2.231:30100/api/v1/notify \
   -H 'Content-Type: application/json' \
   -d '{"text": "Please restart printarr onto build 79 so the next test can run."}'
 ```

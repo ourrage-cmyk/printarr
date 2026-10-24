@@ -349,7 +349,7 @@ class TicketCreate(BaseModel):
 
 class ModelSettings(BaseModel):
     enabled: bool
-    base_url: str = Field(description="OpenAI-compatible base URL, for example http://192.168.1.231:11434/v1. Empty means rules only.")
+    base_url: str = Field(description="OpenAI-compatible base URL, for example http://192.0.2.231:11434/v1. Empty means rules only.")
     model: str = Field(description="Decision model: picks templates and decorations. For example d1:latest.")
     text_model: str = Field(description="Text model for paragraphs, used later. For example granite4.2:3b.")
     timeout: float = Field(ge=1, le=60)

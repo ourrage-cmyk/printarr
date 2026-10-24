@@ -54,7 +54,7 @@ class SetupValues(BaseModel):
     ha_url: str = Field(default="", max_length=300, examples=["http://192.168.1.10:8123"])
     ha_token: str = Field(default="", max_length=500, description="Home Assistant long-lived access token. Stored, never returned.")
     llm_enabled: bool = True
-    llm_base_url: str = Field(default="", max_length=300, examples=["http://192.168.1.231:11434/v1"])
+    llm_base_url: str = Field(default="", max_length=300, examples=["http://192.0.2.231:11434/v1"])
     llm_model: str = Field(default="d1:latest", max_length=120)
     llm_text_model: str = Field(default="granite4.2:3b", max_length=120)
     telegram_token: str = Field(default="", max_length=200, description="Telegram bot token. Stored, never returned.")

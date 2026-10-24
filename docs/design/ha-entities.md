@@ -21,9 +21,9 @@ Entity IDs, units and notes from a read-only snapshot (2026-10-24). Live values 
 | binary_sensor.yannic_pixel_is_charging | on/off | Unplug trigger. History: yes. |
 | sensor.yannic_pixel_do_not_disturb_sensor | state | Presence context. |
 
-Missing: there is no HRV entity with a `_2` suffix for Yannic. The `garmin_connect_hrv_*_2` entities belong to Allyson.
+Missing: there is no HRV entity with a `_2` suffix for Yannic. The `garmin_connect_hrv_*_2` entities belong to the second person.
 
-## Allyson (Garmin and Pixel)
+## the second person (Garmin and Pixel)
 
 | Entity | Unit | Note |
 |---|---|---|

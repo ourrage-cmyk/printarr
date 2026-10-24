@@ -17,7 +17,7 @@ Reference renders: `receipt-lab/renders5/B5-001.png` to `B5-029.png`. Source: `r
 ## Templates (29 mockups)
 | Family | Tone | Variants | Content |
 |---|---|---|---|
-| morning | neutral | 3 | Battery and sleep tiles for Yannic and Allyson, steps, energy now and next, inside and outside, outdoor 24-hour line graph, dogs, calendar (optional) |
+| morning | neutral | 3 | Battery and sleep tiles for Yannic and the second person, steps, energy now and next, inside and outside, outdoor 24-hour line graph, dogs, calendar (optional) |
 | evening | neutral | 3 | Hello, dogs today, daily summary, missed messages from the other person |
 | personal, loving | loving | 2 | Heart header, dotted wave divider, sign-off |
 | personal, neutral | neutral | 2 | Hairline header, plain text, sign-off |
@@ -43,7 +43,7 @@ Reference renders: `receipt-lab/renders5/B5-001.png` to `B5-029.png`. Source: `r
 | urgent | barcode | perforation | barcode | warn, bolt | is_urgent |
 
 ## d1 decision questions
-The d1 model is called at `POST http://192.168.1.231:11434/v1/systemone` (see `receipt-lab/notes/d1-model-api.md`). Each question is a 0 to 1 likelihood. For each message, ask all of these in one call, then pick the tone with the highest score above a threshold of 0.5, and fall back to `neutral` when none is above it:
+The d1 model is called at `POST http://192.0.2.231:11434/v1/systemone` (see `receipt-lab/notes/d1-model-api.md`). Each question is a 0 to 1 likelihood. For each message, ask all of these in one call, then pick the tone with the highest score above a threshold of 0.5, and fall back to `neutral` when none is above it:
 
 - is_loving: "Does the message express love or warm affection?"
 - is_positive: "Is the message positive or grateful?"
