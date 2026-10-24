@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.render.canvas import Bitmap, Canvas, js_round, text_width
+from app.render.canvas import Bitmap, Canvas, js_round, solid_width, text_width
 from app.render.system import ornament
 
 CATALOGUE: dict[str, Any] = json.loads((Path(__file__).parent / "system" / "blocks.json").read_text())
@@ -63,7 +63,7 @@ LAYOUT: dict[str, dict[str, int]] = {
     "message": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 16},
     "alert": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
     "checklist": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 10},
-    "tip": {"span": 3, "min_span": 2, "min_units": 1, "max_units": 2},
+    "tip": {"span": 3, "min_span": 2, "min_units": 1, "max_units": 4},
     "fact": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
 }
 
@@ -383,6 +383,12 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += 4
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + 36, series)
         c.y += 36 + 4
+        _time_axis(c, x0, x1, _span(s))
+
+
+def _span(s: Mapping[str, Any]) -> str:
+    """The time span a chart covers, upper case. A chart with no span says 24H."""
+    return str(s.get("range") or "24H").strip().upper()
 
 
 def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -396,17 +402,30 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         c.y += ROW
 
 
+AXIS_CAP = 14  # chart labels: the smallest full-line size, so they stay quiet under the line
+
+
+def _time_axis(c: Canvas, x0: int, x1: int, span: str) -> None:
+    """Under a chart: the time span it covers on the left and NOW on the right, so the line has a range."""
+    c.solid(x0, c.y, span, AXIS_CAP)
+    c.solid(x1 - solid_width("NOW", AXIS_CAP), c.y, "NOW", AXIS_CAP)
+    c.y += AXIS_CAP + 8
+
+
 def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     _heading(c, x0, _label(s.get("title", "")))
     series = list(s.get("series", []))
     if len(series) > 1:
+        unit = f" {s['unit']}" if s.get("unit") else ""
+        # Low and high are labelled above the plot, so the scale reads without a y axis.
+        c.solid(x0, c.y, f"HIGH {max(series):.1f}{unit}", AXIS_CAP)
+        c.solid(x1 - solid_width(f"LOW {min(series):.1f}{unit}", AXIS_CAP), c.y, f"LOW {min(series):.1f}{unit}", AXIS_CAP)
+        c.y += AXIS_CAP + 6
         plot = max(36, card.plot_h)
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
-        c.y += plot + 16
-        unit = f" {s['unit']}" if s.get("unit") else ""
-        c.solid(x0, c.y, f"{min(series):.1f}  ..  {series[-1]:.1f}{unit}", 21)
-        c.y += 22
+        c.y += plot + 6
+        _time_axis(c, x0, x1, _span(s))
 
 
 def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -415,7 +434,7 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
-        c.row_solid(x0 + 28, x1, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", 21)
+        c.row_solid(x0 + 28, x1 - 10, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", 21)
         c.y += ROW
         c.solid(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", 21)
         c.y += ROW
@@ -638,7 +657,7 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
     height = row_units * UNIT_H - GAP_V
     for p in row:
         # A graph takes the spare height of its card: the card height less padding, heading and footer.
-        card = Card(c, p.block.mood, plot_h=max(36, height - 2 * PAD_V - 60))
+        card = Card(c, p.block.mood, plot_h=max(36, height - 2 * PAD_V - 80))
         c.y = top + PAD_V
         RENDERERS[p.block.type](card, p.slots, p.x0 + PAD_H, p.x1 - PAD_H)
         c.round_box(p.x0, top, p.x1, top + height, RADIUS, STROKE)
