@@ -49,7 +49,7 @@ POST /api/v1/tickets
 
 ### A message held for a person's release
 
-Use `delivery: "on_release"`. The ticket waits in that person's pile until `POST /api/v1/people/{person}/release` is called with a `trigger` of `morning`, `evening`, `arrival` or `request`. The pile prints as one strip per person.
+Use `delivery: "on_release"`. The ticket waits in that person's pile until `POST /api/v1/people/{person}/release` is called with a `trigger` of `morning`, `evening`, `arrival` or `request`. The pile prints as one piece of paper per person, cut once at the end: the ticket with a greeting (the briefing) goes on top, the rest follow in the order they were queued, one card gap apart and no cut margin between them. A second ticket with a greeting starts a new strip, and a strip holds up to 12 tickets.
 
 ### A scheduled message
 
@@ -68,7 +68,7 @@ Writing tickets, for agents:
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
 
-`POST /api/v1/tickets/compose` takes `recipient` and `blocks`, an ordered list of `{type, mood, span, slots}`. Up to 16 blocks. A greeting always starts a new strip, and a strip holds at most five blocks. `span` is 1 to 3 columns, defaulting to the type's own span. `mood` is one of the listed moods, or `auto`.
+`POST /api/v1/tickets/compose` takes `recipient` and `blocks`, an ordered list of `{type, mood, span, slots}`. Up to 16 blocks. A strip is cut by height (about 1100 dots of cards), not by block count. `span` is 1 to 3 columns, defaulting to the type's own span. `mood` is one of the listed moods, or `auto`.
 
 ```json
 {
