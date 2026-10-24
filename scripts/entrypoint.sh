@@ -1,5 +1,5 @@
 #!/bin/sh
-# Start printarr. Runs as the non-root user; tini (PID 1) forwards signals to this process.
+# Start printarr. Runs as uid 568 (TrueNAS's app user); tini (PID 1) forwards signals to this process.
 set -eu
 
 data_dir=$(dirname "${PRINTARR_DB_PATH:-/data/printarr.db}")
@@ -7,7 +7,7 @@ output_dir="${PRINTARR_OUTPUT_DIR:-/data/output}"
 
 if [ ! -d "$data_dir" ] || [ ! -w "$data_dir" ]; then
     echo "printarr: data folder $data_dir is not writable by uid $(id -u)." >&2
-    echo "printarr: on the host, make the folder owned by uid 1000 (chown -R 1000:1000)." >&2
+    echo "printarr: on the host, make the folder owned by uid 568 (chown -R 568:568)." >&2
     exit 1
 fi
 mkdir -p "$output_dir" "$data_dir/backups"

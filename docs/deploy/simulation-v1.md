@@ -40,15 +40,11 @@ accepts it. Leave this window open for the whole run.
 
 ## 3. Server: start printarr pointed at the laptop
 
-Use [`docker-compose.yml`](../../docker-compose.yml) (the TrueNAS file) or a local compose file.
-Change these lines only:
+Use [`docker-compose.yml`](../../docker-compose.yml) (the TrueNAS file) as it is. The YAML has no
+settings. In the setup wizard at `http://SERVER_IP:8000/` (or `/setup` later), set:
 
-```yaml
-PRINTARR_PRINTER_MODE: tcp
-PRINTARR_PRINTER_HOST: LAPTOP_IP       # the laptop running the simulator
-PRINTARR_PRINTER_PORT: "9100"
-PRINTARR_LLM_ENABLED: "off"            # no decision model during the simulation
-```
+- Printer IP address: `LAPTOP_IP` (the laptop running the simulator), port `9100`.
+- Model server: switched off, so the fixed rules pick templates during the simulation.
 
 Start it, then check the link:
 
@@ -59,7 +55,7 @@ curl -s -X POST http://SERVER_IP:8000/api/v1/printer/test
 ```
 
 The second call should print a test receipt on the laptop simulator. If it returns 502, the
-laptop firewall or `PRINTARR_PRINTER_HOST` is the problem.
+laptop firewall or the printer address in the wizard is the problem.
 
 ## 4. Server: point printarr at the fake Home Assistant
 
@@ -112,14 +108,15 @@ and run again. `--allow-existing` skips the check.
   place as step 4). Do not put them in a compose file or in this repo.
 - Restart printarr on a fresh database before the real printer arrives, or keep the database
   if you want the simulation history in the log.
-- Switch `PRINTARR_PRINTER_HOST` to the real printer's address and restart the service.
-  Run `curl -X POST http://SERVER_IP:8000/api/v1/printer/test` and check the paper.
+- Open `http://SERVER_IP:8000/setup`, enter the setup code from the latest log line, change the
+  printer IP address to the real printer's address, press Test, then Save settings. No restart is
+  needed. Run `curl -X POST http://SERVER_IP:8000/api/v1/printer/test` and check the paper.
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| `printer/test` returns 502 | Laptop simulator running, port 9100 open on the laptop firewall, `PRINTARR_PRINTER_HOST` is the laptop's address |
+| `printer/test` returns 502 | Laptop simulator running, port 9100 open on the laptop firewall, the printer address in the wizard is the laptop's address |
 | Entity values show "data unavailable" | Fake HA running and reachable from the server (`curl http://LAPTOP_IP:8123/api/` with the simulation token), URL and token in the settings page |
 | Harness says `printarr is not answering` | The `--api` address; from the laptop use the server's LAN address, not `localhost` |
 | Harness says the piles are not empty | Restart printarr on a fresh database, see step 5 |

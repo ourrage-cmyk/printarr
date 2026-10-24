@@ -61,6 +61,10 @@ class SetupValues(BaseModel):
     telegram_chat_id: str = Field(default="", max_length=50)
     yannic_name: str = Field(default="Yannic", min_length=1, max_length=40)
     wife_name: str = Field(default="Allyson", min_length=1, max_length=40)
+    clear: list[Literal["ha_token", "telegram_token"]] = Field(
+        default_factory=list,
+        description="Secrets to remove. A blank secret keeps the saved one, so use this to clear it.",
+    )
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,17 @@ SAVED_KEYS: dict[str, str] = {
     "wife_name": "recipient_name_wife",
 }
 SECRET_FIELDS = ("ha_token", "telegram_token")
+
+
+def fill_secrets(values: SetupValues, store) -> SetupValues:
+    """Keep a saved secret when its box is blank, unless it is listed in `clear`."""
+    update: dict[str, str] = {}
+    for field in SECRET_FIELDS:
+        if field in values.clear:
+            update[field] = ""
+        elif not getattr(values, field):
+            update[field] = store.get_setting(SAVED_KEYS[field]) or ""
+    return values.model_copy(update=update) if update else values
 
 
 def save_values(store, values: SetupValues) -> None:

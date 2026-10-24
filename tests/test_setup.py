@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -110,8 +111,10 @@ def test_completion_opens_the_api_and_hides_secrets(wizard, monkeypatch):
         assert client.get("/api/v1/tickets").status_code == 200
         assert "Printarr" in client.get("/").text and "Set up printarr" not in client.get("/").text
 
-        again = client.post("/api/v1/setup/complete", json=form(), headers=headers)
-        assert again.status_code == 409
+        # After setup the same code still opens /setup, so settings can be changed later.
+        assert client.get("/setup").status_code == 200
+        wrong = client.post("/api/v1/setup/complete", json=form(), headers={"X-Setup-Code": "guess"})
+        assert wrong.status_code == 401
 
         everything = " ".join(
             [
@@ -182,3 +185,89 @@ def test_model_server_check_needs_both_models(monkeypatch):
     monkeypatch.setattr(setup_flow.urllib.request, "urlopen", lambda url, timeout: Reply())
     result = setup_flow.check_model_server("http://ollama:11434/v1", ["d1:latest", "granite4.2:3b"])
     assert result.ok is False and "granite4.2:3b" in result.detail
+
+
+def test_settings_can_be_changed_after_setup(wizard, monkeypatch):
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(), headers=headers)
+        # A blank token keeps the saved one; the printer moves to the real device.
+        changed = client.post(
+            "/api/v1/setup/complete",
+            json=form(printer_host="192.168.1.77", ha_token=""),
+            headers=headers,
+        )
+        assert changed.status_code == 200
+        store = TicketStore(wizard.db_path)
+        assert store.get_setting("printer_host") == "192.168.1.77"
+        assert store.get_setting("ha_token") == SECRET
+
+
+def test_clear_removes_a_saved_secret(wizard, monkeypatch):
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(), headers=headers)
+        client.post(
+            "/api/v1/setup/complete",
+            json=form(ha_url="", ha_token="", clear=["ha_token"]),
+            headers=headers,
+        )
+        assert TicketStore(wizard.db_path).get_setting("ha_token") == ""
+
+
+def test_fill_secrets_keeps_saved_values_only_when_blank(wizard):
+    store = TicketStore(wizard.db_path)
+    store.init()
+    store.set_setting("ha_token", SECRET)
+    kept = setup_flow.fill_secrets(SetupValues(ha_token=""), store)
+    assert kept.ha_token == SECRET
+    replaced = setup_flow.fill_secrets(SetupValues(ha_token="new-token"), store)
+    assert replaced.ha_token == "new-token"
+
+
+def test_compose_files_hold_no_settings():
+    """The YAML is image, memory, CPUs, ports and storage only. Settings belong to the wizard."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    for name in ("docker-compose.yml", "docker-compose.dev.yml"):
+        text = (root / name).read_text()
+        assert "environment:" not in text, name
+        assert "PRINTARR_" not in text, name
+
+
+def test_recreated_container_on_the_same_folder_comes_back_configured(wizard, monkeypatch):
+    """The data folder is the whole state: a new process on it needs no wizard and keeps the secrets."""
+    all_ok(monkeypatch)
+    app = create_app(wizard)
+    with TestClient(app) as client:
+        headers = {"X-Setup-Code": app.state.setup_code}
+        client.post("/api/v1/setup/complete", json=form(printer_host="10.0.0.9"), headers=headers)
+
+    data_dir = Path(wizard.db_path).parent
+    assert {p.name for p in data_dir.iterdir()} >= {"printarr.db"}
+    assert all(p.is_relative_to(data_dir) for p in data_dir.rglob("*"))
+
+    # A brand-new app on the same folder, with the environment left empty, as after a rebuild.
+    recreated = stored_overrides(replace(wizard, printer_host="", llm_base_url=""))
+    assert recreated.printer_host == "10.0.0.9"
+    app2 = create_app(recreated)
+    with TestClient(app2) as client:
+        status = client.get("/api/v1/setup/status").json()
+        assert status["complete"] is True
+        assert status["secrets"]["ha_token"] == "set"
+        assert client.get("/api/v1/tickets").status_code == 200
+        assert client.get("/").text.find("Set up printarr") == -1
+    assert TicketStore(wizard.db_path).get_setting("ha_token") == SECRET
+
+
+def test_image_and_compose_run_as_the_truenas_app_user():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    assert "USER 568:568" in (root / "Dockerfile").read_text()
+    assert 'user: "568:568"' in (root / "docker-compose.yml").read_text()

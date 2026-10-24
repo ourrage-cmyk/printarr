@@ -1,38 +1,22 @@
 # Printarr for TrueNAS. Apps > Install Custom App > paste this whole file.
 #
 # Change the line marked "<- change" if you need a different data folder. Then open the app's Logs,
-# copy the setup code, and finish the setup wizard in the web page. See docs/deploy/truenas.md.
+# copy the setup code, and finish the setup wizard at http://<nas-ip>:8000/ (docs/deploy/truenas.md).
 #
-# No secrets go in this file. The Home Assistant and Telegram tokens are typed into the wizard and
-# stored in the data folder. The environment values below are only starting defaults for the
-# wizard; once setup is finished, the saved values win.
-# Everything printarr saves (tickets, settings, the decision model setup, backups) lives in the
-# data folder below, so an upgrade or a rebuild of the app keeps it.
+# This file holds only the image, memory, CPUs, ports and storage. Everything else (printer, Home
+# Assistant, model server, Telegram, names, timezone) is set in the wizard and saved in the data folder.
+# Secrets never go in this file.
 services:
   printarr:
     image: ghcr.io/ourrage-cmyk/printarr:latest   # pin to a sha-... tag to stay on one build
+    user: "568:568"                               # TrueNAS's app user; the data folder must be owned by 568
     restart: unless-stopped
     stop_grace_period: 30s                        # time allowed to finish a print on shutdown
     mem_limit: 512m
     cpus: 1.0
     ports:
       - "8000:8000"                               # web page and API at http://<nas-ip>:8000/
-    environment:
-      PRINTARR_TIMEZONE: Europe/London
-      PRINTARR_PRINTER_MODE: tcp
-      PRINTARR_PRINTER_HOST: 192.168.1.50         # default for the wizard; the wizard saves the real one
-      PRINTARR_PRINTER_PORT: "9100"
-      PRINTARR_PAPER_WIDTH: "42"
-      # Decision model (Ollama on the LAN). Starting defaults for the wizard. The wizard saves the
-      # real values in the data folder. Set LLM_ENABLED to "off" to use the fixed rules only.
-      PRINTARR_LLM_ENABLED: "on"
-      PRINTARR_LLM_BASE_URL: http://192.0.2.231:11434/v1
-      PRINTARR_LLM_MODEL: d1:latest
-      PRINTARR_LLM_TEXT_MODEL: granite4.2:3b
-      # Nightly backup into <data folder>/backups, at this local hour, keeping this many copies.
-      PRINTARR_BACKUP_HOUR: "3"
-      PRINTARR_BACKUP_KEEP: "7"
     volumes:
-      # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 1000
-      # (chown 1000:1000 /mnt/ssd/apps/printarr). The app refuses to start otherwise, and says so in the logs.
-      - /mnt/ssd/apps/printarr:/data
+      # <- change if needed: a folder on your SSD dataset. Create it first, owned by uid 568
+      # (chown -R 568:568 /mnt/pool/printarr). The app refuses to start otherwise, and says so in the logs.
+      - /mnt/pool/printarr:/data
