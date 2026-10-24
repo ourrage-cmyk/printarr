@@ -33,7 +33,16 @@ def _u16(value: int) -> bytes:
     return bytes([value & 0xFF, value >> 8])
 
 
+MAX_BAND_ROWS = 1000  # a GS ( L block holds at most 65535 bytes: a 64-byte row allows 1023 rows, so a tall picture goes in bands
+
+
 def _raster(width_bytes: int, height: int, data: bytes, mode: str) -> bytes:
+    if height > MAX_BAND_ROWS:
+        out = b""
+        for top in range(0, height, MAX_BAND_ROWS):
+            rows = min(MAX_BAND_ROWS, height - top)
+            out += _raster(width_bytes, rows, data[top * width_bytes:(top + rows) * width_bytes], mode)
+        return out
     if mode == RASTER_GS_V0:
         return GS + b"v0\x00" + _u16(width_bytes) + _u16(height) + data
     # GS ( L pL pH 48 112 a bx by c xL xH yL yH d...: monochrome, 1x scale, colour 49.
