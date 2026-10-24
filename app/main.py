@@ -24,7 +24,8 @@ from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
 from app.printer import PrinterError, Transport, build_transport
-from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines
+from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
+from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks
 from app.ha import HAClient, HAError
 from app.scheduler import Scheduler, SchedulerThread
@@ -456,6 +457,8 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             message=message,
             sent_at=datetime.fromtimestamp(_resolve_send_at(body.send_at, settings.tzinfo) / 1000, tz=settings.tzinfo),
         )
+        if choice.template.design:
+            return to_text([design_line(choice.template.design, message, home_assistant())[0]], width)
         lines = render_lines(receipt, width, choice.template, choice.decorations, extra)
         return to_text(lines, width)
 
@@ -498,7 +501,11 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 message=message,
                 sent_at=datetime.now(settings.tzinfo),
             )
-            encode(render_lines(receipt, width, choice.template, choice.decorations), raster_mode=settings.raster_mode)
+            if choice.template.design:
+                lines = [placeholder_line(choice.template.design, message)]
+            else:
+                lines = render_lines(receipt, width, choice.template, choice.decorations)
+            encode(lines, feed=choice.template.feed, raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
@@ -672,6 +679,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         ticket = ticket_or_404(ticket_id)
         data = encode(
             render_ticket_lines(ticket, settings.tzinfo, width, scheduler.live_lines(ticket)),
+            feed=ticket_feed(ticket),
             raster_mode=settings.raster_mode,
         )
         return Response(content=data, media_type="application/octet-stream")
