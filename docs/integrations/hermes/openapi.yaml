@@ -35,7 +35,7 @@ paths:
   /tickets/slots:
     post:
       operationId: createSlotTicket
-      summary: "[live] Queue a briefing or note from typed slots. Bad slots return 422 with each problem."
+      summary: "[live] Queue a briefing or note from typed slots. Supports hold, hold_key, idempotency_key and blocks. Bad slots return 422 with each problem."
       requestBody:
         required: true
         content:
@@ -194,7 +194,11 @@ components:
         from_user: { $ref: "#/components/schemas/Recipient" }
         to_user: { $ref: "#/components/schemas/Recipient" }
         sender: { type: string, maxLength: 40, description: "Use hermes." }
-        send_at: { type: string, format: date-time, description: "Local time without offset uses the server timezone. Omit to print when queued." }
+        send_at: { type: string, format: date-time, description: "Local time without offset uses the server timezone. Omit to print when queued. Cannot be combined with hold." }
+        hold: { type: boolean, default: false }
+        hold_key: { type: string, maxLength: 40 }
+        idempotency_key: { type: string, maxLength: 120 }
+        blocks: { type: array, maxItems: 8, items: { type: object }, description: "Home Assistant values read at print time." }
     TicketCreate:
       type: object
       required: [recipient, message]
