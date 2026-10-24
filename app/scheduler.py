@@ -41,6 +41,19 @@ class ReleaseIncomplete(PrinterError):
         self.strips = strips
 
 
+def opens_strip(ticket: dict) -> bool:
+    """A greeting always starts a new strip: a briefing (template 101) or a composed ticket whose first block is a greeting."""
+    if int(ticket.get("template_id") or 0) == 101:
+        return True
+    if int(ticket.get("template_id") or 0) == 103:
+        try:
+            blocks = json.loads(ticket.get("slots_json") or "{}").get("blocks", [])
+        except ValueError:
+            return False
+        return bool(blocks) and blocks[0].get("type") == "greeting"
+    return False
+
+
 class Scheduler:
     def __init__(
         self,
@@ -221,10 +234,8 @@ class Scheduler:
         strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
         pile = self.store.pile(person)
-        size = max(1, self.settings.strip_max_blocks)
         strips: list[dict] = []
-        for start in range(0, len(pile), size):
-            chunk = pile[start : start + size]
+        for chunk in self._strip_chunks(pile):
             won = self.store.claim([ticket["id"] for ticket in chunk])
             if not won:
                 continue
@@ -241,6 +252,20 @@ class Scheduler:
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
             strips.append({"strip_id": strip_id, "ticket_ids": won})
         return strips
+
+    def _strip_chunks(self, pile: list[dict]) -> list[list[dict]]:
+        """Splits a pile into strips: at most strip_max_blocks tickets, and a greeting starts a new strip."""
+        size = max(1, self.settings.strip_max_blocks)
+        chunks: list[list[dict]] = []
+        current: list[dict] = []
+        for ticket in pile:
+            if current and (len(current) >= size or opens_strip(ticket)):
+                chunks.append(current)
+                current = []
+            current.append(ticket)
+        if current:
+            chunks.append(current)
+        return chunks
 
     def _strip_lines(self, tickets: list[dict]) -> list[Line]:
         """The tickets one after another, with a blank margin at the top and bottom of the strip."""
