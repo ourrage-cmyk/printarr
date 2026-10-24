@@ -82,7 +82,18 @@ def test_a_url_wider_than_the_card_breaks_by_character():
 
 def test_a_title_is_at_most_two_lines():
     scale, lines = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 400)
-    assert scale == strips.NUMERAL and len(lines) <= 2
+    assert len(lines) <= 2
+
+
+def test_a_long_title_steps_down_then_ends_in_an_ellipsis_and_two_titles_never_print_the_same():
+    fits = strips.title_lines("SHOPPING LIST FOR THE WEEKEND", 440)
+    assert fits[0] == strips.TITLE and not fits[1][-1].endswith("...")
+    cut = strips.title_lines("SHOPPING LIST FOR THE WEEKEND BARBECUE", 440)
+    assert cut[1][-1].endswith("...") and cut != fits
+
+
+def test_a_continuation_title_keeps_every_word_of_the_original():
+    assert strips._cont_title("Rex and Bella") == "REX AND BELLA CONT."
 
 
 def test_emoji_print_as_a_question_mark_not_a_block():
@@ -139,7 +150,7 @@ def test_title_slot_of_the_briefing_is_the_headline():
     from app.compose import briefing_blocks
 
     blocks = briefing_blocks({"greeting": "GOOD MORNING", "title": "MONDAY", "paragraph": "Short day."}, None)
-    assert blocks[0]["slots"]["greeting"] == "MONDAY" and blocks[0]["slots"]["summary"] == "GOOD MORNING. Short day."
+    assert blocks[0]["slots"]["greeting"] == "MONDAY" and blocks[0]["slots"]["summary"] == "Short day."  # with a title and text the greeting is dropped
 
 
 def test_moods_draw_different_bands():

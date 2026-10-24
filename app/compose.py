@@ -49,6 +49,7 @@ class MetricRow(_Strict):
     value: int | float | str | None = Field(default=None, description="The number or text to print.")
     unit: str | None = Field(default=None, max_length=12)
     entity_id: str | None = Field(default=None, max_length=120, description="Home Assistant entity, read at print time.")
+    scope: str | None = Field(default=None, pattern="^(inside|outside)$", description="Where the reading is taken: inside or outside. Printed as IN or OUT after the label.")
 
     @model_validator(mode="after")
     def _has_value(self) -> MetricRow:
@@ -60,18 +61,19 @@ class MetricRow(_Strict):
 class MetricSlots(MetricRow):
     series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Sparkline, oldest first.")
     range: str | None = Field(default=None, max_length=8, description="The time the sparkline covers, such as 24H. Default 24H.")
-    scope: str | None = Field(default=None, pattern="^(inside|outside)$", description="Where the reading is taken: inside or outside. Printed as IN or OUT after the label.")
     as_of: str | None = Field(default=None, max_length=16, description="When the reading was taken, for example 08:15. Printed as AS OF 08:15.")
 
 
 class MetricRowsSlots(_Strict):
     title: str | None = Field(default=None, min_length=1, max_length=40)
+    as_of: str | None = Field(default=None, max_length=16, description="When the readings were taken, for example 08:15. Printed once under the rows as AS OF 08:15.")
     rows: list[MetricRow] = Field(min_length=1, max_length=6)
 
 
 class GreetingSlots(_Strict):
     greeting: str = Field(min_length=1, max_length=40, description="For example HELLO YANNIC.")
     summary: str | None = Field(default=None, min_length=1, max_length=200)
+    sign_off: str | None = Field(default=None, alias="from", min_length=1, max_length=20, description="Who the greeting is from. Printed at the bottom; a lone greeting takes the ticket's sender when this is omitted.")
 
 
 class GraphSlots(_Strict):
@@ -268,9 +270,15 @@ def fill_values(blocks: Sequence[Mapping[str, Any]], values: Mapping[str, str | 
     for block in blocks:
         slots = dict(block["slots"])
         if block["type"] == "metric":
+            live = slots.get("value") is None and bool(slots.get("entity_id"))
             slots = _filled_row(slots, values)
+            if live and not slots.get("as_of"):
+                slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")  # a live reading says when it was read
         if block["type"] == "metric_rows":
+            live = any(row.get("value") is None and row.get("entity_id") for row in slots.get("rows", []))
             slots["rows"] = [_filled_row(row, values) for row in slots.get("rows", [])]
+            if live and not slots.get("as_of"):
+                slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")
         filled.append({**block, "slots": slots})
     return filled
 
@@ -358,8 +366,8 @@ def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: s
     blocks: list[dict[str, Any]] = []
     head = slots.get("title") or slots.get("greeting")  # a title, when sent, is the headline; the greeting leads the text
     text = slots.get("paragraph")
-    if slots.get("title") and slots.get("greeting"):
-        text = f"{slots['greeting']}. {text}" if text else slots["greeting"]
+    if slots.get("title") and slots.get("greeting") and not text:
+        text = slots["greeting"]  # a title and a greeting with no text: the greeting is the subtitle; with text it is dropped
     if head or text:
         greeting: dict[str, Any] = {"greeting": head or "TODAY"}
         if text:
@@ -399,6 +407,14 @@ def note_card_lines(message: str, sender: str | None, title: str | None = None) 
     return note_card_render(message, sender, title)[0]
 
 
+def sign_blocks(blocks: Sequence[Mapping[str, Any]], sender: str | None) -> list[Mapping[str, Any]]:
+    """Signs the blocks that carry someone's words. A lone greeting is signed too: nothing else on the strip would."""
+    signed = [_signed(block, sender) for block in blocks]
+    if len(signed) == 1 and signed[0].get("type") == "greeting" and sender and not signed[0].get("slots", {}).get("from"):
+        signed[0] = {**signed[0], "slots": {**signed[0]["slots"], "from": sender}}
+    return signed
+
+
 def _signed(block: Mapping[str, Any], sender: str | None) -> Mapping[str, Any]:
     """A card that carries someone's words is never anonymous: an alert without a sign-off takes the ticket's sender."""
     if block.get("type") == "alert" and sender and not block.get("slots", {}).get("from"):
@@ -414,7 +430,7 @@ def ticket_lines(
 ) -> list[ReceiptLine]:
     """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
     if "blocks" in slots:
-        blocks = [_signed(block, sender) for block in slots["blocks"]]
+        blocks = sign_blocks(slots["blocks"], sender)
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
     elif template_id == BRIEFING or "metrics" in slots:

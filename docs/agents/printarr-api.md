@@ -63,7 +63,7 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 
 Writing tickets, for agents:
 - Say the headline once. Use `title` or the block's heading, and do not repeat it in the body text.
-- Greetings ("Good morning, ...") belong to briefings. A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
 - "Did you know" is only for a `fun` fact (the `fact` block, mood `playful`). Never use it on a reminder, a note or an alert.
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
@@ -170,3 +170,11 @@ The printer takes an 80 mm roll. The print width is 512 dots at 180 dpi, about 7
 - Voice intake (`POST /api/v1/intake`): deferred. The voice button is not being bought.
 - The decision model choosing block type and mood: `auto` resolves to `neutral` until it is built.
 - Shopping list intake: not built. The list lives in Home Assistant and Hermes sends it as a checklist ticket when it is asked for, or when Hermes schedules it.
+
+
+## Where scope and AS OF work
+
+- `metric`: `scope` ("inside" or "outside", printed as IN or OUT after the label) and `as_of` (printed as AS OF 08:15 under the chart).
+- `metric_rows`: `scope` on each row, and one `as_of` for the whole block.
+- Template 101 (briefing): the same two fields on each `metrics[]` entry.
+- A metric or row backed by an `entity_id` is stamped with the time it was read when `as_of` is not sent.
