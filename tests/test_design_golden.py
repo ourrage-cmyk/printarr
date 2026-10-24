@@ -6,8 +6,9 @@ from app.render.designs import SAMPLE_MORNING, morning_yannic
 GOLDEN = Path(__file__).parent / "golden" / "design"
 
 
-def test_morning_yannic_matches_the_node_reference_bit_for_bit():
-    # tests/golden/design/b4-014.bin comes from design-lab/scripts/golden_b4014.js.
+def test_morning_yannic_matches_the_golden_bitmap():
+    # tests/golden/design/b4-014.bin was regenerated when text moved to the 2 x 2 dot style (tokens).
+    # design-lab/scripts/golden_b4014.js is the solid-dot reference and no longer matches by design.
     bitmap = morning_yannic(SAMPLE_MORNING)
     expected = (GOLDEN / "b4-014.bin").read_bytes()
     assert bitmap.width == PAPER_DOTS == 512

@@ -45,10 +45,8 @@ def spacing(name: str) -> int:
 
 @lru_cache(maxsize=None)
 def ornament(piece_id: str) -> Mark:
-    """Load one piece as the ink pixels of a 1-bit PNG (black ink = 0 in the file)."""
-    asset = pieces()[piece_id]
-    if asset["type"] != "icon":
-        raise NotImplementedError(f"piece type {asset['type']!r} has no placement yet ({piece_id})")
+    """Load one piece (divider or icon) as the ink pixels of a 1-bit PNG (black ink = 0 in the file)."""
+    asset = pieces()[piece_id]  # dividers and icons alike: the Mark is the same kind of ink map
     with Image.open(DATA / asset["file"]) as image:
         image = image.convert("1")
         width, height = image.size

@@ -18,7 +18,7 @@ from app.ha import HAClient, HAError
 from app.receipt import Line as ReceiptLine
 from app.receipt import format_number
 from app.render import strips as R
-from app.slots import BRIEFING, NOTE, fetch_values, slot_lines
+from app.slots import BRIEFING, NOTE, fetch_values
 
 logger = logging.getLogger("printarr.compose")
 
@@ -384,7 +384,11 @@ def ticket_lines(
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
     elif template_id == BRIEFING or "metrics" in slots:
         blocks = briefing_blocks(slots, client)
+    elif "greeting" in slots:
+        blocks = [{"type": "greeting", "mood": "neutral", "span": 3, "slots": {k: slots[k] for k in ("greeting", "summary") if slots.get(k)}}]
+        if slots.get("tip"):
+            blocks.append({"type": "tip", "mood": "neutral", "span": 3, "slots": {"tip": str(slots["tip"])}})
     else:
-        return slot_lines(slots, fetch_values(slots, client))
+        blocks = message_blocks(str(slots.get("title") or "Printarr"), sender)
     lines, _ = compose_render(blocks, client)
     return lines
