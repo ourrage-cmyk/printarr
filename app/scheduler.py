@@ -123,7 +123,15 @@ class Scheduler:
             client = client_from_store(self.store)
         except HAError:
             client = None
-        return slot_lines(slots, fetch_values(slots, client))
+        lines = slot_lines(slots, fetch_values(slots, client))
+        blocks = parse_blocks(ticket.get("blocks_json"))
+        if not blocks:
+            return lines
+        try:
+            return lines + resolve_blocks(blocks, client)
+        except HAError as exc:
+            logger.warning("ticket %s: Home Assistant unavailable at print time: %s", ticket["id"], exc)
+            return lines + unavailable_lines(blocks)
 
     def design_lines(self, ticket: dict, design: str) -> list[Line]:
         """Draw an image design with the entities read now. Missing values print NO DATA."""

@@ -100,6 +100,19 @@ class SlotTicketCreate(BaseModel):
     to_user: Recipient | None = None
     sender: str | None = Field(default=None, max_length=40)
     send_at: datetime | None = None
+    hold: bool = Field(default=False, description="Keep the ticket until released, as for /tickets.")
+    hold_key: str | None = Field(default=None, max_length=40, examples=["user-home"])
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=120,
+        description="A second request with the same key returns the first ticket and prints nothing new.",
+        examples=["morning:yannic:2026-10-26"],
+    )
+    blocks: list[Block] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Home Assistant blocks printed after the slots, read at print time, as for /tickets.",
+    )
 
 
 class TicketCreate(BaseModel):
@@ -576,6 +589,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     @api.post("/tickets/slots", status_code=201, response_model=TicketOut, tags=["tickets"])
     def create_slot_ticket(body: SlotTicketCreate) -> dict[str, Any]:
         """Queue a slot ticket. Slots are checked first; a bad slot returns 422 with each problem."""
+        if body.hold and body.send_at is not None:
+            raise HTTPException(status_code=422, detail="hold and send_at cannot be combined")
+        if body.hold_key and not body.hold:
+            raise HTTPException(status_code=422, detail="hold_key needs hold: true")
+        if body.idempotency_key:
+            existing = store.get_by_key(body.idempotency_key)
+            if existing is not None:
+                return existing
         if not is_slot_template(body.template):
             raise HTTPException(status_code=422, detail=f"template {body.template} is not a slot template")
         try:
@@ -584,9 +605,19 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=422, detail=exc.problems) from None
         now = datetime.now(settings.tzinfo)
         filled = autofill(body.template, checked.model_dump(exclude_none=True), body.recipient, now)
+        if body.blocks and home_assistant() is None:
+            raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+        try:
+            block_lines = resolve_blocks(body.blocks, home_assistant()) if body.blocks else []
+        except HAError as exc:
+            raise HTTPException(status_code=502, detail=f"ticket not queued: {exc}") from None
         render_started = time.perf_counter()
         try:  # check the layout now, so a queued ticket always prints
-            encode(slot_lines(filled), feed=template_by_id(body.template).feed, raster_mode=settings.raster_mode)
+            encode(
+                slot_lines(filled) + block_lines,
+                feed=template_by_id(body.template).feed,
+                raster_mode=settings.raster_mode,
+            )
         except Exception as exc:
             logger.exception("slot rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
@@ -609,6 +640,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             choice_source="explicit",
             render_ms=render_ms,
             slots_json=json.dumps(filled, default=str),
+            held=body.hold,
+            hold_key=body.hold_key,
+            idempotency_key=body.idempotency_key,
+            blocks_json=json.dumps([block.model_dump() for block in body.blocks]),
         )
 
     @api.post("/tickets", status_code=201, response_model=TicketOut, tags=["tickets"])
