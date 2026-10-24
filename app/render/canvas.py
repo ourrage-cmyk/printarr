@@ -26,6 +26,15 @@ def text_width(text: str, scale: int) -> int:
 
 
 @dataclass(frozen=True)
+class Mark:
+    """An ornament piece: its size and the ink pixels, relative to its top-left corner."""
+
+    width: int
+    height: int
+    ink: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
 class Bitmap:
     width: int
     height: int
@@ -52,6 +61,10 @@ class Canvas:
         steps = max(abs(x1 - x0), abs(y1 - y0), 1)
         for t in range(steps + 1):
             self.set_px(js_round(x0 + ((x1 - x0) * t) / steps), js_round(y0 + ((y1 - y0) * t) / steps))
+
+    def stamp(self, mark: Mark, x: int, y: int) -> None:
+        for dx, dy in mark.ink:
+            self.set_px(x + dx, y + dy)
 
     # ---- text --------------------------------------------------------------------------
     def text(self, x: int, y: int, text: str, scale: int = 2) -> int:
