@@ -37,7 +37,7 @@ def test_strip_has_top_and_bottom_margins():
 def test_every_block_type_renders_in_every_mood():
     samples = {
         "greeting": {"greeting": "Good morning, Yannic", "summary": "Cloudy."},
-        "metric_tiles": {"metrics": [{"label": "Body battery", "value": 72, "unit": "%"}, {"label": "Outside", "value": 12, "series": [8, 9, 12]}]},
+        "metric": {"label": "Body battery", "value": 72, "unit": "%", "series": [8, 9, 12]},
         "metric_rows": {"title": "Energy", "rows": [{"label": "Now", "value": "0.079", "unit": "GBP/kWh"}]},
         "graph": {"title": "Outside", "series": [8.0, 9.0, 12.0], "unit": "C"},
         "dog_counts": {"dogs": [{"name": "Bridget", "pee": 3, "poop": 1, "food": 2, "run": 1}]},
@@ -54,12 +54,14 @@ def test_every_block_type_renders_in_every_mood():
 
 
 def test_one_ornament_per_card():
-    card = strips.Card(strips.Canvas())
+    card = strips.Card(strips.Canvas(), "loving")
     card.c.y = 10
-    first = card.ornament("loving", "header", 14, 498)
-    second = card.ornament("loving", "divider", 14, 498)
-    assert first > 0
-    assert second == 0
+    before = card.c.y
+    card.ornament("header", 14, 498)
+    after_first = card.c.y
+    card.ornament("divider", 14, 498)
+    assert after_first > before
+    assert card.c.y == after_first
 
 
 def test_unknown_block_type_and_mood_are_refused():
@@ -78,3 +80,50 @@ def test_renderers_cover_the_catalogue():
     from app.render.strips import BLOCKS
 
     assert set(RENDERERS) == set(BLOCKS)
+
+
+def test_metric_tiles_pack_side_by_side():
+    from app.render.strips import layout
+
+    blocks = [Block("metric", {"label": "A", "value": 1}), Block("metric", {"label": "B", "value": 2}), Block("metric", {"label": "C", "value": 3})]
+    rows, _ = layout(blocks)
+    assert len(rows) == 1
+    assert [p.col for p in rows[0]] == [0, 1, 2]
+
+
+def test_one_and_two_column_row():
+    from app.render.strips import layout
+
+    blocks = [Block("metric", {"label": "A", "value": 1}), Block("message", {"paragraph": "Hi there."}, span=2)]
+    rows, _ = layout(blocks)
+    assert len(rows) == 1
+    assert [p.span for p in rows[0]] == [1, 2]
+
+
+def test_text_needs_two_columns():
+    with pytest.raises(ValueError):
+        render_strip([Block("message", {"paragraph": "Hi"}, span=1)])
+
+
+def test_fluid_height_grows_with_text():
+    from app.render.strips import layout
+
+    short, _ = layout([Block("message", {"paragraph": "Hi."})])
+    long, _ = layout([Block("message", {"paragraph": "A longer note for the day. " * 6})])
+    assert long[0][0].units > short[0][0].units
+
+
+def test_overflow_is_shortened_and_reported():
+    from app.render.strips import LAYOUT, layout
+
+    huge = Block("message", {"paragraph": "This is a very long message that keeps going. " * 60})
+    rows, notes = layout([huge])
+    placed = rows[0][0]
+    assert placed.units <= LAYOUT["message"]["max_units"]
+    assert placed.slots["paragraph"].endswith("...")
+    assert notes
+
+
+def test_rows_do_not_overlap_in_the_strip():
+    bitmap = render_strip([greeting(), tip(), Block("metric", {"label": "A", "value": 1}), Block("metric", {"label": "B", "value": 2})])
+    assert bitmap.height > MARGIN_TOP + MARGIN_BOTTOM

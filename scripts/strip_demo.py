@@ -23,7 +23,8 @@ MOOD_TEXT = "The bin lorry came early today, so the blue bin is already out fron
 
 MORNING = [
     Block("greeting", {"greeting": "Good morning, Yannic", "summary": "Cloudy, 12 C, rain after 3pm. Cheap energy until 16:00."}),
-    Block("metric_tiles", {"metrics": [{"label": "Body battery", "value": 72, "unit": "%"}, {"label": "Steps", "value": "6,120"}]}, "factual"),
+    Block("metric", {"label": "Body battery", "value": 72, "unit": "%"}, "factual"),
+    Block("metric", {"label": "Steps", "value": "6,120"}, "factual"),
     Block("metric_rows", {"title": "Energy and house", "rows": [{"label": "Energy now", "value": "0.079", "unit": "GBP/kWh"}, {"label": "Energy 16:00", "value": "0.245", "unit": "GBP/kWh"}, {"label": "Inside / out", "value": "19.5 / 12", "unit": "C"}]}, "factual"),
     Block("graph", {"title": "Outside, 24 h", "series": OUTSIDE, "unit": "C"}, "factual"),
     Block("dog_counts", {"dogs": [{"name": "Bridget", "pee": 3, "poop": 1, "food": 2, "run": 1}, {"name": "Kida", "pee": 2, "poop": 2, "food": 2, "run": 2}]}),
