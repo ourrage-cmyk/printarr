@@ -146,3 +146,38 @@ def test_legacy_templates_endpoint_still_lists_only_printed_layouts(settings):
     with TestClient(create_app(settings)) as client:
         ids = [t["id"] for t in client.get("/api/v1/templates").json()]
         assert ids == list(range(1, 13))
+
+
+def test_slot_ticket_can_be_held_and_keyed(settings):
+    with TestClient(create_app(settings)) as client:
+        body = {"template": 101, "recipient": "yannic", "hold": True, "hold_key": "user-home",
+                "idempotency_key": "morning:yannic:2026-10-26"}
+        first = client.post("/api/v1/tickets/slots", json=body).json()
+        again = client.post("/api/v1/tickets/slots", json=body).json()
+        assert first["status"] == "held" and first["hold_key"] == "user-home"
+        assert again["id"] == first["id"]
+
+
+def test_slot_hold_rules_match_plain_tickets(settings):
+    with TestClient(create_app(settings)) as client:
+        both = client.post(
+            "/api/v1/tickets/slots",
+            json={"template": 102, "recipient": "wife", "slots": {"paragraph": "x"}, "hold": True,
+                  "send_at": "2026-10-26T07:00:00"},
+        )
+        assert both.status_code == 422
+        key_only = client.post(
+            "/api/v1/tickets/slots", json={"template": 102, "recipient": "wife", "slots": {"paragraph": "x"}, "hold_key": "k"}
+        )
+        assert key_only.status_code == 422
+
+
+def test_slot_blocks_need_home_assistant(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/v1/tickets/slots",
+            json={"template": 102, "recipient": "wife", "slots": {"paragraph": "x"},
+                  "blocks": [{"type": "value", "entity_id": "sensor.a", "label": "A"}]},
+        )
+        assert response.status_code == 422  # Home Assistant is not configured in the test settings
+        assert "Home Assistant" in response.json()["detail"]
