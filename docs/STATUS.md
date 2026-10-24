@@ -38,14 +38,13 @@
 
 ## Model timeouts and alerts (2026-10-24)
 
-Root cause of the "decision model / LLM not available" Telegram alerts: the model timeout was 5 s, and Ollama unloads a model after about 5 idle minutes. The first call after an unload then waited 15.7 s for d1 (8.8 s for granite) and timed out, so each cold call alerted. Warm calls take 0.06 s (d1) and 0.11 s (granite).
+Root cause of the "decision model / LLM not available" Telegram alerts: the model timeout was 5 s, and Ollama unloads a model after about 5 idle minutes. The first call after an unload waited 15.7 s for d1 (8.8 s for granite), so it timed out, and each cold call alerted.
 
 What changed:
-- The timeout defaults to 30 s. Migration 7 raises a stored 5 s, the old seed. A value set by hand is kept.
-- printarr warms both models at start and every 4 minutes: d1 through /v1/systemone, granite through /api/generate with keep_alive 30m. d1 rejects /api/generate.
-- A model failure is logged at once but alerts only after 3 failures within 15 minutes. A success clears the count. Telegram gets the real cause: the HTTP status, the timeout, or the network error.
+- The timeout defaults to 45 s, the most a cold d1 or granite load needs with margin. The API accepts up to 60 s. Migrations 7 and 8 move a stored 5 s or 30 s seed to 45 s. A value set by hand is kept.
+- Models are not kept warm. Yannic ruled out keeping them in memory, because it exhausts his server's RAM. No warm-up runs, and no keep_alive is sent, so Ollama unloads as it likes.
+- A model failure is logged at once but alerts only after 3 failures within 15 minutes. A success clears the count. The alert gives the real cause: the HTTP status, the timeout, or the network error.
 - A failed model never blocks a print. The rules choose, and the text is printed as sent.
 - Granite calls send max_tokens 1024. A small budget left the answer empty.
 
-Recommended on the Ollama server, outside printarr: set OLLAMA_KEEP_ALIVE=30m so every request keeps its model loaded. Warm-up covers it either way.
-
+Known limit: a cold text clean-up followed by a cold decision call can run past the 60 s ticket limit. The rules fallback still prints.

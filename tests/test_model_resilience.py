@@ -11,8 +11,9 @@ from app.config import Settings
 from app.migrations import LATEST_VERSION, migrate
 
 
-def test_default_timeout_covers_a_cold_d1_load():
-    assert Settings().llm_timeout == 30.0
+def test_default_timeout_covers_a_cold_load_and_models_are_not_pinned():
+    assert Settings().llm_timeout == 45.0
+    assert not hasattr(templates, "warm_models")  # no warm-up: a pinned model would exhaust the server's memory
 
 
 def test_describe_failure_names_the_cause():
@@ -71,7 +72,7 @@ def test_a_success_clears_the_count():
     assert sent == []
 
 
-def test_migration_seven_raises_the_seeded_five_second_timeout(tmp_path):
+def test_migrations_raise_the_seeded_timeout_to_45(tmp_path):
     conn = sqlite3.connect(tmp_path / "db.sqlite", isolation_level=None)
     conn.row_factory = sqlite3.Row
     migrate(conn)
@@ -82,7 +83,7 @@ def test_migration_seven_raises_the_seeded_five_second_timeout(tmp_path):
     migrate(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == LATEST_VERSION
     values = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings")}
-    assert values["llm_timeout"] == "30" and values["ha_url"] == "http://ha:8123"
+    assert values["llm_timeout"] == "45" and values["ha_url"] == "http://ha:8123"
 
 
 def test_a_value_chosen_by_hand_is_kept_by_the_migration(tmp_path):
@@ -114,27 +115,22 @@ def test_granite_gets_a_token_budget_and_its_errors_are_described(monkeypatch):
     assert seen["body"]["max_tokens"] == 1024
 
 
-def test_warm_up_loads_d1_through_systemone_and_granite_natively(monkeypatch):
-    calls = []
-
-    class Done:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return b"{}"
+def test_model_calls_send_no_keep_alive(monkeypatch):
+    seen = []
 
     def fake_urlopen(request, timeout):
-        calls.append((request.full_url, json.loads(request.data)))
-        return Done()
+        seen.append(json.loads(request.data))
+        raise TimeoutError("timed out")
 
     monkeypatch.setattr(templates.urllib.request, "urlopen", fake_urlopen)
-    failed = templates.warm_models("http://ollama:11434/v1", "d1:latest", "granite4.2:3b", timeout=30)
-    assert failed == []
-    urls = {url: payload for url, payload in calls}
-    assert "http://ollama:11434/v1/systemone" in urls
-    assert urls["http://ollama:11434/api/generate"]["keep_alive"] == "30m"
-    assert "images" not in urls["http://ollama:11434/v1/systemone"]
+    try:
+        templates.SystemOneModel("http://ollama:11434/v1", "d1:latest", timeout=45).scores("yannic", None, "hi")
+    except templates.ModelError:
+        pass
+    templates.OpenAICompatibleModel("http://ollama:11434/v1", "granite4.2:3b", timeout=45)
+    try:
+        templates.OpenAICompatibleModel("http://ollama:11434/v1", "granite4.2:3b", timeout=45).rewrite("hi")
+    except templates.ModelError:
+        pass
+    assert seen and all("keep_alive" not in body for body in seen)
+

@@ -72,8 +72,6 @@ from app.slots import schema as slot_schema
 from app.slots import validate as validate_slots
 from app.templates import (
     RECIPIENTS,
-    WARM_EVERY_S,
-    warm_models,
     TEMPLATES,
     Choice,
     template_by_id,
@@ -305,7 +303,7 @@ class ModelSettings(BaseModel):
     base_url: str = Field(description="OpenAI-compatible base URL, for example http://192.168.1.231:11434/v1. Empty means rules only.")
     model: str = Field(description="Decision model: picks templates and decorations. For example d1:latest.")
     text_model: str = Field(description="Text model for paragraphs, used later. For example granite4.2:3b.")
-    timeout: float = Field(ge=1, le=30)
+    timeout: float = Field(ge=1, le=60)
 
 
 class ModelSettingsPatch(BaseModel):
@@ -315,7 +313,7 @@ class ModelSettingsPatch(BaseModel):
     base_url: str | None = Field(default=None, max_length=300)
     model: str | None = Field(default=None, min_length=1, max_length=120)
     text_model: str | None = Field(default=None, min_length=1, max_length=120)
-    timeout: float | None = Field(default=None, ge=1, le=30)
+    timeout: float | None = Field(default=None, ge=1, le=60)
 
 
 class TicketOut(BaseModel):
@@ -528,19 +526,6 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             text_model=store.get_setting("llm_text_model") or settings.llm_text_model,
             timeout=float(store.get_setting("llm_timeout") or settings.llm_timeout),
         )
-
-    def warm_loop() -> None:
-        """Keep both models loaded: at start, then every WARM_EVERY_S. A failed warm-up is logged, never alerted."""
-        while True:
-            try:
-                current = read_model_settings()
-                if current.enabled and current.base_url:
-                    warm_models(current.base_url, current.model, current.text_model, timeout=current.timeout)
-            except Exception:
-                logger.exception("model warm-up loop error; trying again next round")
-            time.sleep(WARM_EVERY_S)
-
-    threading.Thread(target=warm_loop, name="model-warmer", daemon=True).start()
 
     def current_model() -> SystemOneModel | None:
         current = read_model_settings()
