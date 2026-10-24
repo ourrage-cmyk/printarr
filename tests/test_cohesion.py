@@ -104,3 +104,9 @@ def test_a_lone_metric_tile_takes_the_full_width():
     left, right = _ink_columns(strips.render_strip([Block("metric", SAMPLES["metric"])]))
     assert left == OUTER_L
     assert PAPER_DOTS - 1 - right == PAPER_DOTS - OUTER_R - 1
+
+
+def test_dog_counts_for_two_dogs_fit_the_card_without_cutting():
+    block = Block("dog_counts", SAMPLES["dog_counts"] | {"dogs": SAMPLES["dog_counts"]["dogs"] * 2})
+    rows, notes = strips.layout([block])
+    assert not any("shortened" in note for note in notes)

@@ -24,12 +24,18 @@ from pathlib import Path
 from typing import Any
 
 from app.render.canvas import Bitmap, Canvas, js_round, text_width
+from app.render.system import ornament
 
 CATALOGUE: dict[str, Any] = json.loads((Path(__file__).parent / "system" / "blocks.json").read_text())
 SHELL: dict[str, Any] = CATALOGUE["shell"]
 GRID: dict[str, int] = CATALOGUE["grid"]
 MOODS: dict[str, dict[str, str]] = CATALOGUE["moods"]
 BLOCKS: dict[str, dict[str, Any]] = CATALOGUE["blocks"]
+
+BODY = 3  # body and label scale: cap 21 (conformance, font arena tier B)
+ROW = 7 * BODY + 9  # one row of text: cap 21 with the tokens' body leading of 9 dots
+CAPTION = 2  # caption scale: cap 14, the minimum
+NUMERAL = 6  # display numerals: cap 42, used when the value fits the tile
 
 UNIT_H = GRID["unit_h"]  # one unit of height, in dots
 GAP_V = GRID["gap_v"]  # space between rows of cards
@@ -53,7 +59,7 @@ LAYOUT: dict[str, dict[str, int]] = {
     "metric": {"span": 1, "min_span": 1, "min_units": 2, "max_units": 4},
     "metric_rows": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 8},
     "graph": {"span": 3, "min_span": 2, "min_units": 3, "max_units": 8},
-    "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 4},
+    "dog_counts": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 5},
     "message": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 16},
     "alert": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 6},
     "checklist": {"span": 3, "min_span": 2, "min_units": 2, "max_units": 10},
@@ -171,6 +177,20 @@ ORNAMENTS: dict[str, Callable[[Canvas, int, int, int], int]] = {
 }
 
 
+# Mood ornament names mapped to the 26 system pieces (app/render/system/ornaments). Names without a
+# piece, such as the hairlines, keep their drawing in code.
+SYSTEM_PIECES: dict[str, str] = {
+    "sunStrip": "sys-sun-strip",
+    "dottedWave": "sys-wave",
+    "barcode": "sys-barcode-decor",
+    "tapeTicks": "sys-tape-ticks",
+    "perforation": "sys-perforation",
+    "dashedRule": "sys-dotted-rule",
+    "heart": "sys-heart",
+    "warn": "sys-warning",
+}
+
+
 # ---- text helpers --------------------------------------------------------------------------------
 def _label(text: object) -> str:
     """Upper case, with underscores as spaces: the dot font has no underscore."""
@@ -242,10 +262,18 @@ class Card:
     def ornament(self, slot: str, x0: int, x1: int) -> None:
         if self.ornamented:
             return
-        draw = ORNAMENTS.get(MOODS[self.mood][slot])
-        if draw is None:
-            return
-        h = draw(self.c, x0, x1, self.c.y) or 4
+        name = MOODS[self.mood][slot]
+        piece = SYSTEM_PIECES.get(name)
+        if piece is not None and ornament(piece).width <= x1 - x0:
+            # The system piece (design system, orn-sys-*), centred in the card's inner width.
+            mark = ornament(piece)
+            self.c.stamp(mark, x0 + (x1 - x0 - mark.width) // 2, self.c.y)
+            h = mark.height
+        else:
+            draw = ORNAMENTS.get(name)
+            if draw is None:
+                return
+            h = draw(self.c, x0, x1, self.c.y) or 4
         self.c.y += h + 6
         self.ornamented = True
 
@@ -260,40 +288,29 @@ def _title_line(card: Card, x0: int, x1: int, text: str) -> None:
     label = _label(text)
     c = card.c
     if MOODS[card.mood]["accent"] == "pill":
-        w = min(text_width(label, 2) + 28, x1 - x0)
-        h = 7 * 2 + 14
+        w = min(text_width(label, BODY) + 28, x1 - x0)
+        h = 7 * BODY + 14
         c.round_box(x0, c.y, x0 + w, c.y + h, h // 2, 2)
         c.fill(x0 + 4, c.y + 4, x0 + w - 4, c.y + h - 4)
-        c.text(x0 + 14, c.y + 7, label, 2)
-        _erase_glyphs(c, x0 + 14, c.y + 7, label, 2)
+        c.text(x0 + 14, c.y + 7, label, BODY)
+        _erase_glyphs(c, x0 + 14, c.y + 7, label, BODY)
         c.y += h + 8
     else:
         card.icon(x0, c.y)
-        c.text(x0 + 36, c.y + 2, label, 2)
-        c.y += 30
+        c.text(x0 + 36, c.y + 2, label, BODY)
+        c.y += 7 * BODY + 9
 
 
 def _erase_glyphs(c: Canvas, x: int, y: int, text: str, scale: int) -> None:
-    """Clears glyph dots, so the text shows white on a filled pill."""
-    from app.render.glyphs import GLYPHS
-
-    cx = x
-    for ch in text:
-        glyph = GLYPHS.get(ch.upper(), GLYPHS["?"])
-        for r in range(7):
-            for col in range(5):
-                if glyph[r][col] != "#":
-                    continue
-                for yy in range(scale):
-                    for xx in range(scale):
-                        px = cx + col * scale + xx
-                        py = y + r * scale + yy
-                        if 0 <= px < 512 and 0 <= py:
-                            c.bits[py * 64 + (px >> 3)] &= (~(0x80 >> (px & 7))) & 0xFF
-        cx += 6 * scale
+    """Clears the glyph squares, so the text shows white on a filled pill."""
+    for sx, sy, w, h in c.glyph_dots(x, y, text, scale):
+        for yy in range(sy, sy + h):
+            for xx in range(sx, sx + w):
+                if 0 <= xx < 512 and 0 <= yy:
+                    c.bits[yy * 64 + (xx >> 3)] &= (~(0x80 >> (xx & 7))) & 0xFF
 
 
-def _heading(c: Canvas, x: int, text: str, scale: int = 2) -> None:
+def _heading(c: Canvas, x: int, text: str, scale: int = BODY) -> None:
     c.text(x, c.y, text, scale)
     c.y += 7 * scale + 8
 
@@ -304,28 +321,30 @@ def _greeting(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.c.text(x0, card.c.y, str(s.get("greeting", "")).upper(), 3)
     card.c.y += 21 + 8
     if s.get("summary"):
-        card.c.y += paragraph(card.c, x0, card.c.y, str(s["summary"]), 2, x1 - x0) + 2
+        card.c.y += paragraph(card.c, x0, card.c.y, str(s["summary"]), BODY, x1 - x0) + 2
 
 
 def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     value = str(s.get("value", "--"))
-    # The label wraps inside the tile, so a long label never runs over the border.
-    for line in wrap_lines(_label(s.get("label", "")), 2, x1 - x0) or [""]:
-        c.text(x0, c.y, line, 2)
-        c.y += 7 * 2 + 4
-    c.y += 4
-    c.text(x0, c.y, value, 3)
     unit = str(s.get("unit") or "")
-    unit_x = x0 + text_width(value, 3) + 6
+    # The label wraps inside the tile, so a long label never runs over the border.
+    for line in wrap_lines(_label(s.get("label", "")), BODY, x1 - x0) or [""]:
+        c.text(x0, c.y, line, BODY)
+        c.y += 7 * BODY + 4
+    c.y += 4
+    # Numerals are display size (cap 42) when the value and its unit fit the tile, else body size.
+    scale = NUMERAL if text_width(value, NUMERAL) + text_width(unit, BODY) + 6 <= x1 - x0 else BODY
+    c.text(x0, c.y, value, scale)
+    unit_x = x0 + text_width(value, scale) + 6
     # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
-    beside = bool(unit) and unit_x + text_width(unit, 2) <= x1
+    beside = bool(unit) and unit_x + text_width(unit, BODY) <= x1
     if beside:
-        c.text(unit_x, c.y + 7, unit, 2)  # cap 14 ends on the value baseline (cap 21)
-    c.y += 28
+        c.text(unit_x, c.y + 7 * scale - 7 * BODY, unit, BODY)  # its baseline sits on the value's baseline
+    c.y += 7 * scale + 7
     if unit and not beside:
-        c.text(x0, c.y, unit, 2)
-        c.y += 7 * 2 + 4
+        c.text(x0, c.y, unit, BODY)
+        c.y += 7 * BODY + 4
     series = s.get("series")
     if isinstance(series, list) and len(series) > 1:
         c.y += 4
@@ -340,8 +359,8 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for r in list(s.get("rows", []))[:12]:
         card.icon(x0, c.y)
         unit = f" {r['unit']}" if r.get("unit") else ""
-        c.row(x0 + 28, x1, c.y + 2, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", 2)
-        c.y += 24
+        c.row(x0 + 28, x1, c.y + 2, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", BODY)
+        c.y += ROW
 
 
 def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -353,18 +372,20 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
         c.y += plot + 16
         unit = f" {s['unit']}" if s.get("unit") else ""
-        c.text(x0, c.y, f"{min(series):.1f}  ..  {series[-1]:.1f}{unit}", 2)
+        c.text(x0, c.y, f"{min(series):.1f}  ..  {series[-1]:.1f}{unit}", BODY)
         c.y += 22
 
 
 def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     _heading(c, x0, "DOGS TODAY")
-    for d in list(s.get("dogs", []))[:4]:
+    for d in list(s.get("dogs", []))[:2]:
+        # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
-        tail = f"P{d.get('pee', 0)} O{d.get('poop', 0)} F{d.get('food', 0)} R{d.get('run', 0)}"
-        c.row(x0 + 28, x1, c.y + 2, _label(d.get("name", "")), tail, 2)
-        c.y += 24
+        c.row(x0 + 28, x1, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", BODY)
+        c.y += ROW
+        c.text(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", BODY)
+        c.y += ROW
 
 
 def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -372,13 +393,13 @@ def _message(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     if s.get("title"):
         _title_line(card, x0, x1, str(s["title"]))
-    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), 2, x1 - x0) + 6
+    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0) + 6
     if s.get("tip"):
-        c.y += paragraph(c, x0, c.y, str(s["tip"]), 2, x1 - x0) + 4
+        c.y += paragraph(c, x0, c.y, str(s["tip"]), BODY, x1 - x0) + 4
     card.ornament("divider", x0, x1)
     if s.get("from"):
-        c.text(x0, c.y, f"- {_label(s['from'])}", 2)
-        c.y += 24
+        c.text(x0, c.y, f"- {_label(s['from'])}", BODY)
+        c.y += ROW
 
 
 def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -386,10 +407,10 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     _title_line(card, x0, x1, str(s.get("label", "")))
     if s.get("paragraph"):
-        c.y += paragraph(c, x0, c.y, str(s["paragraph"]), 2, x1 - x0) + 6
+        c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
-        c.row(x0, x1, c.y, "ACTION", _label(s["action"]), 2)
-        c.y += 24
+        c.row(x0, x1, c.y, "ACTION", _label(s["action"]), BODY)
+        c.y += ROW
     card.ornament("divider", x0, x1)
 
 
@@ -399,22 +420,22 @@ def _checklist(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         _heading(c, x0, _label(s["title"]))
     for item in list(s.get("items", []))[:12]:
         stamp_sprite(c, x0, c.y, "check" if item.get("checked") else "box")
-        c.text(x0 + 26, c.y + 2, _label(item.get("text", "")), 2)
-        c.y += 26
+        c.text(x0 + 26, c.y + 2, _label(item.get("text", "")), BODY)
+        c.y += ROW
 
 
 def _tip(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.icon(x0, card.c.y)
-    card.c.y += paragraph(card.c, x0 + 28, card.c.y, str(s.get("tip", "")), 2, x1 - x0 - 28) + 2
+    card.c.y += paragraph(card.c, x0 + 28, card.c.y, str(s.get("tip", "")), BODY, x1 - x0 - 28) + 2
 
 
 def _fact(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     card.ornament("header", x0, x1)
-    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), 2, x1 - x0) + 4
+    c.y += paragraph(c, x0, c.y, str(s.get("paragraph", "")), BODY, x1 - x0) + 4
     card.ornament("divider", x0, x1)
-    c.text(x0, c.y, "FUN FACT", 2)
-    c.y += 24
+    c.text(x0, c.y, "FUN FACT", BODY)
+    c.y += ROW
 
 
 RENDERERS: dict[str, Callable[[Card, Mapping[str, Any], int, int], None]] = {
