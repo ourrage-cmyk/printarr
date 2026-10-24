@@ -114,7 +114,7 @@ class Scheduler:
             return
         if self.notifier:
             self.notifier.recovered("printer", "printer is reachable again")
-        self.store.mark_sent(ticket["id"])
+        self.store.mark_sent(ticket["id"], print_ms=round(total_ms))
         logger.info("ticket %s printed", ticket["id"])
 
     def _record_failure(self, ticket: dict, error: str) -> None:

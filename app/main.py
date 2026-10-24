@@ -6,9 +6,12 @@ the API renders it into the printer's byte stream.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -23,6 +26,7 @@ from app.web import WEB_UI
 from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.config import Settings, load_settings
 from app.escpos import encode, to_text
+from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
 from app.printer import PrinterError, Transport, build_transport
 from app.receipt import Line, Receipt, line_to_dict, render_lines, render_ticket_lines, ticket_feed
 from app.render.registry import design_line, placeholder_line
@@ -103,6 +107,20 @@ class TicketCreate(BaseModel):
             "request arrives, not when it prints."
         ),
     )
+    kind: Literal[KINDS] | None = Field(  # type: ignore[valid-type]
+        default=None,
+        description="What the ticket is for. Left out, the template's kind is used, or 'note'.",
+    )
+    tone: Literal[TONES] | None = Field(  # type: ignore[valid-type]
+        default=None,
+        description="How it sounds. Left out, 'neutral'.",
+    )
+    from_user: Recipient | None = Field(
+        default=None, description="The person who wrote it, when it is a message to the other person."
+    )
+    to_user: Recipient | None = Field(
+        default=None, description="The person it is for. With from_user, it is an inbox item."
+    )
     blocks: list[Block] = Field(
         default_factory=list,
         max_length=8,
@@ -168,6 +186,14 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     printed_at: datetime | None
+    kind: str
+    tone: str
+    from_user: str | None = None
+    to_user: str | None = None
+    inbox_state: str | None = None
+    choice_source: str | None = None
+    render_ms: int | None = None
+    print_ms: int | None = None
 
 
 class ChoiceOut(BaseModel):
@@ -493,6 +519,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         message = prepare_text(body)
         if body.blocks and home_assistant() is None:
             raise HTTPException(status_code=422, detail="Home Assistant is not configured; set its URL and token first")
+        render_started = time.perf_counter()
         try:  # reject now rather than queue a ticket that cannot print
             receipt = Receipt(
                 recipient=RECIPIENTS[body.recipient],
@@ -509,7 +536,14 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         except Exception as exc:
             logger.exception("rendering failed; ticket not queued")
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
+        render_ms = round((time.perf_counter() - render_started) * 1000)
+        kind = body.kind or (choice.template.kind if choice.template.kind in KINDS else DEFAULT_KIND)
         return store.create(
+            kind=kind,
+            tone=body.tone or DEFAULT_TONE,
+            from_user=body.from_user,
+            to_user=body.to_user,
+            render_ms=render_ms,
             recipient=body.recipient,
             message=message,
             text_state=body.text_state,
@@ -647,6 +681,64 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             "width": width,
             "warnings": preview_warnings(text),
         }
+
+    def log_filters(recipient: str | None, since_hours: int | None) -> dict[str, Any]:
+        since_ms = None if since_hours is None else now_ms() - since_hours * 3_600_000
+        return {"recipient": recipient, "since_ms": since_ms}
+
+    @api.get("/log", response_model=list[TicketOut], tags=["log"])
+    def log_list(
+        recipient: Recipient | None = None,
+        kind: str | None = None,
+        tone: str | None = None,
+        template_id: int | None = None,
+        status: Status | None = None,
+        since_hours: int | None = Query(None, ge=1),
+        limit: int = Query(200, ge=1, le=1000),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """Every ticket, oldest first, with the kind, tone, template, choice source and timings."""
+        return store.log(
+            kind=kind, tone=tone, template_id=template_id, status=status,
+            limit=limit, offset=offset, **log_filters(recipient, since_hours),
+        )
+
+    @api.get("/log/summary", tags=["log"])
+    def log_summary(
+        recipient: Recipient | None = None,
+        since_hours: int | None = Query(None, ge=1),
+    ) -> dict[str, dict[str, int]]:
+        """Counts by kind, tone, template, status and choice source, to see what is used."""
+        filters = log_filters(recipient, since_hours)
+        return {
+            "by_kind": store.log_counts("kind", **filters),
+            "by_tone": store.log_counts("tone", **filters),
+            "by_template": store.log_counts("template_id", **filters),
+            "by_status": store.log_counts("status", **filters),
+            "by_choice": store.log_counts("choice_source", **filters),
+        }
+
+    @api.get("/log/export", tags=["log"], responses={200: {"content": {"text/csv": {}}}})
+    def log_export(
+        format: Literal["csv", "json"] = "csv",
+        recipient: Recipient | None = None,
+        since_hours: int | None = Query(None, ge=1),
+    ) -> Response:
+        """Every ticket in the log as CSV or JSON, for tuning the templates from real use."""
+        rows = store.log(limit=1000000, **log_filters(recipient, since_hours))
+        if format == "json":
+            return Response(json.dumps(rows, default=str), media_type="application/json")
+        columns = [
+            "id", "created_at", "recipient", "from_user", "to_user", "kind", "tone", "template_id",
+            "choice_source", "selection", "decorations", "status", "inbox_state", "render_ms",
+            "print_ms", "printed_at", "title", "sender", "message",
+        ]
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({**row, "decorations": ",".join(row["decorations"])})
+        return Response(buffer.getvalue(), media_type="text/csv")
 
     @api.get("/tickets/{ticket_id}", response_model=TicketOut, tags=["tickets"])
     def get_ticket(ticket_id: str) -> dict[str, Any]:

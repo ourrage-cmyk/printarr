@@ -55,6 +55,43 @@ CREATE TABLE IF NOT EXISTS settings (
 
 MAX_ERROR_LENGTH = 500
 
+# Columns added after the first release. init() adds any that an older database lacks.
+ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("kind", "TEXT NOT NULL DEFAULT 'note'"),
+    ("tone", "TEXT NOT NULL DEFAULT 'neutral'"),
+    ("from_user", "TEXT"),
+    ("to_user", "TEXT"),
+    ("inbox_state", "TEXT"),
+    ("render_ms", "INTEGER"),
+    ("print_ms", "INTEGER"),
+    ("choice_source", "TEXT"),
+    ("model_scores", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+LOG_COLUMNS = ("kind", "tone", "template_id", "status", "choice_source")
+
+
+def _log_filters(
+    recipient: str | None,
+    kind: str | None,
+    tone: str | None,
+    template_id: int | None,
+    status: str | None,
+    since_ms: int | None,
+) -> tuple[list[str], list[Any]]:
+    wanted = {
+        "recipient = ?": recipient,
+        "kind = ?": kind,
+        "tone = ?": tone,
+        "template_id = ?": template_id,
+        "status = ?": status,
+        "created_at_ms >= ?": since_ms,
+    }
+    clauses = [clause for clause, value in wanted.items() if value is not None]
+    params = [value for value in wanted.values() if value is not None]
+    return clauses, params
+
 
 class TicketNotFound(LookupError):
     pass
@@ -97,6 +134,10 @@ class TicketStore:
         with closing(self._connect()) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(SCHEMA)
+            have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+            for name, definition in ADDED_COLUMNS:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
 
     def create(
         self,
@@ -113,23 +154,38 @@ class TicketStore:
         hold_key: str | None = None,
         text_state: str = "formatted",
         blocks_json: str = "[]",
+        kind: str = "note",
+        tone: str = "neutral",
+        from_user: str | None = None,
+        to_user: str | None = None,
+        render_ms: int | None = None,
+        choice_source: str | None = None,
+        model_scores: str = "",
     ) -> dict[str, Any]:
-        """Queue a ticket. A held ticket waits until released, then prints at once."""
+        """Queue a ticket. A held ticket waits until released, then prints at once.
+
+        A ticket from one recipient's user to the other is an inbox item: it is 'unread' until
+        it is printed in the evening rundown or seen.
+        """
         ticket_id = uuid.uuid4().hex
         now = now_ms()
         status = "held" if held else "pending"
+        inbox_state = "unread" if from_user and to_user else None
         with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT INTO tickets (id, recipient, sender, title, message, status, hold_key,
                                      send_at_ms, next_attempt_ms, template_id, text_state,
-                                     blocks_json, decorations, selection, created_at_ms, updated_at_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     blocks_json, decorations, selection, created_at_ms, updated_at_ms,
+                                     kind, tone, from_user, to_user, inbox_state, render_ms,
+                                     choice_source, model_scores)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
-                    selection, now, now,
+                    selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
+                    choice_source or selection, model_scores,
                 ),
             )
         result = self.get(ticket_id)
@@ -166,6 +222,43 @@ class TicketStore:
         with closing(self._connect()) as conn:
             rows = conn.execute(sql, params).fetchall()
         return [_to_dict(row) for row in rows]
+
+    def log(
+        self,
+        *,
+        recipient: str | None = None,
+        kind: str | None = None,
+        tone: str | None = None,
+        template_id: int | None = None,
+        status: str | None = None,
+        since_ms: int | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Every ticket that matches, oldest first, for the timeline and exports."""
+        clauses, params = _log_filters(recipient, kind, tone, template_id, status, since_ms)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT * FROM tickets {where} ORDER BY created_at_ms ASC LIMIT ? OFFSET ?"
+        with closing(self._connect()) as conn:
+            rows = conn.execute(sql, [*params, limit, offset]).fetchall()
+        return [_to_dict(row) for row in rows]
+
+    def log_counts(
+        self,
+        column: str,
+        *,
+        recipient: str | None = None,
+        since_ms: int | None = None,
+    ) -> dict[str, int]:
+        """Ticket counts grouped by one logged column: kind, tone, template_id, status or choice_source."""
+        if column not in LOG_COLUMNS:
+            raise ValueError(f"cannot group the log by {column}")
+        clauses, params = _log_filters(recipient, None, None, None, None, since_ms)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT {column} AS key, COUNT(*) AS n FROM tickets {where} GROUP BY {column} ORDER BY n DESC"
+        with closing(self._connect()) as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return {str(row["key"]): row["n"] for row in rows}
 
     def cancel(self, ticket_id: str) -> dict[str, Any]:
         return self._guarded_update(
@@ -265,16 +358,17 @@ class TicketStore:
         claimed = [self.get(ticket_id) for ticket_id in ids]
         return [ticket for ticket in claimed if ticket is not None]
 
-    def mark_sent(self, ticket_id: str) -> None:
+    def mark_sent(self, ticket_id: str, print_ms: int | None = None) -> None:
         now = now_ms()
         with closing(self._connect()) as conn:
             conn.execute(
                 """
                 UPDATE tickets
-                SET status = 'sent', printed_at_ms = ?, updated_at_ms = ?, last_error = NULL
+                SET status = 'sent', printed_at_ms = ?, updated_at_ms = ?, last_error = NULL,
+                    print_ms = ?
                 WHERE id = ?
                 """,
-                (now, now, ticket_id),
+                (now, now, print_ms, ticket_id),
             )
 
     def record_failure(self, ticket_id: str, error: str, retry_at_ms: int | None) -> None:

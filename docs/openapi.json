@@ -588,6 +588,338 @@
         }
       }
     },
+    "/api/v1/log": {
+      "get": {
+        "tags": [
+          "log"
+        ],
+        "summary": "Log List",
+        "description": "Every ticket, oldest first, with the kind, tone, template, choice source and timings.",
+        "operationId": "log_list_api_v1_log_get",
+        "parameters": [
+          {
+            "name": "recipient",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "yannic",
+                    "wife"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "tone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tone"
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "held",
+                    "pending",
+                    "printing",
+                    "sent",
+                    "failed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "since_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Hours"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TicketOut"
+                  },
+                  "title": "Response Log List Api V1 Log Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/log/summary": {
+      "get": {
+        "tags": [
+          "log"
+        ],
+        "summary": "Log Summary",
+        "description": "Counts by kind, tone, template, status and choice source, to see what is used.",
+        "operationId": "log_summary_api_v1_log_summary_get",
+        "parameters": [
+          {
+            "name": "recipient",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "yannic",
+                    "wife"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "name": "since_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    }
+                  },
+                  "title": "Response Log Summary Api V1 Log Summary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/log/export": {
+      "get": {
+        "tags": [
+          "log"
+        ],
+        "summary": "Log Export",
+        "description": "Every ticket in the log as CSV or JSON, for tuning the templates from real use.",
+        "operationId": "log_export_api_v1_log_export_get",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "type": "string",
+              "default": "csv",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "recipient",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "yannic",
+                    "wife"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipient"
+            }
+          },
+          {
+            "name": "since_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tickets/{ticket_id}": {
       "get": {
         "tags": [
@@ -1106,6 +1438,14 @@
           "width": {
             "type": "integer",
             "title": "Width"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "description": "Things to check before printing."
           }
         },
         "type": "object",
@@ -1317,6 +1657,81 @@
             "description": "A template id from GET /api/v1/templates, which must belong to the recipient's group, or 'auto' to let the decision model or the rules choose. Chosen when the request arrives, not when it prints.",
             "default": "auto"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "note",
+                  "shopping",
+                  "todo",
+                  "alert",
+                  "fun",
+                  "reminder"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "What the ticket is for. Left out, the template's kind is used, or 'note'."
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "loving",
+                  "neutral",
+                  "reminder",
+                  "playful",
+                  "gentle",
+                  "firm",
+                  "urgent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone",
+            "description": "How it sounds. Left out, 'neutral'."
+          },
+          "from_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From User",
+            "description": "The person who wrote it, when it is a message to the other person."
+          },
+          "to_user": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "yannic",
+                  "wife"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To User",
+            "description": "The person it is for. With from_user, it is an inbox item."
+          },
           "blocks": {
             "items": {
               "oneOf": [
@@ -1520,6 +1935,80 @@
               }
             ],
             "title": "Printed At"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          },
+          "from_user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From User"
+          },
+          "to_user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To User"
+          },
+          "inbox_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbox State"
+          },
+          "choice_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice Source"
+          },
+          "render_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Ms"
+          },
+          "print_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Print Ms"
           }
         },
         "type": "object",
@@ -1541,7 +2030,9 @@
           "selection",
           "created_at",
           "updated_at",
-          "printed_at"
+          "printed_at",
+          "kind",
+          "tone"
         ],
         "title": "TicketOut"
       },
