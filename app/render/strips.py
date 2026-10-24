@@ -348,6 +348,23 @@ def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
     return TITLE, wrap_lines(label, TITLE, max_w)
 
 
+EDGE_GAP = 10  # the least clear space between a line of text and the card border, in dots
+
+
+def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -> int:
+    """A label with its value at the right: on one line when the two fit with an edge gap and some leaders,
+    else the value goes on the line under the label, so nothing runs into the border. Returns its height."""
+    from app.render.canvas import solid_width
+
+    width = x1 - EDGE_GAP - (x0 + indent)
+    if solid_width(label, 21) + solid_width(value, 21) + 8 + 24 <= width:
+        c.row_solid(x0 + indent, x1 - EDGE_GAP, c.y, label, value, 21)
+        return ROW
+    c.solid(x0 + indent, c.y, label, 21)
+    c.solid(x1 - EDGE_GAP - solid_width(value, 21), c.y + ROW, value, 21)
+    return 2 * ROW
+
+
 def _heading(c: Canvas, x: int, text: str, x1: int = OUTER_R) -> None:
     """A title: the dot font at a size larger than body text. Long titles wrap onto more lines."""
     scale, lines = title_lines(text, x1 - x)
@@ -416,8 +433,7 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for r in list(s.get("rows", []))[:12]:
         card.icon(x0, c.y)
         unit = f" {r['unit']}" if r.get("unit") else ""
-        c.row_solid(x0 + 28, x1, c.y + 2, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", 21)
-        c.y += ROW
+        c.y += _row(c, x0, x1, _label(r.get("label", "")), f"{r.get('value', '--')}{unit}", indent=28)
 
 
 AXIS_CAP = 14  # chart labels: the smallest full-line size, so they stay quiet under the line
@@ -452,8 +468,7 @@ def _dog_counts(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for d in list(s.get("dogs", []))[:2]:
         # Words, not codes: "3 PEE" reads at a glance on the paper, "P3" does not.
         card.icon(x0, c.y)
-        c.row_solid(x0 + 28, x1 - 10, c.y + 2, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", 21)
-        c.y += ROW
+        c.y += _row(c, x0, x1, _label(d.get("name", "")), f"{d.get('pee', 0)} PEE, {d.get('poop', 0)} POOP", indent=28)
         c.solid(x0 + 28, c.y + 2, f"{d.get('food', 0)} FOOD, {d.get('run', 0)} RUN", 21)
         c.y += ROW
 
@@ -479,8 +494,7 @@ def _alert(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if s.get("paragraph"):
         c.y += paragraph(c, x0, c.y, str(s["paragraph"]), BODY, x1 - x0) + 6
     if s.get("action"):
-        c.row_solid(x0, x1, c.y, "ACTION", _label(s["action"]), 21)
-        c.y += ROW
+        c.y += _row(c, x0, x1, "ACTION", _label(s["action"]))
     card.ornament("divider", x0, x1)
 
 

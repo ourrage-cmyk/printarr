@@ -211,7 +211,7 @@
       "divider": "tapeTicks",
       "footer": "dottedWave",
       "icon": "star",
-      "accent": "pill",
+      "accent": "outline",
       "sprite_set": "bright"
     },
     "loving": {
@@ -286,12 +286,20 @@
       "accent": "outline",
       "sprite_set": "alert"
     },
-    "urgent": {
+    "critical": {
       "header": "barcode",
       "divider": "perforation",
       "footer": "barcode",
       "icon": "warn",
       "accent": "pill",
+      "sprite_set": "alert"
+  },
+  "urgent": {
+      "header": "barcode",
+      "divider": "perforation",
+      "footer": "barcode",
+      "icon": "warn",
+      "accent": "outline",
       "sprite_set": "alert"
     }
   },
