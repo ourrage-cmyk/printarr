@@ -19,6 +19,17 @@ So when Hermes writes something for a person, it chooses one of three deliveries
 
 Default is `now`, or `at` when `send_at` is given.
 
+## Who owns the schedule
+
+printarr does not make schedules. It holds each item until it is due, then prints it. Every schedule comes
+from outside: Hermes, or Home Assistant on its triggers. So:
+
+- Hermes decides when something prints by choosing `delivery` and `send_at`, and it creates one ticket per moment.
+  There are no recurring tickets. For a repeating reminder, Hermes creates each occurrence (or a scheduled job of its own does).
+- Shopping lists print only when someone asks for one, or when Hermes or a scheduled job of its own asks for one.
+- Briefings and messages wait for the person's strip. Home Assistant releases the strip on the phone and arrival triggers.
+- Addresses (printarr, the laptop simulator, the LLM server) come from the setup wizard. Never hard-code them.
+
 ## Which operation to use
 
 | Want to | Call |
@@ -26,7 +37,7 @@ Default is `now`, or `at` when `send_at` is given.
 | A briefing for the next strip | `GET /templates/101/schema`, then `POST /tickets/slots` with `template: 101`, `delivery: on_release`, and an `idempotency_key` |
 | A message from one person to the other | `POST /tickets` with `from_user`, `to_user`, `delivery: on_release` |
 | A standalone item now | `POST /tickets` with `delivery: now` |
-| A standalone item at a time | `POST /tickets` with `delivery: at` and `send_at` |
+| A standalone item at a time (a reminder, a timed note) | `POST /tickets` with `delivery: at` and `send_at` |
 | Print a person's pile now, on request | `POST /people/{yannic\|wife}/release` with `{"trigger": "request"}` |
 | Choose graph candidates for a briefing | `GET /insights/entities?person=...` |
 | Cancel a pending ticket | `POST /tickets/{id}/cancel` |
