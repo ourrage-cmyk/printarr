@@ -14,6 +14,7 @@ import os
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Literal, TypeVar
 
@@ -27,6 +28,7 @@ from app.web import WEB_UI
 from app.alerts import AlertSettings, HeartbeatThread, Notifier, send_telegram
 from app.backup import BackupError, NightlyBackup, NightlyThread, import_bytes
 from app.config import Settings, load_settings
+from app.insights import InsightCache, collect
 from app.escpos import encode, to_text
 from app.kinds import DEFAULT_KIND, DEFAULT_TONE, KINDS, TONES
 from app.printer import PrinterError, Transport, build_transport
@@ -591,6 +593,25 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     def release_hold(hold_key: str) -> list[dict[str, Any]]:
         """Release every held ticket with this key. Home Assistant can call this on arrival."""
         return store.release_hold(hold_key)
+
+    insight_cache = InsightCache()
+
+    @api.get("/insights/entities", tags=["insights"])
+    def insight_entities(
+        person: Recipient = Query(description="yannic or wife."),
+        limit: int = Query(12, ge=1, le=30),
+    ) -> list[dict[str, Any]]:
+        """Numeric Home Assistant entities for a briefing, most notable first.
+
+        Each item has the current value, 30-day mean and spread, a z-score, a 7-day trend and
+        a plain reason. Hermes picks the graph slots from this list. Cached for five minutes.
+        """
+        client = home_assistant()
+        if client is None:
+            raise HTTPException(status_code=422, detail="Home Assistant is not configured")
+
+        found = insight_cache.get(person, limit, lambda: collect(person, client.numeric_history, limit))
+        return [asdict(item) for item in found]
 
     @api.get("/settings/model", response_model=ModelSettings, tags=["settings"])
     def get_model_settings() -> ModelSettings:

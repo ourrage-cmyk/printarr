@@ -290,6 +290,72 @@
         }
       }
     },
+    "/api/v1/insights/entities": {
+      "get": {
+        "tags": [
+          "insights"
+        ],
+        "summary": "Insight Entities",
+        "description": "Numeric Home Assistant entities for a briefing, most notable first.\n\nEach item has the current value, 30-day mean and spread, a z-score, a 7-day trend and\na plain reason. Hermes picks the graph slots from this list. Cached for five minutes.",
+        "operationId": "insight_entities_api_v1_insights_entities_get",
+        "parameters": [
+          {
+            "name": "person",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "yannic",
+                "wife"
+              ],
+              "type": "string",
+              "description": "yannic or wife.",
+              "title": "Person"
+            },
+            "description": "yannic or wife."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "default": 12,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Insight Entities Api V1 Insights Entities Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings/model": {
       "get": {
         "tags": [
