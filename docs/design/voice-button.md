@@ -1,6 +1,19 @@
 # Voice button: leave a message, add to the shopping list
 
-Status: proposal, for Yannic to decide. No hardware is built and no endpoint is added yet.
+Status: parked. Design only. No hardware is bought or built, and no endpoint is added. Revisit when Yannic asks for it.
+
+## Decisions (Yannic, 2026-10-24)
+
+- **Hardware:** on hold. Nothing is purchased. Until then, messages go to Hermes directly, or to a separate Telegram bot that Hermes manages. Neither needs new hardware.
+- **Release:** hold to record, and on release the transcript is formatted, the template is chosen, and the note prints **instantly**. The point is that the note can be picked up and stuck on the fridge or a bathroom mirror.
+- **Reminders:** a reminder does not print on its own. It goes on the scheduled slip that already comes out at its time.
+- **Sender:** filled in automatically from the button or phone used. The sender is inferred from the addressee, since it is easy to tell who is speaking by who is being addressed. Not built now.
+- **Shopping list:** lives in Home Assistant and is managed by Hermes. It prints only when requested or when scheduled.
+- **Scheduling lives outside the container.** The printarr container does not hold a calendar or a schedule UI. It stores tickets, assigns templates and text, and holds a schedule until it runs. The agent (Hermes) creates and manages every schedule through the API. Keeping it that way means every ticket has a known source.
+- **Network:** LAN only. No API key. Server and laptop addresses, and the URLs and tokens, are set in the setup wizard in the web UI, not in the Docker stack.
+- **Paper:** 80 mm wide, which matches the TM-T88V documentation. A roll arrives Monday.
+
+The rest of this document describes the option space for later. The decisions above override anything that disagrees with them.
 
 ## The idea
 
