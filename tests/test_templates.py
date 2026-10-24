@@ -191,3 +191,37 @@ def test_rules_never_pick_the_morning_stats_card():
     for recipient in ("yannic", "wife"):
         assert rule_choice(recipient, None).template.design is None
         assert rule_choice(recipient, "Hello").template.design is None
+
+
+def test_rules_read_the_words_when_the_model_has_no_answer():
+    from app.templates import rule_choice
+
+    expected = {  # message: template id for yannic
+        "Water leak in the kitchen, turn off the stopcock": 8,  # alert
+        "Good morning. Today: dentist 9:30, bins out": 2,  # no text morning template: Memo
+        "Wrap up: dinner was pasta, bedtime 22:30": 1,  # evening
+        "Shopping: milk, eggs, bread": 2,  # list
+        "Bins go out on Tuesday night.": 3,  # note
+    }
+    for message, template_id in expected.items():
+        choice = rule_choice("yannic", None, message)
+        assert choice.selection == "rule"
+        assert choice.template.id == template_id, message
+
+
+def test_a_model_morning_for_yannic_prints_as_the_nearest_text_template(monkeypatch):
+    import io
+    import json
+
+    from app import templates
+
+    scores = {name: 0.0 for name in templates.QUESTIONS}
+    scores["is_morning_briefing"] = 0.9
+    reply = {"answers": {name: {"type": "noul", "noul": value} for name, value in scores.items()}}
+    monkeypatch.setattr(
+        templates.urllib.request, "urlopen", lambda request, timeout: io.BytesIO(json.dumps(reply).encode())
+    )
+    model = templates.SystemOneModel("http://h:11434", "d1", 5)
+    choice = resolve_choice("yannic", None, "Morning plan: school run at 8", model=model)
+    assert choice.selection == "model"
+    assert choice.template.id == 2  # Memo, not the evening Classic
