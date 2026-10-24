@@ -129,6 +129,13 @@ def _raise_model_timeout(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE settings SET value = '30' WHERE key = 'llm_timeout' AND value IN ('5', '5.0')")
 
 
+def _model_timeout_45(conn: sqlite3.Connection) -> None:
+    """Version 8: the model timeout is 45 s, since cold loads are not kept warm. Stored 5 s and 30 s move up."""
+    conn.execute(
+        "UPDATE settings SET value = '45' WHERE key = 'llm_timeout' AND value IN ('5', '5.0', '30', '30.0')"
+    )
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
@@ -137,6 +144,7 @@ MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _add_delivery_columns,  # version 5
     _add_moods_column,  # version 6
     _raise_model_timeout,  # version 7
+    _model_timeout_45,  # version 8
 )
 
 LATEST_VERSION = len(MIGRATIONS)

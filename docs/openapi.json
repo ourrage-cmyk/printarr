@@ -2207,7 +2207,7 @@
           },
           "timeout": {
             "type": "number",
-            "maximum": 30.0,
+            "maximum": 60.0,
             "minimum": 1.0,
             "title": "Timeout"
           }
@@ -2277,7 +2277,7 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 30.0,
+                "maximum": 60.0,
                 "minimum": 1.0
               },
               {
