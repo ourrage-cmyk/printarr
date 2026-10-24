@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime
@@ -399,6 +399,7 @@ class TicketOut(BaseModel):
     notes: list[str] = Field(default_factory=list, description="What was shortened to fit.")
     truncated: bool = Field(default=False, description="True when some of the text did not fit and was shortened. Read notes for what.")
     strip_count: int = Field(default=1, description="How many strips the ticket prints as.")
+    warnings: list[str] = Field(default_factory=list, description="Things to check on a composed ticket, for example characters that print as '?'.")
 
 
 class ChoiceOut(BaseModel):
@@ -533,6 +534,25 @@ def preview_warnings(text: str) -> list[str]:
     if question:
         warnings.append("These characters will print as '?': " + " ".join(question))
     return warnings
+
+
+def _compose_warnings(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Characters in a composed ticket's text that the printer cannot draw: each prints as "?"."""
+    found: set[str] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, str):
+            found.update(printed_as_question(value))
+        elif isinstance(value, Mapping):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item)
+
+    for block in blocks:
+        walk(block.get("slots", {}))
+    return ["These characters will print as '?': " + " ".join(sorted(found))] if found else []
 
 
 # Paths that answer while setup is open: the wizard page, health, the setup routes and the docs.
@@ -1052,7 +1072,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             notes=notes,
             strip_count=len(lines),
         )
-        return ticket
+        return {**ticket, "warnings": _compose_warnings(checked)}
 
     @api.post("/people/{person}/release", tags=["tickets"])
     def release_person(person: Recipient, body: PersonRelease) -> dict[str, Any]:

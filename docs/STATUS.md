@@ -11,7 +11,9 @@
 - Backup export and import; health and metrics for monitoring.
 - OpenAPI export regenerated (`docs/openapi.json`).
 - Briefings and notes draw as cards in the shared shell (PR #54). Briefing metrics get 24 h Home Assistant sparklines.
-- Greeting starts a new strip at each release (PR #53).
+- One release is one piece of paper per person: the briefing leads, the rest follow in queue order with no gap, one cut at the end, up to 12 tickets per strip. The blank before the cut is fed with the cut command (CUT_FEED, 4 lines), never drawn in a ticket.
+- Every block is its own tile on the three-column grid; only a briefing nests (PR #100). One dot size for every title, up to three lines (PR #105). Strips are cut by height, not by block count (PR #101). Tall pictures are sent in bands of at most 1000 rows (PR #106).
+- Briefing preset on the compose API (PR #104); a metric label is at most 20 characters; characters the printer cannot draw print as `?` and the response lists them under `warnings`.
 - The running version is shown in Settings and in `/healthz` as `version` and `git_sha`. CI bakes the commit sha into the image; a local build shows `dev`.
 - Telegram ping for threads: `POST /api/v1/notify`, one message a minute per caller (PR #80).
 - Ticket PNGs kept for printed and failed tickets: `GET /api/v1/ticket-images` and `GET /api/v1/tickets/{id}/image` (PR #78).
@@ -19,7 +21,7 @@
 - Hermes skill at `docs/agents/hermes-skill/SKILL.md`, with copies in `skills/printarr/` and `docs/integrations/hermes/`. `tests/test_docs.py` keeps the copies equal.
 - READY8 on main: kind marks at the top-right (envelope, bolt, clock, bulb, cart) and tone outlines. The docs describe them.
 - Schedule-creation control removed from the web UI. The container holds scheduled tickets but never creates schedules.
-- Test suite: 281 tests, all passing on main.
+- Test suite: 512 tests, all passing on main.
 
 ## Still to fix or build
 

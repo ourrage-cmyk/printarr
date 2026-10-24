@@ -45,7 +45,7 @@ class _Strict(BaseModel):
 
 
 class MetricRow(_Strict):
-    label: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=20, description="Short name, printed in capitals. A tile is a third of the paper wide.")
     value: int | float | str | None = Field(default=None, description="The number or text to print.")
     unit: str | None = Field(default=None, max_length=12)
     entity_id: str | None = Field(default=None, max_length=120, description="Home Assistant entity, read at print time.")

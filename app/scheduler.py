@@ -44,7 +44,7 @@ class ReleaseIncomplete(PrinterError):
 
 
 def opens_strip(ticket: dict) -> bool:
-    """A greeting leads its strip, and only one greeting fits a strip: a briefing (template 101) or a composed ticket whose first block is a greeting."""
+    """A ticket that leads the piece: a briefing (template 101) or a composed ticket whose first block is a greeting."""
     if int(ticket.get("template_id") or 0) == 101:
         return True
     if int(ticket.get("template_id") or 0) == 103:
@@ -296,7 +296,10 @@ class Scheduler:
         release prints nothing new. A failed print puts its claimed tickets back on hold. If a later
         strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
-        pile = sorted(self.store.pile(person), key=lambda ticket: not opens_strip(ticket))  # the briefing leads, the rest follow in order
+        pile = self.store.pile(person)
+        lead = next((t for t in pile if opens_strip(t)), None)
+        if lead is not None:  # the first briefing leads the piece, everything else follows in queue order
+            pile = [lead] + [t for t in pile if t is not lead]
         strips: list[dict] = []
         for chunk in self._strip_chunks(pile):
             won = self.store.claim([ticket["id"] for ticket in chunk])
@@ -324,12 +327,12 @@ class Scheduler:
         return strips
 
     def _strip_chunks(self, pile: list[dict]) -> list[list[dict]]:
-        """Splits a pile into strips: at most strip_max_blocks tickets, and a second greeting starts a new strip."""
+        """Splits a pile into strips: one piece of paper, new only when strip_max_blocks tickets are on it. A greeting ticket leads (the pile is ordered that way); a second one is just another tile."""
         size = max(1, self.settings.strip_max_blocks)
         chunks: list[list[dict]] = []
         current: list[dict] = []
         for ticket in pile:
-            if current and (len(current) >= size or (opens_strip(ticket) and any(opens_strip(t) for t in current))):
+            if current and len(current) >= size:
                 chunks.append(current)
                 current = []
             current.append(ticket)
