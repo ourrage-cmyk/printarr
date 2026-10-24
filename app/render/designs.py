@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from app.render import system
 from app.render.canvas import Bitmap, Canvas
 
 LEFT = 14  # card edges, 14 dots from the paper edges
@@ -102,6 +103,42 @@ def segbar(c: Canvas, m: Morning, x0: int, x1: int) -> None:
         fraction = 0 if percent is None else percent / 100
         c.seg_bar(x0, x1, c.y + 22, 10, fraction, 20)
         c.y += 42
+
+
+def system_card(
+    c: Canvas,
+    v: Variant,
+    name: str,
+    piece: str | None,
+    body: Callable[[int, int], None],
+    x0: int = LEFT,
+    x1: int = RIGHT,
+) -> None:
+    """A card under the receipt system: the body, then at most one icon in the top-right corner."""
+    top = c.y
+    mark = system.ornament(piece) if piece else None
+    body_x1 = x1 - PAD
+    if mark is not None:
+        body_x1 -= mark.width + system.spacing("m")  # keep the body clear of the icon
+    c.y += PAD
+    body(x0 + PAD, body_x1)
+    bottom = c.y + PAD
+    c.round_box(x0, top, x1, bottom, v.radius, 2)
+    if mark is not None:
+        c.stamp(mark, x1 - PAD - mark.width, top + PAD)
+    c.y = bottom + v.gap
+
+
+def morning_system(m: Morning) -> Bitmap:
+    """The morning design under the receipt system: card radius and ornaments from app/render/system."""
+    v = Variant(radius=system.card_radius(), gap=system.spacing("m"))
+    cards = system.decorations().get("morning", {})
+    c = Canvas()
+    c.y = TOP
+    system_card(c, v, "hello", cards.get("hello"), lambda x0, x1: hello(c, v, m.summary, x0, x1))
+    system_card(c, v, "rows", cards.get("rows"), lambda x0, x1: rows(c, m, x0, x1))
+    system_card(c, v, "segbar", cards.get("segbar"), lambda x0, x1: segbar(c, m, x0, x1))
+    return c.crop(12)
 
 
 def morning_yannic(m: Morning, v: Variant = Variant()) -> Bitmap:
