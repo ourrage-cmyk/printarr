@@ -452,7 +452,9 @@ def ticket_lines(
     recipient: str | None = None,
 ) -> list[ReceiptLine]:
     """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
-    if "blocks" in slots:
+    if "preset" in slots:  # a stored briefing preset: its graph and sparklines are read now, at print time
+        blocks = sign_blocks(briefing_preset_blocks(slots["slots"], client, sender), sender)
+    elif "blocks" in slots:
         blocks = sign_blocks(slots["blocks"], sender)
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
         blocks = message_blocks(str(slots["paragraph"]), sender, title=slots.get("title"), tip=slots.get("tip"))
