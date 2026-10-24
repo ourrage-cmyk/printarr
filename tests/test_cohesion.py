@@ -98,3 +98,9 @@ def test_full_width_cards_are_centred_with_equal_gutters(name):
     left, right = _ink_columns(strips.render_strip([Block(name, SAMPLES[name])]))
     assert left == OUTER_L
     assert PAPER_DOTS - 1 - right == PAPER_DOTS - OUTER_R - 1
+
+
+def test_a_lone_metric_tile_takes_the_full_width():
+    left, right = _ink_columns(strips.render_strip([Block("metric", SAMPLES["metric"])]))
+    assert left == OUTER_L
+    assert PAPER_DOTS - 1 - right == PAPER_DOTS - OUTER_R - 1
