@@ -572,6 +572,9 @@ def _greeting(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     _heading(card.c, x0, str(s.get("greeting", "")).upper(), x1)
     if s.get("summary"):
         card.c.y += paragraph(card.c, x0, card.c.y, str(s["summary"]), BODY, x1 - x0) + 2
+    if s.get("from"):
+        card.c.solid(x0, card.c.y, f"- {_label(s['from'])}", 21)  # a greeting is signed like every other note
+        card.c.y += ROW
 
 
 def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -651,6 +654,11 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         # Low and high are labelled above the plot, so the scale reads without a y axis.
         c.solid(x0, c.y, f"HIGH {max(series):.1f}{unit}", AXIS_CAP)
         c.solid(x1 - solid_width(f"LOW {min(series):.1f}{unit}", AXIS_CAP), c.y, f"LOW {min(series):.1f}{unit}", AXIS_CAP)
+        mid = f"MID {(max(series) + min(series)) / 2:.1f}{unit}"  # the middle dotted line, so every scale line reads
+        left_end = x0 + solid_width(f"HIGH {max(series):.1f}{unit}", AXIS_CAP)
+        right_start = x1 - solid_width(f"LOW {min(series):.1f}{unit}", AXIS_CAP)
+        if left_end + 12 + solid_width(mid, AXIS_CAP) + 12 <= right_start:
+            c.solid((left_end + right_start - solid_width(mid, AXIS_CAP)) // 2, c.y, mid, AXIS_CAP)
         c.y += AXIS_CAP + 6
         plot = max(36, card.plot_h)
         line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)

@@ -146,3 +146,11 @@ def test_moods_draw_different_bands():
     headers = {m: spec["header"] for m, spec in strips.MOODS.items()}
     for a, b in (("playful", "gentle_warning"), ("excited", "happy")):
         assert headers[a] != headers[b]
+
+
+def test_greeting_only_ticket_is_signed_and_graph_has_a_middle_label():
+    from app.compose import ticket_lines
+
+    plain = ticket_lines({"greeting": "HELLO ALLYSON"}, None, None, None)
+    signed = ticket_lines({"greeting": "HELLO ALLYSON"}, None, None, "Hermes")
+    assert [line.raster for line in signed] != [line.raster for line in plain]  # the signature changes the picture

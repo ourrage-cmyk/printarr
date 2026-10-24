@@ -9,6 +9,7 @@ runs past its card's height is shortened with "..." and reported as a note.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, tzinfo
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -26,6 +27,7 @@ MOODS: tuple[str, ...] = tuple(R.MOODS)
 AUTO = "auto"  # the decision model picks the mood; the rules pick neutral until it does
 MAX_BLOCKS = 16
 PLACEHOLDER = "--"  # printed for a value Home Assistant did not give
+DISPLAY_TZ: tzinfo | None = None  # the household's time zone, set at start-up from the settings
 TICKET_MARGIN = 24  # dots above a composed ticket
 TICKET_MARGIN_BOTTOM = 66  # plus the one-line cutter feed (about 24 dots): the blank before the cut is about 90 dots
 CARD_CAPTION = "[card]"  # what a text preview shows in place of a drawn card
@@ -346,6 +348,8 @@ def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[st
     for key in ("scope", "as_of"):
         if metric.get(key):
             slots[key] = metric[key]
+    if "entity_id" in slots and "as_of" not in slots:
+        slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")  # a live reading says when it was read
     return {"type": "metric", "mood": "factual", "span": 1, "slots": slots}
 
 
@@ -414,6 +418,8 @@ def ticket_lines(
         blocks = briefing_blocks(slots, client, sender)
     elif "greeting" in slots:
         blocks = [{"type": "greeting", "mood": "neutral", "span": 3, "slots": {k: slots[k] for k in ("greeting", "summary") if slots.get(k)}}]
+        if sender and not slots.get("tip"):
+            blocks[0]["slots"]["from"] = sender
         if slots.get("tip"):
             blocks.append({"type": "tip", "mood": "neutral", "span": 3, "slots": {"tip": str(slots["tip"])}})
     else:

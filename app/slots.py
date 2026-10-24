@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.ha import HAClient, HAError
 from app.receipt import Line, format_number, wrap
@@ -84,8 +84,16 @@ class BriefingSlots(BaseModel):
 
     greeting: str | None = Field(default=None, max_length=40, examples=["Good morning, Yannic"])
     title: str | None = Field(default=None, max_length=60, examples=["Today"])
-    metrics: list[Metric] = Field(default_factory=list, max_length=4, description="Up to four graphed numbers.")
+    metrics: list[Metric] = Field(default_factory=list, description="Up to four graphed numbers.", json_schema_extra={"maxItems": 4})
     paragraph: str | None = Field(default=None, max_length=400, description="The briefing text.")
+
+    @field_validator("metrics")
+    @classmethod
+    def _four_metrics(cls, value: list[Metric]) -> list[Metric]:
+        if len(value) > 4:
+            raise ValueError(f"a briefing holds at most 4 metrics but {len(value)} were sent: keep the four that matter and print the rest as a second briefing")
+        return value
+
     formatted: bool = Field(default=True, description="False when the text is raw speech to clean up.")
     tip: str | None = Field(default=None, max_length=120, examples=["Leave five minutes early."])
     sign_off: str | None = Field(default=None, alias="from", max_length=20, description="Who the briefing is from. Printed under the tip; the ticket's sender is used when omitted.")

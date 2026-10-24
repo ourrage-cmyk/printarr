@@ -669,6 +669,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             if worker:
                 worker.stop()
 
+    from app import compose as _compose
+
+    _compose.DISPLAY_TZ = settings.tzinfo  # live readings are stamped in the household's time zone
+
     app = FastAPI(
         title="Printarr",
         version=PACKAGE_VERSION,
