@@ -357,6 +357,65 @@
         }
       }
     },
+    "/api/v1/people/{person}/release": {
+      "post": {
+        "tags": [
+          "tickets"
+        ],
+        "summary": "Release Person",
+        "description": "Print this person's pile as strips, cutting after each. Only this person's tickets go on a strip.",
+        "operationId": "release_person_api_v1_people__person__release_post",
+        "parameters": [
+          {
+            "name": "person",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "yannic",
+                "wife"
+              ],
+              "type": "string",
+              "title": "Person"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonRelease"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Release Person Api V1 People  Person  Release Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/holds/{hold_key}/release": {
       "post": {
         "tags": [
@@ -1407,6 +1466,54 @@
           }
         }
       }
+    },
+    "/api/v1/printer/self-check": {
+      "get": {
+        "tags": [
+          "printer"
+        ],
+        "summary": "Printer Self Check",
+        "description": "Check the link and read the printer's status bytes. Prints nothing.\n\n`faults` are the blocking keys the queue pauses for. `unanswered` lists keys whose\nstatus request got no reply, so they could not be checked.",
+        "operationId": "printer_self_check_api_v1_printer_self_check_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Printer Self Check Api V1 Printer Self Check Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Metrics",
+        "description": "Counters since start: tickets printed, failures, dead letters, interrupted jobs, pauses.",
+        "operationId": "get_metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Metrics Api V1 Metrics Get"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1644,6 +1751,25 @@
         "type": "object",
         "title": "ModelSettingsPatch"
       },
+      "PersonRelease": {
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "morning",
+              "evening",
+              "arrival",
+              "request"
+            ],
+            "title": "Trigger",
+            "description": "Why the strip is printed, kept in the log.",
+            "default": "request"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PersonRelease"
+      },
       "PreviewOut": {
         "properties": {
           "template_id": {
@@ -1843,6 +1969,23 @@
               }
             ],
             "title": "Send At"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "at",
+                  "on_release"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery",
+            "description": "As for /tickets: now, at, or on_release (the recipient's pile)."
           },
           "hold": {
             "type": "boolean",
@@ -2153,6 +2296,23 @@
             "title": "To User",
             "description": "The person it is for. With from_user, it is an inbox item."
           },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "at",
+                  "on_release"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery",
+            "description": "now: print and cut at once. at: print at send_at. on_release: wait in the recipient's pile and print with their next POST /api/v1/people/{person}/release. Omitted, it is at when send_at is set, otherwise now."
+          },
           "blocks": {
             "items": {
               "oneOf": [
@@ -2446,6 +2606,33 @@
               }
             ],
             "title": "Print Ms"
+          },
+          "delivery": {
+            "type": "string",
+            "title": "Delivery",
+            "default": "now"
+          },
+          "strip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strip Id"
+          },
+          "strip_trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strip Trigger"
           }
         },
         "type": "object",
