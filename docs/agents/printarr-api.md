@@ -83,6 +83,10 @@ Writing tickets, for agents:
 
 `entity_id` values are read from Home Assistant when the ticket prints. A value that is missing prints `--`. Text that is too long for its card is shortened with `...`, and the response lists each cut in `notes`.
 
+### A briefing preset
+
+`POST /api/v1/tickets/compose` with `preset: "briefing"` and `slots` instead of `blocks`. It lays out one fixed briefing: a greeting with the time of day (`time_of_day`: morning, afternoon or evening), three `metrics` with sparklines, one larger `graph`, a `body` in a message card and a `fun_fact`. Each part is its own tile. Use it for every Hermes briefing so they all look the same. The full example is in the Hermes skill. A preset ticket is kind `morning` unless `kind` is sent.
+
 ### A slot ticket
 
 `POST /api/v1/tickets/slots` with `template` 101 or 102 and `slots` checked against `GET /api/v1/templates/{id}/schema`.

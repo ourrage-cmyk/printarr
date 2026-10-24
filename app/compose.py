@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, tzinfo
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -445,3 +445,71 @@ def ticket_lines(
         blocks = message_blocks(str(slots.get("title") or "Printarr"), sender)
     lines, _ = compose_render(blocks, client)
     return lines
+
+
+# The briefing preset: one fixed layout for Hermes' morning (or evening) briefing, so every briefing
+# looks like the same ticket. Greeting with the time of day, three metrics with sparklines, one larger
+# graph, a body and a fun fact. Each part is a block, so each prints as its own tile.
+PRESET_BRIEFING = "briefing"
+PRESET_METRICS = 3
+
+
+class PresetMetric(_Strict):
+    label: str = Field(min_length=1, max_length=40)
+    entity_id: str | None = Field(default=None, max_length=120, description="Home Assistant entity: its value is read at print time and its history draws the sparkline.")
+    value: int | float | str | None = Field(default=None, description="A fixed value, when there is no entity.")
+    unit: str | None = Field(default=None, max_length=12)
+    hours: int = Field(default=24, ge=1, le=168, description="How far back the sparkline reaches.")
+
+    @model_validator(mode="after")
+    def _has_value(self) -> PresetMetric:
+        if self.value is None and self.entity_id is None:
+            raise ValueError("send a value or an entity_id (a Home Assistant entity, such as sensor.steps)")
+        return self
+
+
+class PresetGraph(_Strict):
+    title: str = Field(min_length=1, max_length=40)
+    entity_id: str | None = Field(default=None, max_length=120, description="Home Assistant entity whose history draws the graph. Left out when there is no history.")
+    series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Fixed values, oldest first, when there is no entity.")
+    hours: int = Field(default=24, ge=1, le=168)
+    unit: str | None = Field(default=None, max_length=12)
+
+    @model_validator(mode="after")
+    def _has_data(self) -> PresetGraph:
+        if self.series is None and self.entity_id is None:
+            raise ValueError("send series (values, oldest first) or an entity_id")
+        return self
+
+
+class BriefingPresetSlots(_Strict):
+    time_of_day: Literal["morning", "afternoon", "evening"] = Field(description="The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING.")
+    metrics: list[PresetMetric] = Field(min_length=PRESET_METRICS, max_length=PRESET_METRICS, description="Exactly three entities, each with a sparkline.")
+    graph: PresetGraph = Field(description="The one larger graph under the metrics.")
+    body: str = Field(min_length=1, max_length=800, description="The briefing text, in a message card.")
+    fun_fact: str = Field(min_length=1, max_length=200, description="A short fun fact, printed as a fact card.")
+    sign_off: str | None = Field(default=None, alias="from", min_length=1, max_length=20, description="Who the briefing is from. The ticket's sender is used when omitted.")
+
+
+
+def briefing_preset_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None) -> list[dict[str, Any]]:
+    """The briefing preset as blocks, in print order. Raises BlockProblem naming each wrong slot."""
+    try:
+        parsed = BriefingPresetSlots.model_validate(dict(slots))
+    except ValidationError as exc:
+        raise BlockProblem(_slot_problems("preset", exc)) from None
+    blocks: list[dict[str, Any]] = [{
+        "type": "greeting", "mood": "neutral", "span": 3,
+        "slots": {"greeting": f"GOOD {parsed.time_of_day.upper()}"},
+    }]
+    blocks.extend(_metric_block(metric.model_dump(exclude_none=True), client) for metric in parsed.metrics)
+    graph = parsed.graph
+    series = list(graph.series) if graph.series is not None else _history(graph.entity_id, graph.hours, client)
+    if series:  # no history from Home Assistant: the graph is left out and the rest still prints
+        graph_slots: dict[str, Any] = {"title": graph.title, "series": series, "range": f"{graph.hours}H"}
+        if graph.unit:
+            graph_slots["unit"] = graph.unit
+        blocks.append({"type": "graph", "mood": "factual", "span": 3, "slots": graph_slots})
+    blocks.extend(message_blocks(parsed.body, parsed.sign_off or sender))
+    blocks.append({"type": "fact", "mood": "playful", "span": 3, "slots": {"paragraph": parsed.fun_fact}})
+    return blocks

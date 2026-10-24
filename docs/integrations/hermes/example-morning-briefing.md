@@ -7,14 +7,13 @@ Values are illustrative. The flow matches the live API on main.
 ```
 Compose Yannic's morning briefing for 26 October 2026. It should print at 07:00.
 
-1. GET /api/v1/templates/101/schema and check the slot limits.
-2. GET /api/v1/insights/entities?person=yannic&limit=12.
-3. Pick up to four entities. Prefer |z_score| above 2, a clear trend, or relevance 3.
-   Give each a label of at most 20 characters and a unit.
-4. Write a paragraph of three or four plain sentences and a one-line tip.
-5. POST /api/v1/tickets/slots with template 101, recipient yannic, sender hermes,
+1. GET /api/v1/insights/entities?person=yannic&limit=12.
+2. Pick three entities for the metrics. Prefer |z_score| above 2, a clear trend, or relevance 3.
+   Give each a label of at most 20 characters and a unit. Pick one more numeric entity with history for the graph.
+3. Write a body of three or four plain sentences and a one-line fun fact.
+4. POST /api/v1/tickets/compose with preset briefing, recipient yannic, sender hermes,
    kind morning, delivery on_release, idempotency_key morning:yannic:2026-10-26.
-6. Reply with the ticket id, and one line per metric on why it was chosen.
+5. Reply with the ticket id, and one line per metric on why it was chosen.
    Home Assistant prints it on Yannic's strip when his phone is unplugged.
 ```
 
@@ -44,28 +43,28 @@ and home temperature (shared, trending). It explains each choice in step 6.
 
 ```json
 {
-  "template": 101,
   "recipient": "yannic",
   "sender": "hermes",
   "kind": "morning",
-  "tone": "neutral",
+  "preset": "briefing",
   "delivery": "on_release",
   "idempotency_key": "morning:yannic:2026-10-26",
   "slots": {
-    "title": "Morning",
+    "time_of_day": "morning",
     "metrics": [
-      {"label": "SLEEP", "entity_id": "sensor.sleep_score", "hours": 168},
-      {"label": "STEPS", "entity_id": "sensor.total_steps", "unit": "steps", "hours": 168},
-      {"label": "BODY BATTERY", "entity_id": "sensor.body_battery_most_recent", "unit": "%", "hours": 168},
-      {"label": "HOME", "entity_id": "sensor.home_temperature", "unit": "°C", "hours": 24}
+      {"label": "Sleep", "entity_id": "sensor.sleep_score", "hours": 168},
+      {"label": "Steps", "entity_id": "sensor.total_steps", "unit": "steps", "hours": 168},
+      {"label": "Body battery", "entity_id": "sensor.body_battery_most_recent", "unit": "%", "hours": 168}
     ],
-    "paragraph": "Sleep came in low at 71, well below your usual 82, and steps are behind at 3,400 so far. Body battery is steady at 58. Home is a little cool at 18.6 degrees.",
-    "tip": "A short walk before lunch would help the steps."
+    "graph": {"title": "Home temperature", "entity_id": "sensor.home_temperature", "hours": 24, "unit": "C"},
+    "body": "Sleep came in low at 71, well below your usual 82, and steps are behind at 3,400 so far. Body battery is steady at 58. Home is a little cool at 18.6 degrees.",
+    "fun_fact": "Honey does not spoil. Jars found in old tombs were still edible.",
+    "from": "hermes"
   }
 }
 ```
 
-Greeting is left out, so printarr writes "Good morning, Yannic" from the send time.
+The headline is GOOD MORNING, from `time_of_day`. Every briefing has this same layout.
 
 ## What happens next
 
