@@ -54,6 +54,7 @@ from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
 from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
 from app.text import printed_as_question
 from app.compose import (
+    sign_blocks,
     note_card_lines,
     note_card_render,
     ticket_lines,
@@ -979,7 +980,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise ApiProblem(422, exc.problems, BLOCKS_HINT, COMPOSE_EXAMPLE) from None
         render_started = time.perf_counter()
         try:  # draw the strips now, so a queued ticket always prints; notes say what was shortened
-            lines, notes = compose_render(checked, None)
+            lines, notes = compose_render(sign_blocks(checked, body.sender), None)
             encode(lines, feed=template_by_id(103).feed, raster_mode=settings.raster_mode)
         except Exception as exc:
             logger.exception("composed rendering failed; ticket not queued")
