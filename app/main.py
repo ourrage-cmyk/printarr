@@ -483,7 +483,7 @@ def preview_warnings(text: str) -> list[str]:
 
 
 # Paths that answer while setup is open: the wizard page, health, the setup routes and the docs.
-SETUP_OPEN_PATHS = ("/", "/healthz", "/api/v1/health", "/docs", "/openapi.json", "/redoc")
+SETUP_OPEN_PATHS = ("/", "/setup", "/healthz", "/api/v1/health", "/docs", "/openapi.json", "/redoc")
 
 
 def create_app(settings: Settings | None = None, transport: Transport | None = None) -> FastAPI:
@@ -578,22 +578,30 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             runtime["paper_near_end"] = "paper_near_end" in status.warnings  # shown in health, not alerted
 
     def start_setup() -> None:
-        """First run: print a new setup code. Legacy installs already have settings, so they skip the wizard."""
+        """Print a new setup code at every start. Legacy installs already have settings, so they skip the wizard.
+
+        The same code opens the wizard while setup is open, and later opens /setup to change settings.
+        """
         if not settings.setup_required:
             return
         if store.get_setting(setup_flow.COMPLETE_KEY) is None and setup_flow.is_legacy_install(store):
             store.set_setting(setup_flow.COMPLETE_KEY, "true")
-        if store.get_setting(setup_flow.COMPLETE_KEY) == "true":
-            runtime["setup_open"] = False
-            return
+        runtime["setup_open"] = store.get_setting(setup_flow.COMPLETE_KEY) != "true"
         code = setup_flow.new_code()
         store.set_setting(setup_flow.CODE_HASH_KEY, setup_flow.code_hash(code))
         app.state.setup_code = code
-        logger.warning(
-            "printarr setup: open this printarr's web page in a browser and enter setup code %s. "
-            "A new code is printed at each start until setup is finished.",
-            code,
-        )
+        if runtime["setup_open"]:
+            logger.warning(
+                "printarr setup: open this printarr's web page in a browser and enter setup code %s. "
+                "A new code is printed at each start until setup is finished.",
+                code,
+            )
+        else:
+            logger.warning(
+                "printarr settings: to change settings, open /setup and enter setup code %s. "
+                "A new code is printed at each start.",
+                code,
+            )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -655,8 +663,6 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
     api = APIRouter(prefix="/api/v1")
 
     def require_setup_code(code: str | None) -> None:
-        if not runtime["setup_open"]:
-            raise HTTPException(status_code=409, detail="setup is already finished")
         if not setup_flow.code_matches(code, store.get_setting(setup_flow.CODE_HASH_KEY)):
             raise HTTPException(status_code=401, detail="setup code is wrong. Copy it from the printarr log.")
 
@@ -1146,26 +1152,33 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         values: SetupValues,
         x_setup_code: str | None = Header(default=None, description="The setup code from the log."),
     ) -> dict[str, Any]:
-        """Check every service that was filled in, then save everything and open the API.
+        """Check every service that was filled in, then save everything. Also used to change settings later.
 
-        A failed check returns 422 with what to fix. Nothing is saved unless every check passes.
+        The first call finishes setup and opens the API. After that, the same call saves changes, and a
+        blank secret keeps the saved one (list it in `clear` to remove it). A failed check returns 422
+        with what to fix. Nothing is saved unless every check passes.
         """
         with setup_lock:
             require_setup_code(x_setup_code)
+            values = setup_flow.fill_secrets(values, store)
             failed = {name: r.detail for name, r in run_checks(values).items() if not r.ok}
             if failed:
                 raise HTTPException(status_code=422, detail=failed)
             setup_flow.save_values(store, values)
-            store.delete_setting(setup_flow.CODE_HASH_KEY)
             store.set_setting(setup_flow.COMPLETE_KEY, "true")
             runtime["setup_open"] = False
             transport.swap(build_transport(setup_flow.printer_settings(settings, values)))
-        logger.info("printarr setup finished")
+        logger.info("printarr settings saved")
         return {"complete": True, "restart_needed": values.timezone != settings.timezone}
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def web_ui() -> str:
         return SETUP_UI if runtime["setup_open"] else WEB_UI
+
+    @app.get("/setup", response_class=HTMLResponse, include_in_schema=False)
+    def setup_page() -> str:
+        """The wizard while setup is open; afterwards the same page edits the saved settings."""
+        return SETUP_UI
 
     @api.get("/tickets", response_model=list[TicketOut], tags=["tickets"])
     def list_tickets(

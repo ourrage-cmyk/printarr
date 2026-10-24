@@ -58,11 +58,11 @@ jobs:
           build-args: VERSION=${{ github.sha }}
       - name: Smoke test the image
         run: |
-          mkdir -p "$RUNNER_TEMP/data" && sudo chown 1000:1000 "$RUNNER_TEMP/data"
+          mkdir -p "$RUNNER_TEMP/data" && sudo chown 568:568 "$RUNNER_TEMP/data"
           # A stand-in printer on the runner. The container uses host networking, so it can reach it.
           python3 -c "import socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', 9100)); s.listen(50)
           while True: c,_=s.accept(); c.close()" &
-          docker run -d --name printarr-ci --network host \
+          docker run -d --name printarr-ci --network host --user 568:568 \
             -e PRINTARR_PRINTER_MODE=file \
             -v "$RUNNER_TEMP/data:/data" printarr:ci
           for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz >/dev/null 2>&1 && break; sleep 1; done

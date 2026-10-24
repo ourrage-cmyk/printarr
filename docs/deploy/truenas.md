@@ -5,11 +5,14 @@ install it from one YAML file. There is no env file and no second file.
 
 ## Before you start
 
-1. **Create the data folder on your SSD dataset**, for example `/mnt/ssd/apps/printarr`.
-2. **Give it to the app's user (uid 1000).** In the TrueNAS shell:
+1. **Create the data folder on your SSD dataset**, for example `/mnt/SSDCAGE/printarr`. Everything
+   printarr keeps lives in this one folder: the database (tickets, settings, the setup state and the
+   saved secrets), the nightly backups and the output. Delete or rebuild the app and point it at the
+   same folder, and it comes back configured, with no wizard.
+2. **Give it to the app's user (uid 568).** In the TrueNAS shell:
    ```sh
-   mkdir -p /mnt/ssd/apps/printarr
-   chown -R 1000:1000 /mnt/ssd/apps/printarr
+   mkdir -p /mnt/SSDCAGE/printarr
+   chown -R 568:568 /mnt/SSDCAGE/printarr
    ```
    If the folder is not writable, the app stops at once and writes a message to its logs.
 3. **Know the printer's IP address** (the Epson TM-T88V on the LAN, port 9100). Have the Home Assistant
@@ -36,8 +39,14 @@ install it from one YAML file. There is no env file and no second file.
 **Secrets never go in the YAML or in environment variables.** The Home Assistant token and the
 Telegram bot token are typed into the wizard and stored in the database in the data folder. No
 endpoint returns them. Until setup is finished, the API answers 503, except health and the wizard.
-The setup code changes at every start until setup is finished. Once setup is finished, the code is
-gone and the wizard closes. Change settings later in the web page.
+The setup code changes at every start. Once setup is finished, the same code opens the wizard at
+`http://<nas-ip>:8000/setup`, where you can change any value later, including the printer's IP
+address. Each service is checked before anything is saved. A blank token keeps the saved one. Tick
+"Remove the saved token" to clear it.
+
+**Moving from the laptop simulator to the real printer:** open `/setup`, enter the code from the
+latest log line, change **Printer IP address** to the TM-T88V's address, press **Test**, then **Save
+settings**. The printer switches at once, with no restart.
 
 If the timezone changes in the wizard, restart the app once so it takes effect.
 
@@ -103,10 +112,10 @@ from `backups/`. The current database is kept as `backups/pre-import-*.db`, so t
 1. Stop the app in TrueNAS.
 2. In the TrueNAS shell, replace the database with the copy you want, and remove the journal files:
    ```sh
-   cd /mnt/ssd/apps/printarr
+   cd /mnt/SSDCAGE/printarr
    rm -f printarr.db-wal printarr.db-shm
    cp backups/<the-copy>.db printarr.db
-   chown 1000:1000 printarr.db
+   chown 568:568 printarr.db
    ```
 3. Start the app.
 
@@ -114,18 +123,15 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 
 ## Settings and the printer
 
-- The decision model, Home Assistant and Telegram settings are saved in the database. Change
-  them in the web page; they survive upgrades and rebuilds.
-- `PRINTARR_PRINTER_HOST` in the YAML is only the starting default for the setup wizard. Once
-  setup is finished, the printer address saved by the wizard wins, so changing the YAML does
-  nothing. There is no screen yet to change the printer address after setup (known gap, see the
-  Monday note below).
-- Values in the YAML are read only until setup is finished. After that the web page wins.
+- Every setting is saved by the setup wizard in the data folder: the printer, Home Assistant,
+  the model server, Telegram, names and timezone. Change them later at `http://<nas-ip>:8000/setup`
+  with the setup code from the log. They survive upgrades and rebuilds.
+- The YAML holds no settings, so there is nothing to edit there for the printer. To move from the
+  simulator to the real printer, change the printer address at `/setup`.
 
 ## Nightly backups
 
-- Turn them off with `PRINTARR_BACKUP: "off"`, or change the hour with `PRINTARR_BACKUP_HOUR`
-  (0 to 23, local time), and how many to keep with `PRINTARR_BACKUP_KEEP`.
+- They run at 03:00 local time and keep the last seven copies. These are fixed for now.
 - Backups sit on the same SSD as the data. They protect against a bad upgrade or a damaged
   database, not against losing the SSD. Copy the `backups/` folder to another disk now and then.
 
@@ -139,7 +145,7 @@ Keep a copy of the current `printarr.db` before step 2 if you may want it back.
 
 | Symptom in the logs | Cause and fix |
 | --- | --- |
-| `data folder /data is not writable by uid 1000` | Run `chown -R 1000:1000` on the data folder, then restart. |
+| `data folder /data is not writable by uid 568` | Run `chown -R 568:568` on the data folder, then restart. |
 | `schema is version N, but this printarr supports up to M` | The data came from a newer version. Roll back the image, or restore the matching backup. |
 | Health returns 503 | The printer is not reachable. Check the IP address, the printer's power and the LAN switch. |
 | The web page loads but a ticket is `failed` | Open the ticket in the web page. Its `last_error` says why. |
