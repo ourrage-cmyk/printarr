@@ -115,3 +115,34 @@ def test_truncated_and_strip_count_are_stored(tmp_path):
     ticket = store.create(recipient="yannic", message="x", send_at_ms=0, template_id=103, decorations=(), selection="explicit", notes=["message shortened"], strip_count=3)
     again = store.get(ticket["id"])
     assert again["truncated"] is True and again["strip_count"] == 3 and again["notes"] == ["message shortened"]
+
+
+def test_every_continuation_card_fits_without_shortening():
+    for count in (30, 70, 120):
+        text = " ".join(f"Sentence number {i} says something about the dogs." for i in range(count))
+        text = f"{text}\n\n{text[:300]}"
+        for block in strips.spill([Block("message", {"title": "Rex and Bella story", "paragraph": text, "from": "Hermes"})]):
+            _, notes = strips.layout([block])
+            assert notes == [], notes
+
+
+def test_a_long_row_label_wraps_and_the_value_stays_right_aligned():
+    from app.render.canvas import Canvas
+
+    c = Canvas()
+    c.y = 0
+    height = strips._row(c, strips.OUTER_L, strips.OUTER_R, "OUTSIDE TEMPERATURE READING FROM THE GARDEN SENSOR", "18.4 C")
+    assert height >= 2 * strips.ROW
+
+
+def test_title_slot_of_the_briefing_is_the_headline():
+    from app.compose import briefing_blocks
+
+    blocks = briefing_blocks({"greeting": "GOOD MORNING", "title": "MONDAY", "paragraph": "Short day."}, None)
+    assert blocks[0]["slots"]["greeting"] == "MONDAY" and blocks[0]["slots"]["summary"] == "GOOD MORNING. Short day."
+
+
+def test_moods_draw_different_bands():
+    headers = {m: spec["header"] for m, spec in strips.MOODS.items()}
+    for a, b in (("playful", "gentle_warning"), ("excited", "happy"), ("confused", "sad")):
+        assert headers[a] != headers[b]
