@@ -45,7 +45,7 @@ def test_firm_complaint_has_a_barcode():
 
 def test_metric_tiles_nest_in_the_card_that_closes_them():
     blocks = [
-        Block("greeting", {"greeting": "TODAY", "summary": "Fine."}),
+        Block("greeting", {"greeting": "TODAY", "summary": "Fine.", "_group": True}),
         Block("metric", {"label": "A", "value": 1}, span=1),
         Block("metric", {"label": "B", "value": 2}, span=1),
         Block("metric", {"label": "C", "value": 3}, span=1),
@@ -165,3 +165,10 @@ def test_greeting_only_ticket_is_signed_and_graph_has_a_middle_label():
     plain = ticket_lines({"greeting": "HELLO ALLYSON"}, None, None, None)
     signed = ticket_lines({"greeting": "HELLO ALLYSON"}, None, None, "Hermes")
     assert [line.raster for line in signed] != [line.raster for line in plain]  # the signature changes the picture
+
+
+def test_every_other_block_is_its_own_tile_and_small_ones_share_a_row():
+    blocks = [Block("tip", {"tip": "One."}, span=1), Block("fact", {"paragraph": "Two."}, span=2), Block("message", {"paragraph": "Three.", "from": "A"})]
+    assert [b.type for b in strips.prepare(blocks)] == ["tip", "fact", "message"]
+    rows, _ = strips.layout(strips.prepare(blocks))
+    assert [len(r) for r in rows] == [2, 1]

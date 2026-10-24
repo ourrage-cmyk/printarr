@@ -369,7 +369,7 @@ def briefing_blocks(slots: Mapping[str, Any], client: HAClient | None, sender: s
     if slots.get("title") and slots.get("greeting") and not text:
         text = slots["greeting"]  # a title and a greeting with no text: the greeting is the subtitle; with text it is dropped
     if head or text:
-        greeting: dict[str, Any] = {"greeting": head or "TODAY"}
+        greeting: dict[str, Any] = {"greeting": head or "TODAY", "_group": True}  # a briefing is one nested card
         if text:
             greeting["summary"] = text  # the renderer shortens it if it runs long
         signer = slots.get("from") or slots.get("sign_off") or sender
