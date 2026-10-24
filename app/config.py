@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-PRINTER_MODES = ("tcp", "file")
+PRINTER_MODES = ("tcp", "file", "usb", "serial")  # usb and serial are placeholders, see printer.py
 _TRUE_VALUES = ("1", "true", "yes", "on")
 
 
