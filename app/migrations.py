@@ -98,10 +98,18 @@ def _add_idempotency_index(conn: sqlite3.Connection) -> None:
     )
 
 
+def _add_slots_column(conn: sqlite3.Connection) -> None:
+    """Version 4: the filled slots of a slot template, stored with the ticket for the log."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "slots_json" not in have:
+        conn.execute("ALTER TABLE tickets ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
     _add_idempotency_index,  # version 3
+    _add_slots_column,  # version 4
 )
 
 LATEST_VERSION = len(MIGRATIONS)

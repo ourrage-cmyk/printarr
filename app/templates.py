@@ -53,6 +53,9 @@ TEMPLATES: tuple[Template, ...] = (
     Template(10, "Briefing", "wife", True, "left", "=", ("footer",), (), kind="morning"),
     Template(11, "Evening", "wife", True, "center", "-", ("footer",), (), kind="evening"),
     Template(12, "List", "wife", False, "left", "-", ("footer",), (), kind="list"),
+    # Slot templates (app/slots.py). Their group is not a recipient, so no recipient picks them by rule.
+    Template(101, "Briefing slots", "slots", True, "left", "=", (), (), kind="morning"),
+    Template(102, "Note slots", "slots", True, "left", "-", (), (), kind="note"),
 )
 
 _BY_ID = {template.id: template for template in TEMPLATES}

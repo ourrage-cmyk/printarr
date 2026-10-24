@@ -7,6 +7,7 @@ consume these lines, so what the preview shows matches what the printer prints.
 from __future__ import annotations
 
 import base64
+import json
 import re
 import textwrap
 from collections.abc import Mapping, Sequence
@@ -90,6 +91,11 @@ def render_ticket_lines(
     template = template_by_id(int(ticket["template_id"]))  # type: ignore[arg-type]
     if template.design:
         return list(extra)  # the image is the whole ticket; its live lines are the bitmap
+    if template.group == "slots":
+        from app.slots import slot_lines  # imported here: app.slots imports this module
+
+        slots = json.loads(str(ticket.get("slots_json") or "{}"))
+        return list(extra) or slot_lines(slots)
     decorations = tuple(d for d in str(ticket["decorations"] or "").split(",") if d)
     return render_lines(receipt_for_ticket(ticket, tz), width, template, decorations, extra)
 
