@@ -32,11 +32,11 @@ BLOCKS = {
 @pytest.fixture
 def dot_draws(monkeypatch):
     """Records (function that drew it, text) for every Canvas.text call while the test runs."""
-    draws: list[tuple[str, str]] = []
+    draws: list[tuple[str, str, int]] = []
     original = canvas.Canvas.text
 
     def recording(self, x, y, text, scale=2):
-        draws.append((sys._getframe(1).f_code.co_name, str(text)))
+        draws.append((sys._getframe(1).f_code.co_name, str(text), scale))
         return original(self, x, y, text, scale)
 
     monkeypatch.setattr(canvas.Canvas, "text", recording)
@@ -44,7 +44,7 @@ def dot_draws(monkeypatch):
 
 
 def _assert_titles_only(draws: list[tuple[str, str]]) -> None:
-    body = [(caller, text) for caller, text in draws if caller not in TITLE_CALLERS]
+    body = [(caller, text) for caller, text, _ in draws if caller not in TITLE_CALLERS]
     assert not body, f"body text drawn in the dot matrix font: {body}"
 
 
@@ -66,9 +66,20 @@ def test_morning_design_body_text_is_full_line(dot_draws):
     )
     _assert_titles_only(dot_draws)
     # The title words are still dot matrix: the design is a titled card, not all body text.
-    assert {text for caller, text in dot_draws if caller == "title"} == {"HELLO YANNIC", "TODAY"}
+    assert {text for caller, text, _ in dot_draws if caller == "title"} == {"HELLO YANNIC", "TODAY"}
 
 
 def test_morning_design_with_no_data_is_full_line(dot_draws):
     designs.morning_system(designs.Morning(summary="Good morning.", body_battery=None, stress=None, steps=None, cpu=None, ram=None))
     _assert_titles_only(dot_draws)
+
+
+def test_every_title_is_larger_than_body_text(dot_draws):
+    """Dot-matrix titles must be bigger than body text: at equal size the dot font reads grey and weaker."""
+    strips.render_strip([Block("message", BLOCKS["alert"], mood="urgent")])
+    strips.render_strip([Block("graph", BLOCKS["graph"])])
+    strips.render_strip([Block("checklist", BLOCKS["checklist"])])
+    strips.render_strip([Block("greeting", BLOCKS["greeting"])])
+    titles = [scale for caller, _, scale in dot_draws if caller in TITLE_CALLERS]
+    assert titles, "expected dot-matrix titles to be drawn"
+    assert all(scale > strips.BODY for scale in titles), titles
