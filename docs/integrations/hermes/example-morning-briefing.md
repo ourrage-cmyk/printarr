@@ -13,8 +13,9 @@ Compose Yannic's morning briefing for 26 October 2026. It should print at 07:00.
    Give each a label of at most 20 characters and a unit.
 4. Write a paragraph of three or four plain sentences and a one-line tip.
 5. POST /api/v1/tickets/slots with template 101, recipient yannic, sender hermes,
-   kind morning, send_at 2026-10-26T07:00:00.
+   kind morning, delivery on_release, idempotency_key morning:yannic:2026-10-26.
 6. Reply with the ticket id, and one line per metric on why it was chosen.
+   Home Assistant prints it on Yannic's strip when his phone is unplugged.
 ```
 
 ## Insights returned (trimmed)
@@ -48,7 +49,8 @@ and home temperature (shared, trending). It explains each choice in step 6.
   "sender": "hermes",
   "kind": "morning",
   "tone": "neutral",
-  "send_at": "2026-10-26T07:00:00",
+  "delivery": "on_release",
+  "idempotency_key": "morning:yannic:2026-10-26",
   "slots": {
     "title": "Morning",
     "metrics": [
@@ -65,13 +67,10 @@ and home temperature (shared, trending). It explains each choice in step 6.
 
 Greeting is left out, so printarr writes "Good morning, Yannic" from the send time.
 
-## Held version
+## What happens next
 
-To have Home Assistant release this briefing when the phone is unplugged, send it held instead of
-with `send_at`. Replace `send_at` in the payload with:
-
-```json
-"hold": true,
-"hold_key": "morning-yannic-2026-10-26",
-"idempotency_key": "morning:yannic:2026-10-26"
-```
+The briefing waits in Yannic's pile. When his phone is unplugged, Home Assistant creates the morning
+briefing (same idempotency key, so it is not duplicated) and calls
+`POST /api/v1/people/yannic/release` with `{"trigger": "morning"}`. His strip prints with the briefing
+and any messages waiting for him, cut after each strip. Allyson's strip is separate, and only prints
+on her own trigger.
