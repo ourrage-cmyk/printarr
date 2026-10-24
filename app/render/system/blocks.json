@@ -223,7 +223,7 @@
       "sprite_set": "soft"
     },
     "playful": {
-      "header": "sunStrip",
+      "header": "dottedWave",
       "divider": "tapeTicks",
       "footer": "dottedWave",
       "icon": "star",
@@ -239,7 +239,7 @@
       "sprite_set": "neutral"
     },
     "factual": {
-      "header": "hairline",
+      "header": "doubleHairline",
       "divider": "hairline",
       "footer": "hairline",
       "icon": "box",
@@ -247,7 +247,7 @@
       "sprite_set": "neutral"
     },
     "sad": {
-      "header": "dottedWave",
+      "header": "dashedRule",
       "divider": "dashedRule",
       "footer": "hairline",
       "icon": "drop",
@@ -279,7 +279,7 @@
       "sprite_set": "alert"
     },
     "firm_complaint": {
-      "header": "perforation",
+      "header": "doubleHairline",
       "divider": "doubleHairline",
       "footer": "barcode",
       "icon": "warn",
