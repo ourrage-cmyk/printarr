@@ -222,14 +222,14 @@ def _warn(c: Canvas, x0: int, _x1: int, y: int) -> int:
     return 24
 
 
-BAND_H = 20  # a mood band is tall enough to read at a glance, before a word is read
+BAND_H = 28  # a mood band is tall enough to read at a glance, before a word is read
 
 
 def _band_dots(c: Canvas, x0: int, x1: int, y: int) -> int:
     """Warm family: two rows of sparse round dots, offset like a soft pattern."""
-    for row, yy in enumerate((y + 4, y + 12)):
+    for row, yy in enumerate((y + 5, y + 17)):
         for x in range(x0 + 4 + (6 if row else 0), x1 - 4, 12):
-            c.fill_rect(x, yy, 4, 4)
+            c.fill_rect(x, yy, 6, 6)
     return BAND_H
 
 
@@ -238,8 +238,8 @@ def _band_zigzag(c: Canvas, x0: int, x1: int, y: int) -> int:
     prev = None
     for x in range(x0, x1):
         phase = (x - x0) % 16
-        yy = y + 2 + (phase if phase < 8 else 16 - phase) * 2
-        for dy in range(0, 4):
+        yy = y + 2 + (phase if phase < 8 else 16 - phase) * 3
+        for dy in range(0, 4):  # a 4-dot stroke
             c.set_px(x, min(y + BAND_H - 1, yy + dy))
         if prev is not None:
             for t in range(min(yy, prev), max(yy, prev) + 1):
@@ -250,8 +250,8 @@ def _band_zigzag(c: Canvas, x0: int, x1: int, y: int) -> int:
 
 def _band_ticks(c: Canvas, x0: int, x1: int, y: int) -> int:
     """Prompt family: evenly spaced upright ticks, a pause cue."""
-    for x in range(x0 + 2, x1 - 2, 8):
-        c.fill_rect(x, y + 2, 3, BAND_H - 4)
+    for x in range(x0 + 2, x1 - 4, 10):
+        c.fill_rect(x, y + 2, 4, BAND_H - 4)
     return BAND_H
 
 
@@ -271,20 +271,20 @@ def _band_stipple(c: Canvas, x0: int, x1: int, y: int) -> int:
 
 def _band_hatch(c: Canvas, x0: int, x1: int, y: int) -> int:
     """Caution family: diagonal hatching between two rules."""
-    c.fill_rect(x0, y, x1 - x0, 2)
-    c.fill_rect(x0, y + BAND_H - 2, x1 - x0, 2)
+    c.fill_rect(x0, y, x1 - x0, 3)
+    c.fill_rect(x0, y + BAND_H - 3, x1 - x0, 3)
     for x in range(x0, x1):
         for yy in range(y + 3, y + BAND_H - 3):
-            if (x - x0 + (yy - y)) % 10 < 3:
+            if (x - x0 + (yy - y)) % 12 < 4:
                 c.set_px(x, yy)
     return BAND_H
 
 
 def _band_blocks(c: Canvas, x0: int, x1: int, y: int) -> int:
     """Firm family: two rows of chunky blocks, like caution tape: heavier than a hatch, lighter than the barcode."""
-    for row, yy in enumerate((y + 3, y + 11)):
+    for row, yy in enumerate((y + 4, y + 16)):
         for x in range(x0 + (8 if row else 0), x1 - 11, 16):
-            c.fill_rect(x, yy, 10, 6)
+            c.fill_rect(x, yy, 12, 8)
     return BAND_H
 
 
