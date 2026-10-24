@@ -50,7 +50,11 @@ def test_model_outage_falls_back_and_alerts_once(settings, monkeypatch):
         first = client.post("/api/v1/tickets", json={"recipient": "wife", "message": "one"}).json()
         second = client.post("/api/v1/tickets", json={"recipient": "wife", "message": "two"}).json()
         assert first["selection"] == second["selection"] == "rule"
-        assert sum("decision model down" in text for text in sent) == 1
+        assert sent == []  # two failures are logged, not alerted: one slow answer never pages anyone
+        third = client.post("/api/v1/tickets", json={"recipient": "wife", "message": "three"}).json()
+        assert third["selection"] == "rule"
+        assert sum("decision model failed" in text for text in sent) == 1
+        assert "gave no answer" in " ".join(sent) or "cannot be reached" in " ".join(sent)
 
 
 def test_printer_outage_alerts_once(settings, monkeypatch):

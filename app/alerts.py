@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -37,15 +39,38 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
         raise RuntimeError(f"Telegram send failed: {message}") from None
 
 
+def describe_failure(exc: BaseException, where: str, timeout: float | None = None) -> str:
+    """Say what went wrong, with the real cause: the HTTP status, the timeout, or the network error."""
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            detail = exc.read(200).decode("utf-8", "replace").strip()
+        except Exception:  # the body is optional: the status alone still says what happened
+            detail = ""
+        return f"{where} answered HTTP {exc.code} {exc.reason}" + (f": {detail}" if detail else "")
+    if isinstance(exc, TimeoutError) or (isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, TimeoutError)):
+        limit = f" within {timeout:g} s" if timeout else ""
+        return f"{where} gave no answer{limit} (timeout)"
+    if isinstance(exc, urllib.error.URLError):
+        return f"{where} cannot be reached: {exc.reason}"
+    return f"{where} failed: {type(exc).__name__}: {exc}"
+
+
+REPEATS_TO_ALERT = 3  # a model alert needs this many failures...
+REPEAT_WINDOW_S = 900.0  # ...inside this window, so one slow answer never pages anyone
+
+
 class Notifier:
     def __init__(
         self,
         read_settings: Callable[[], AlertSettings],
         sender: Callable[[str, str, str], None] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._read = read_settings
         self._sender = sender or send_telegram
+        self._clock = clock
         self._active: set[str] = set()
+        self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
     def is_active(self, key: str) -> bool:
@@ -63,7 +88,25 @@ class Notifier:
             self._active.add(key)
         self._send(f"Printarr alert: {text}")
 
+    def repeated(self, key: str, text: str) -> None:
+        """Log every failure, but alert only when REPEATS_TO_ALERT of them fall within REPEAT_WINDOW_S."""
+        logger.warning(text)
+        now = self._clock()
+        with self._lock:
+            recent = [t for t in self._failures.get(key, []) if now - t < REPEAT_WINDOW_S]
+            recent.append(now)
+            self._failures[key] = recent
+            due = len(recent) >= REPEATS_TO_ALERT
+        if due:
+            self.problem(key, text)
+
+    def clear_failures(self, key: str) -> None:
+        """A success: forget the failures counted so far."""
+        with self._lock:
+            self._failures.pop(key, None)
+
     def recovered(self, key: str, text: str) -> None:
+        self.clear_failures(key)
         with self._lock:
             if key not in self._active:
                 return

@@ -124,6 +124,11 @@ def _add_moods_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE tickets ADD COLUMN moods TEXT NOT NULL DEFAULT ''")
 
 
+def _raise_model_timeout(conn: sqlite3.Connection) -> None:
+    """Version 7: the model timeout default rose from 5 s to 30 s. A stored 5 s, seeded by the old default, moves up too."""
+    conn.execute("UPDATE settings SET value = '30' WHERE key = 'llm_timeout' AND value IN ('5', '5.0')")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
@@ -131,6 +136,7 @@ MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _add_slots_column,  # version 4
     _add_delivery_columns,  # version 5
     _add_moods_column,  # version 6
+    _raise_model_timeout,  # version 7
 )
 
 LATEST_VERSION = len(MIGRATIONS)
