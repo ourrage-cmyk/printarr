@@ -278,4 +278,4 @@ const SPRITES = {
   drop: ['..#..', '.###.', '#####', '#####', '.###.'],
 };
 
-module.exports = { Canvas, W, glyph, textWidth, SPRITES, GLYPHS };
+module.exports = { Canvas, W, glyph, textWidth, SPRITES };
