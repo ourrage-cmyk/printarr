@@ -25,7 +25,10 @@ from app.text import printable
 from app import ticket_images
 from app.templates import template_by_id
 from app.blocks import resolve_blocks
-from app.store import PRINT_CODE_LEN, TicketStore, now_ms
+from app.store import PRINT_CODE_LEN, RELEASE_TAG_FOR_TRIGGER, TicketStore, now_ms
+
+# The default briefing's layout: the three metrics and the graph printarr reads at release, set by PUT /api/v1/briefing/default.
+DEFAULT_BRIEFING_SETTING = "briefing_default"
 
 logger = logging.getLogger("printarr.scheduler")
 
@@ -301,11 +304,18 @@ class Scheduler:
     def print_release(self, person: str, trigger: str) -> list[dict]:
         """Print one person's pile as strips. Each strip holds only this person's tickets and is cut after it.
 
+        A morning or evening release prints the tickets tagged for it (and any), so a briefing queued for
+        the other release stays in the pile. A request prints the whole pile. A morning or evening release
+        with no briefing queued for it prints the default briefing first, when one is set.
+
         A strip is cut after strip_max_blocks tickets. Tickets are claimed before printing, so a repeat
         release prints nothing new. A failed print puts its claimed tickets back on hold. If a later
         strip fails, ReleaseIncomplete carries the strips already printed, so the caller can report them.
         """
-        pile = self.store.pile(person)
+        tag = RELEASE_TAG_FOR_TRIGGER.get(trigger)
+        if tag is not None:
+            self._ensure_default_briefing(person, tag)
+        pile = self.store.pile(person, tag)
         lead = next((t for t in pile if opens_strip(t)), None)
         if lead is not None:  # the first briefing leads the piece, everything else follows in queue order
             pile = [lead] + [t for t in pile if t is not lead]
@@ -335,6 +345,43 @@ class Scheduler:
             logger.info("strip %s for %s (%s): %d ticket(s) printed", strip_id, person, trigger, len(won))
             strips.append({"strip_id": strip_id, "ticket_ids": won})
         return strips
+
+    def _ensure_default_briefing(self, person: str, tag: str) -> None:
+        """Queue the default briefing for this release, when none is waiting for it and none was built today.
+
+        The ticket holds only the layout. Its values are read when it prints, so an unreachable Home Assistant
+        prints the metrics with their placeholder mark. Never raises: a release still prints the rest of the pile.
+        """
+        try:
+            raw = self.store.get_setting(DEFAULT_BRIEFING_SETTING)
+            if not raw:
+                return
+            if any(opens_strip(t) and t["release_on"] == tag for t in self.store.pile(person, tag)):
+                return
+            day = datetime.now(self.settings.tzinfo).strftime("%Y-%m-%d")
+            key = f"default:{person}:{tag}:{day}"
+            if self.store.get_by_key(key) is not None:  # built today already: printed, or waiting in the pile
+                return
+            layout = json.loads(raw)
+            slots = {"preset": "briefing", "default": True, "slots": {"time_of_day": tag, **layout}}
+            self.store.create(
+                recipient=person,
+                message=f"Default {tag} briefing",
+                send_at_ms=self.clock(),
+                template_id=103,
+                decorations=(),
+                selection="rule",
+                choice_source="rule",
+                kind=tag,
+                slots_json=json.dumps(slots),
+                held=True,
+                delivery="on_release",
+                idempotency_key=key,
+                release_on=tag,
+            )
+            logger.info("default %s briefing queued for %s (%s)", tag, person, key)
+        except Exception:
+            logger.exception("could not queue the default %s briefing for %s", tag, person)
 
     def _stamp_lines(self, code: str) -> list[Line]:
         """The print time and short code, in small text below the last ticket, inside the space fed for the cut.

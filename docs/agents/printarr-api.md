@@ -49,7 +49,9 @@ POST /api/v1/tickets
 
 ### A message held for a person's release
 
-Use `delivery: "on_release"`. The ticket waits in that person's pile until `POST /api/v1/people/{person}/release` is called with a `trigger` of `morning`, `evening`, `arrival` or `request`. The pile prints as one piece of paper per person, cut once at the end: the ticket with a greeting (the briefing) goes on top, the rest follow in the order they were queued, one card gap apart and no cut margin between them. A second ticket with a greeting starts a new strip, and a strip holds up to 12 tickets.
+Use `delivery: "on_release"`. The ticket waits in that person's pile until `POST /api/v1/people/{person}/release` is called with a `trigger` of `morning`, `evening`, `arrival` or `request`. A `morning` release prints the tickets tagged `release_on: "morning"` and those tagged `any`; `evening` and `arrival` print the `evening` and `any` tickets; `request` prints the whole pile. `release_on` is set on the ticket (a briefing takes it from its `time_of_day`, and a message defaults to `any`).
+
+If a `morning` or `evening` release finds no briefing queued for that release, printarr prints the default briefing first, when one is set with `PUT /api/v1/briefing/default`. Its values are read from Home Assistant at print time, and it is built at most once a day per person and release. The pile prints as one piece of paper per person, cut once at the end: the ticket with a greeting (the briefing) goes on top, the rest follow in the order they were queued, one card gap apart and no cut margin between them. A second ticket with a greeting starts a new strip, and a strip holds up to 12 tickets.
 
 ### A scheduled message
 

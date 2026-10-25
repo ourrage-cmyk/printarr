@@ -8,11 +8,12 @@ Placeholders: `<printarr-host>` is the printarr address (port 30100). `<recipien
 
 | When | Who | What |
 |---|---|---|
-| 04:00 each day | Hermes | Queues today's **morning** briefing for each recipient, `delivery: on_release`, key `morning:<recipient>:<date>` |
+| 04:00 each day | Hermes | Queues today's **morning** briefing for each recipient, `delivery: on_release`, `release_on: morning` (set from `time_of_day`), key `morning:<recipient>:<date>` |
 | 06:00 each day | Hermes | Checks that today's morning briefing is still held. If not, queues it again with the same key |
-| 15:00 each day | Hermes | Queues today's **evening** briefing for each recipient, key `evening:<recipient>:<date>`, with the same check at 17:00 |
-| Phone unplugged | Home Assistant | Releases that person's pile with `trigger: morning` |
-| Arriving home | Home Assistant | Releases that person's pile with `trigger: evening` |
+| 15:00 each day | Hermes | Queues today's **evening** briefing for each recipient, `release_on: evening`, key `evening:<recipient>:<date>`, with the same check at 17:00 |
+| Phone unplugged | Home Assistant | Releases that person's pile with `trigger: morning`: the `morning` and `any` tickets print, the evening briefing stays |
+| Arriving home | Home Assistant | Releases that person's pile with `trigger: evening`: the `evening` and `any` tickets print |
+| Morning or evening release, nothing queued for it | printarr | Builds the default briefing first, if one is set (see below) |
 
 Queue time is not print time. A briefing waits in the person's pile until a release, so queueing at 04:00 does not print at 04:00. The fixed clock times only decide when the text is written.
 
@@ -24,23 +25,22 @@ Hermes does not need a webhook from Home Assistant. Each day's queue is keyed by
 
 **(b) What if a trigger fires twice, or nothing is queued?**
 - A second release on the same day prints only tickets that arrived since the first. The briefing was already consumed, so it does not print again.
-- A release with an empty pile returns 200 with `"strips": []`. Nothing prints, and Home Assistant gets no error.
-- If nothing is queued, the release prints any waiting messages, with no greeting or body. printarr has no default briefing yet. This is the gap in the smallest change below.
+- A release with an empty pile still prints the default briefing, if one is set and none was queued for that release. Once built, it is not built again that day, so a second release prints nothing new.
+- With no default set and nothing queued, a release returns 200 with `"strips": []`. Nothing prints, and Home Assistant gets no error.
 
-**(c) What if messages arrive after a release and before the next briefing?** They wait in the pile and print with the next release. A message sent after the morning release prints at the evening release. Nothing is lost.
+**(c) What if messages arrive after a release and before the next briefing?** They wait in the pile and print with the next release that matches their `release_on`. A message is `any` by default, so it prints at the next release of either kind. Nothing is lost.
 
-## Known limits
+## What printarr does now
 
-- **A release prints the whole pile, whatever its trigger.** So a morning briefing queued at 04:00 would also print at an evening release if no morning release happened first. This is the main risk of queueing ahead. In practice the morning briefing then prints at arrival, which is an acceptable fallback.
-- **Text is fixed at queue time.** The body and fun fact are written at 04:00 or 15:00. Only the metrics, graph and sparklines are read at print time.
-- **Two briefings in one pile.** If the morning briefing was never released, it prints at arrival before the evening one, on its own strip.
+- **Release tag per ticket.** Each held pile ticket has `release_on`: `morning`, `evening` or `any`. A briefing preset sets it from `time_of_day` (morning gives `morning`, afternoon or evening gives `evening`). A morning release prints the `morning` and `any` tickets; an evening or arrival release prints the `evening` and `any` tickets; a `request` prints the whole pile. So an early evening arrival no longer prints the morning briefing.
+- **Default briefing.** printarr builds a standard briefing when a morning or evening release finds no briefing queued for it, if one is set. Set it once with `PUT /api/v1/briefing/default`: three `metrics` and a `graph` (the same shape as the preset, with no body and no fun fact). `GET` shows it and `DELETE` removes it. The values are read from Home Assistant when it prints. It is built at most once a day per person and release.
+- **Home Assistant down at release.** The ticket still prints. A metric whose value cannot be read prints the placeholder `--` in place of its value, the layout stays put, and each failed read is logged. It does not page the owner; the ticket still prints.
 
-### Smallest printarr changes (not built, need the owner's go-ahead)
+### Still open
 
-1. **Release by trigger.** Each ticket gets a `release_on` value (`morning`, `evening` or `any`). A release prints only the tickets that match its trigger. This removes the early-print risk.
-2. **Default briefing.** When a morning or evening release finds no greeting-led ticket in the pile, printarr builds a standard briefing from its own settings (metrics and graph from Home Assistant, no body). This closes the "nothing queued" gap.
-
-Both keep printarr dumb about time. Hermes still decides what to queue and when.
+- **A stale briefing waits.** A morning briefing that was never released at the morning waits for the next morning release, because it is tagged for that release only. The owner asked for it to print on its own trigger, so it is not printed at an evening arrival.
+- **The default needs its layout set.** Until `PUT /api/v1/briefing/default` is called, no default is built.
+- **Text is fixed at queue time.** The body and fun fact are written when Hermes queues the briefing. Only the metrics, graph and sparklines are read at print time.
 
 ## 1. Message for Hermes
 
@@ -57,8 +57,8 @@ From now on, set up printarr briefings like this. printarr is at http://<printar
 2. Every day at 15:00 local time, do the same for the evening briefing: time_of_day "evening", kind "evening", idempotency_key "evening:<recipient>:<YYYY-MM-DD>".
 3. At 06:00 and 17:00, check GET /api/v1/tickets?status=held&recipient=<recipient>. If today's briefing is missing, queue it again with the same key. A repeat is safe.
 4. Do not give any briefing a print time, and do not call POST /api/v1/people/{person}/release yourself. Home Assistant releases on phone unplug (morning) and on arriving home (evening).
-5. Messages for a person use delivery "on_release". They print with the next release.
-6. Ping the owner with POST /api/v1/notify only when they need to act.
+5. Messages for a person use delivery "on_release". They print with the next release (release_on defaults to any).
+6. Ping the owner with POST /api/v1/notify only when he needs to act.
 ```
 
 ## 2. Home Assistant YAML

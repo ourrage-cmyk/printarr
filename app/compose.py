@@ -453,7 +453,7 @@ def ticket_lines(
 ) -> list[ReceiptLine]:
     """Lay out a stored slot ticket. Composed tickets, briefings and notes all draw as cards."""
     if "preset" in slots:  # a stored briefing preset: its graph and sparklines are read now, at print time
-        blocks = sign_blocks(briefing_preset_blocks(slots["slots"], client, sender), sender)
+        blocks = sign_blocks(briefing_preset_blocks(slots["slots"], client, sender, recipient, default=slots.get("default", False)), sender)
     elif "blocks" in slots:
         blocks = sign_blocks(slots["blocks"], sender)
     elif template_id == NOTE or ("paragraph" in slots and "metrics" not in slots):
@@ -524,12 +524,26 @@ def _preset_greeting(time_of_day: str, recipient: str | None) -> str:
     return f"{greeting} {name}" if name else greeting
 
 
+class DefaultBriefingSlots(BriefingPresetSlots):
+    """The briefing printarr builds itself when none was queued: the same layout without a body or a fun fact."""
+
+    body: str | None = Field(default=None, min_length=1, max_length=800)  # type: ignore[assignment]
+    fun_fact: str | None = Field(default=None, min_length=1, max_length=200)  # type: ignore[assignment]
+
+
 def briefing_preset_blocks(
-    slots: Mapping[str, Any], client: HAClient | None, sender: str | None = None, recipient: str | None = None
+    slots: Mapping[str, Any],
+    client: HAClient | None,
+    sender: str | None = None,
+    recipient: str | None = None,
+    default: bool = False,
 ) -> list[dict[str, Any]]:
-    """The briefing preset as blocks, in print order. Raises BlockProblem naming each wrong slot."""
+    """The briefing preset as blocks, in print order. Raises BlockProblem naming each wrong slot.
+
+    default=True takes the built-in briefing, which may leave out the body and the fun fact.
+    """
     try:
-        parsed = BriefingPresetSlots.model_validate(dict(slots))
+        parsed = (DefaultBriefingSlots if default else BriefingPresetSlots).model_validate(dict(slots))
     except ValidationError as exc:
         raise BlockProblem(_slot_problems("preset", exc)) from None
     blocks: list[dict[str, Any]] = [{
@@ -544,6 +558,8 @@ def briefing_preset_blocks(
         if graph.unit:
             graph_slots["unit"] = graph.unit
         blocks.append({"type": "graph", "mood": "factual", "span": 3, "slots": graph_slots})
-    blocks.extend(message_blocks(parsed.body, parsed.sign_off or sender))
-    blocks.append({"type": "fact", "mood": "playful", "span": 3, "slots": {"paragraph": parsed.fun_fact}})
+    if parsed.body:
+        blocks.extend(message_blocks(parsed.body, parsed.sign_off or sender))
+    if parsed.fun_fact:
+        blocks.append({"type": "fact", "mood": "playful", "span": 3, "slots": {"paragraph": parsed.fun_fact}})
     return blocks
