@@ -35,7 +35,7 @@ Hermes does not need a webhook from Home Assistant. Each day's queue is keyed by
 - **Text is fixed at queue time.** The body and fun fact are written at 04:00 or 15:00. Only the metrics, graph and sparklines are read at print time.
 - **Two briefings in one pile.** If the morning briefing was never released, it prints at arrival before the evening one, on its own strip.
 
-### Smallest printarr changes (not built, need Yannic's go-ahead)
+### Smallest printarr changes (not built, need the owner's go-ahead)
 
 1. **Release by trigger.** Each ticket gets a `release_on` value (`morning`, `evening` or `any`). A release prints only the tickets that match its trigger. This removes the early-print risk.
 2. **Default briefing.** When a morning or evening release finds no greeting-led ticket in the pile, printarr builds a standard briefing from its own settings (metrics and graph from Home Assistant, no body). This closes the "nothing queued" gap.
@@ -58,7 +58,7 @@ From now on, set up printarr briefings like this. printarr is at http://<printar
 3. At 06:00 and 17:00, check GET /api/v1/tickets?status=held&recipient=<recipient>. If today's briefing is missing, queue it again with the same key. A repeat is safe.
 4. Do not give any briefing a print time, and do not call POST /api/v1/people/{person}/release yourself. Home Assistant releases on phone unplug (morning) and on arriving home (evening).
 5. Messages for a person use delivery "on_release". They print with the next release.
-6. Ping Yannic with POST /api/v1/notify only when he needs to act.
+6. Ping the owner with POST /api/v1/notify only when they need to act.
 ```
 
 ## 2. Home Assistant YAML
