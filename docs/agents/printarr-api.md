@@ -186,3 +186,4 @@ The printer takes an 80 mm roll. The print width is 512 dots at 180 dpi, about 7
 - `metric_rows`: `scope` on each row.
 - Template 101 (briefing): the same two fields on each `metrics[]` entry.
 - No time is printed per reading. The print time under the cut says when the ticket was made.
+- Labels are full, readable words, not abbreviations: `HOME TEMPERATURE` and `RESTING HEART RATE`, not `HOMETEMP` or `RHR`. Keep each label short enough for one line; a long word that does not fit steps the labels of its row down together.

@@ -136,6 +136,7 @@ curl -sS -X POST http://<printarr-host>:30100/api/v1/tickets/compose \
 
 - `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING, and it appends the recipient's name where one is set (`GOOD MORNING SAM`).
 - `scope` is `inside` or `outside` and prints as IN or OUT after the label. The time is not printed on the tile: the line under the cut carries the print time.
+- Labels are full, readable words that fit one line, in the tile's width: `HOME TEMPERATURE`, `RESTING HEART RATE`, `BODY BATTERY`, not `HOMETEMP`, `RHR` or `BODYBATT`. A label too long for one line wraps on words, so keep it short and whole.
 - Queueing works even when Home Assistant is unreachable. Preset values are read at print time, so a value Home Assistant cannot give prints as `--`.
 - `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`. `hours` (1 to 168, default 24) sets how far back the sparkline reaches.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
