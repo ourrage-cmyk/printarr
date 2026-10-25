@@ -94,3 +94,16 @@ def test_chart_labels_line_up_with_the_plot(monkeypatch):
     # the scale labels clear the title, and the axis labels clear the plot
     plot_top = high[1] + AXIS_CAP + 8
     assert axis[1] == plot_top + card.plot_h + 8
+
+
+def test_graph_and_table_titles_use_the_solid_label_size(monkeypatch):
+    texts = record(monkeypatch, "text")
+    solids = record(monkeypatch, "solid")
+    c, card = card_canvas()
+    strips._graph(card, {"title": "Home temperature", "series": [16.8, 20.5, 18.0], "unit": "C"}, 15, 497)
+    title = next(args for args in solids if args[2] == "HOME TEMPERATURE")
+    assert title[3] == 21  # the metric label size, as STEPS and STRESS
+    assert not any(args[0] == 15 and args[1] == 0 for args in texts)  # no dot-matrix title at the top
+    strips._metric_rows(card, {"title": "Energy and house", "rows": [{"label": "ENERGY NOW", "value": "0.079"}]}, 15, 497)
+    rows_title = next(args for args in solids if args[2] == "ENERGY AND HOUSE")
+    assert rows_title[3] == 21

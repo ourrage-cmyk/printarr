@@ -707,10 +707,22 @@ def _span(s: Mapping[str, Any]) -> str:
     return str(s.get("range") or "24H").strip().upper()
 
 
+def _solid_title(c: Canvas, x0: int, x1: int, text: str) -> None:
+    """A tile's title in the solid label font, the same size as the metric labels (STEPS, STRESS), so the tiles read
+    as one set. It wraps inside the tile, left-aligned like the labels, never in the dot matrix."""
+    label = _label(text)
+    cap = 21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP
+    step = _label_step(cap)
+    for line in solid_wrap(label, x1 - x0, cap) or [""]:
+        c.solid(x0, c.y, line, cap)
+        c.y += step
+    c.y += 6  # the first row keeps clear of the title above it
+
+
 def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     if s.get("title"):
-        _heading(c, x0, _label(s["title"]), x1)
+        _solid_title(c, x0, x1, s["title"])
     rows = list(s.get("rows", []))[:12]
     labels = []
     for r in rows:
@@ -738,7 +750,7 @@ def _time_axis(c: Canvas, x0: int, x1: int, span: str) -> None:
 
 def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
-    _heading(c, x0, _label(s.get("title", "")), x1)
+    _solid_title(c, x0, x1, s.get("title", ""))
     series = list(s.get("series", []))
     if len(series) > 1:
         unit = f" {s['unit']}" if s.get("unit") else ""

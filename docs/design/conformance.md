@@ -8,7 +8,8 @@ The arena and lab results that drove the choices are in the design folder. The c
 
 | Role | Font | Where |
 |---|---|---|
-| Titles and headlines | 5x7 dot matrix, centred | native glyph table in `app/render/glyphs.py` (no file) |
+| Titles and headlines | 5x7 dot matrix, centred, on the greeting, dog counts and other headline blocks | native glyph table in `app/render/glyphs.py` (no file) |
+| Tile titles on graphs and tables | solid label size (21), left-aligned, the same as the STEPS and STRESS labels | `_solid_title` in `app/render/strips.py` |
 | Body, labels, numbers | 5x7 solid, body scale 3 (cap 21 dots) | `BODY = 3` in `app/render/strips.py` |
 | Captions | scale 2 (cap 14 dots), the minimum | `CAPTION = 2` |
 
