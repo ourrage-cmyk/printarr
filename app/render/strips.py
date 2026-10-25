@@ -524,7 +524,7 @@ def _title_line(card: Card, x0: int, x1: int, text: str, clear: int = 0) -> None
             card.icon(x0, c.y)
         scale, lines = title_lines(label, room)
         left = x0 + side
-        step = 7 * scale + 6
+        step = 7 * scale + TITLE_LEAD
         for i, line in enumerate(lines):
             c.text(left + (room - text_width(line, scale)) // 2, c.y + i * step, line, scale)
         c.y += len(lines) * step + 2
@@ -592,18 +592,21 @@ def title_lines(text: str, max_w: int) -> tuple[int, list[str]]:
 
 
 MAX_TITLE_LINES = 3  # one dot size, so a long title takes a third line before it is cut
+TITLE_LEAD = 3  # the gap between two lines of a dot-matrix title: small, so a multi-line title groups
+ROW_GAP = 4  # extra space under each row of a table, so the numbers breathe
+CHART_INSET = 4  # a chart plots and labels inside the tile, this far from either side
 EDGE_GAP = 14  # the least clear space between a line of text and the card border, in dots
 
 
-def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -> int:
+def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0, label_col: int = 0) -> int:
     """A label, dot leaders, the value right-aligned: one rhythm for every row. When they do not fit on one line
     a long label wraps on the left, or a long value wraps on the right; the leaders and the right edge stay.
     Returns the row's height."""
     left, right = x0 + indent, x1 - EDGE_GAP
     width = right - left
     lw, vw = solid_width(label, 21), solid_width(value, 21)
-    if lw + vw + 22 <= width:
-        c.row_solid(left, right, c.y, label, value, 21)
+    if max(lw, label_col) + vw + 22 <= width:
+        c.row_solid(left, right, c.y, label, value, 21, label_col)
         return ROW
     if lw > vw:  # a long label: it wraps on the left and the value closes the last line
         lines = solid_wrap(label, max(60, width - vw - 22)) or [label]
@@ -624,7 +627,7 @@ def _row(c: Canvas, x0: int, x1: int, label: str, value: str, indent: int = 0) -
 def _heading(c: Canvas, x: int, text: str, x1: int = OUTER_R) -> None:
     """A title: the dot font at a size larger than body text, centred between x and x1."""
     scale, lines = title_lines(text, x1 - x)
-    step = 7 * scale + 6
+    step = 7 * scale + TITLE_LEAD
     for i, line in enumerate(lines):
         c.text(x + (x1 - x - text_width(line, scale)) // 2, c.y + i * step, line, scale)
     c.y += len(lines) * step + 2
@@ -635,10 +638,28 @@ def _greeting(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     card.ornament("header", x0, x1)
     _heading(card.c, x0, str(s.get("greeting", "")).upper(), x1)
     if s.get("summary"):
+        card.c.y += 6  # the summary keeps clear of the title above it
         card.c.y += paragraph(card.c, x0, card.c.y, str(s["summary"]), BODY, x1 - x0) + 2
     if s.get("from"):
         card.c.solid(x0, card.c.y, f"- {_label(s['from'])}", 21)  # a greeting is signed like every other note
         card.c.y += ROW
+
+
+def _metric_label(s: Mapping[str, Any], x0: int, x1: int) -> tuple[int, list[str]]:
+    """A tile's label: its size and the lines it wraps to inside the tile, so a long label never runs over the border."""
+    scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(s.get("scope") or "").strip().upper(), "")
+    label = _label(s.get("label", "")) + (f" {scope}" if scope else "")
+    label_cap = 21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP  # a word that does not fit the tile steps down, it never splits
+    return label_cap, solid_wrap(label, x1 - x0, label_cap) or [""]
+
+
+def _label_step(cap: int) -> int:
+    return 7 * BODY + 4 if cap == 21 else cap + 8
+
+
+def _metric_label_h(s: Mapping[str, Any], x0: int, x1: int) -> int:
+    cap, lines = _metric_label(s, x0, x1)
+    return len(lines) * _label_step(cap)
 
 
 def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
@@ -647,34 +668,24 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     unit = str(s.get("unit") or "")
     if unit.strip().upper() == str(s.get("label", "")).strip().upper():
         unit = ""  # "750 STEPS" under the label STEPS says it twice
-    # The label wraps inside the tile, so a long label never runs over the border.
-    scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(s.get("scope") or "").strip().upper(), "")
-    label = _label(s.get("label", "")) + (f" {scope}" if scope else "")
-    from app.render.canvas import solid_width
-
-    label_cap = 21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP  # a word that does not fit the tile steps down, it never splits
-    for line in solid_wrap(label, x1 - x0, label_cap) or [""]:
+    label_cap, lines = _metric_label(s, x0, x1)
+    step = _label_step(label_cap)
+    for line in lines:
         c.solid(x0, c.y, line, label_cap)
-        c.y += 7 * BODY + 4 if label_cap == 21 else label_cap + 8
-    c.y += 4
+        c.y += step
+    # Tiles in one row reserve the tallest label's height, so their values sit on one line.
+    c.y += max(0, int(s.get("_label_h") or 0) - len(lines) * step)
+    c.y += 4 + int(s.get("_fill") or 0) // 2  # the value sits in the middle of the room under its label
     # Numerals are display size (cap 42) when the value and its unit fit the tile, else body size.
-    from app.render.canvas import solid_width
-
-    # Numbers are full-line text (Inter): display size (cap 42) when the value fits the tile, else body size.
     cap = int(s.get("_cap") or (42 if solid_width(value, 42) + solid_width(unit, 21) + 6 <= x1 - x0 else 21))
     while cap > AXIS_CAP and solid_width(value, cap) > x1 - x0:
         cap = 21 if cap > 21 else AXIS_CAP  # a number wider than its tile steps down, it never runs over the border
-    scale = cap
     c.solid(x0, c.y, value, cap)
-    unit_x = x0 + text_width(value, scale) + 6
     # The unit sits beside the value when it fits the tile, otherwise under it, never past the border.
-    from app.render.canvas import solid_width
-
-    value_w = solid_width(value, cap)
-    unit_x = x0 + value_w + 6
+    unit_x = x0 + solid_width(value, cap) + 3  # close to its number, so "%" reads with "72"
     beside = bool(unit) and unit_x + solid_width(unit, 21) <= x1
     if beside:
-        c.solid(unit_x, c.y + cap - 21, unit, 21)  # the unit's baseline sits on the value's baseline  # its baseline sits on the value's baseline
+        c.solid(unit_x, c.y + cap - 21, unit, 21)  # the unit's baseline sits on the value's baseline
     c.y += cap + 7
     if unit and not beside:
         c.solid(x0, c.y, unit, 21)
@@ -683,7 +694,7 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     if isinstance(series, list) and len(series) > 1:
         c.y += 4
         plot = 36 + int(s.get("_extra") or 0)  # a tile with a shorter label grows its chart, so the axes line up
-        line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
+        line_graph(c, x0 + CHART_INSET, c.y, x1 - CHART_INSET, c.y + plot, series)
         c.y += plot + 4
         _time_axis(c, x0, x1, _span(s))
     if s.get("as_of"):
@@ -700,11 +711,16 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     c = card.c
     if s.get("title"):
         _heading(c, x0, _label(s["title"]), x1)
-    for r in list(s.get("rows", []))[:12]:
-        unit = f" {r['unit']}" if r.get("unit") else ""
+    rows = list(s.get("rows", []))[:12]
+    labels = []
+    for r in rows:
         scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(r.get("scope") or "").strip().upper(), "")
-        label = _label(r.get("label", "")) + (f" {scope}" if scope else "")
-        c.y += _row(c, x0, x1, label, f"{r.get('value', '--')}{unit}")
+        labels.append(_label(r.get("label", "")) + (f" {scope}" if scope else ""))
+    # Every row's leaders start on the widest label's column, so the leaders run on one grid down the table.
+    label_col = max((solid_width(label, 21) for label in labels), default=0)
+    for label, r in zip(labels, rows):
+        unit = f" {r['unit']}" if r.get("unit") else ""
+        c.y += _row(c, x0, x1, label, f"{r.get('value', '--')}{unit}", label_col=label_col) + ROW_GAP
     if s.get("as_of"):
         c.solid(x0, c.y, f"AS OF {str(s['as_of']).upper()}", AXIS_CAP)
         c.y += AXIS_CAP + 8
@@ -714,9 +730,9 @@ AXIS_CAP = 14  # chart labels: the smallest full-line size, so they stay quiet u
 
 
 def _time_axis(c: Canvas, x0: int, x1: int, span: str) -> None:
-    """Under a chart: the time span it covers on the left and NOW on the right, so the line has a range."""
-    c.solid(x0, c.y, span, AXIS_CAP)
-    c.solid(x1 - solid_width("NOW", AXIS_CAP), c.y, "NOW", AXIS_CAP)
+    """Under a chart: the time span it covers on the left and NOW on the right, inset to the plot's edges."""
+    c.solid(x0 + CHART_INSET, c.y, span, AXIS_CAP)
+    c.solid(x1 - CHART_INSET - solid_width("NOW", AXIS_CAP), c.y, "NOW", AXIS_CAP)
     c.y += AXIS_CAP + 8
 
 
@@ -726,18 +742,22 @@ def _graph(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     series = list(s.get("series", []))
     if len(series) > 1:
         unit = f" {s['unit']}" if s.get("unit") else ""
+        left, right = x0 + CHART_INSET, x1 - CHART_INSET
         # Low and high are labelled above the plot, so the scale reads without a y axis.
-        c.solid(x0, c.y, f"HIGH {max(series):.1f}{unit}", AXIS_CAP)
-        c.solid(x1 - solid_width(f"LOW {min(series):.1f}{unit}", AXIS_CAP), c.y, f"LOW {min(series):.1f}{unit}", AXIS_CAP)
+        c.y += 6  # the scale labels keep clear of the title above them
+        hi = f"HIGH {max(series):.1f}{unit}"
+        lo = f"LOW {min(series):.1f}{unit}"
+        c.solid(left, c.y, hi, AXIS_CAP)
+        c.solid(right - solid_width(lo, AXIS_CAP), c.y, lo, AXIS_CAP)
         mid = f"MID {(max(series) + min(series)) / 2:.1f}{unit}"  # the middle dotted line, so every scale line reads
-        left_end = x0 + solid_width(f"HIGH {max(series):.1f}{unit}", AXIS_CAP)
-        right_start = x1 - solid_width(f"LOW {min(series):.1f}{unit}", AXIS_CAP)
+        left_end = left + solid_width(hi, AXIS_CAP)
+        right_start = right - solid_width(lo, AXIS_CAP)
         if left_end + 12 + solid_width(mid, AXIS_CAP) + 12 <= right_start:
             c.solid((left_end + right_start - solid_width(mid, AXIS_CAP)) // 2, c.y, mid, AXIS_CAP)
-        c.y += AXIS_CAP + 6
+        c.y += AXIS_CAP + 8  # the labels keep clear of the plot below them
         plot = max(36, card.plot_h)
-        line_graph(c, x0 + 4, c.y, x1 - 4, c.y + plot, series)
-        c.y += plot + 6
+        line_graph(c, left, c.y, right, c.y + plot, series)
+        c.y += plot + 8  # a small margin under the plot, so the axis labels do not touch the line
         _time_axis(c, x0, x1, _span(s))
 
 
@@ -1160,7 +1180,8 @@ def _equalise(row: list[Placed], left: int = OUTER_L, right: int = OUTER_R) -> l
             for p in metrics
         )
         cap = 42 if fits else 21
-        row = [_place(p.block, {**p.slots, "_cap": cap}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
+        label_h = max(_metric_label_h(p.slots, p.x0 + PAD_H, p.x1 - PAD_H) for p in metrics)  # the label wraps inside the padding
+        row = [_place(p.block, {**p.slots, "_cap": cap, "_label_h": label_h}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
         heights = {id(p): _measure(p.block, p.slots, p.x0, p.x1) for p in row if p.block.type == "metric"}
         tallest = max(heights.values())
         row = [
@@ -1215,6 +1236,8 @@ def _draw_row(c: Canvas, row: list[Placed]) -> None:
             plot += slack
         elif p.block.type == "metric" and slots.get("series"):
             slots = {**slots, "_extra": int(slots.get("_extra") or 0) + slack}
+        elif p.block.type == "metric":
+            slots = {**slots, "_fill": slack}
         card = Card(c, p.block.mood, plot_h=plot)
         c.y = top + PAD_V
         if p.block.type == "greeting" and not p.slots.get("summary"):

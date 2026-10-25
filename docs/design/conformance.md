@@ -25,6 +25,11 @@ The arena and lab results that drove the choices are in the design folder. The c
 | Tile corner | 4 dots by default; soft moods round (8 to 12), heavy moods square (2) | `RADIUS`, `RADIUS_BY_MOOD` |
 | Mood band | one band across the top of a tile, 28 dots tall | `BAND_H` in `app/render/strips.py` |
 | Kind mark | one per block type that has one, top-right corner | `KIND_MARKS` |
+| Title leading | two lines of a dot-matrix title are 3 dots apart, so a multi-line title groups | `TITLE_LEAD` in `app/render/strips.py` |
+| Metric value | a value sits in the room under its label; tiles in one row share the tallest label's height, so their values line up | `_label_h`, `_fill` in `app/render/strips.py` |
+| Metric unit | 3 dots from its number, on the number's baseline | `_metric` |
+| Table rows | one label column per table: every row's dot leaders start on it; 4 dots extra between rows | `ROW_GAP`, `Canvas.row_solid` |
+| Chart | scale labels 6 dots under the title, 8 dots above the plot, axis labels 8 dots under it, all inset 4 dots from the card edge | `CHART_INSET`, `_graph`, `_time_axis` |
 | Ticket edges | no blank is drawn at the top or bottom of a composed ticket (`TICKET_MARGIN = 0`) | `app/compose.py` |
 | Cut | the feed before the cut is sent with the partial-cut command, never drawn into the picture. A small line with the print time and a 6-character code (`2026-10-24 21:05  a3f9c2`) sits just under the last ticket, inside that space | `CUT_FEED` in `app/escpos.py`; `STAMP_GAP` in `app/scheduler.py` |
 
