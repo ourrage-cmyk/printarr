@@ -147,10 +147,11 @@ class Canvas:
                     self.set_px(x + px - pad, y + py - pad)
         return int(font.getlength(text))
 
-    def row_solid(self, x0: int, x1: int, y: int, label: str, value: object, cap: int = 21) -> None:
-        """Label, dot leaders, then the value right-aligned at x1, all in full-line text."""
+    def row_solid(self, x0: int, x1: int, y: int, label: str, value: object, cap: int = 21, label_col: int = 0) -> None:
+        """Label, dot leaders, then the value right-aligned at x1, all in full-line text. The leaders start after
+        label_col (the widest label in a table), so every row's leaders begin on the same dot column."""
         tail = str(value)
-        label_w = int(_inter(cap).getlength(label))
+        label_w = max(label_col, int(_inter(cap).getlength(label)))
         tail_w = int(_inter(cap).getlength(tail))
         self.solid(x0, y, label, cap)
         self.solid(x1 - tail_w, y, tail, cap)
