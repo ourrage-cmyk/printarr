@@ -44,21 +44,41 @@ Hermes does not need a webhook from Home Assistant. Each day's queue is keyed by
 
 ## 1. Message for Hermes
 
-Send this to Hermes as it is, after replacing the placeholders:
+Paste this to Hermes as it is. Replace `<printarr-host>` with `192.168.1.231`.
 
 ```
-From now on, set up printarr briefings like this. printarr is at http://<printarr-host>:30100.
+From now on, printarr briefings work with Home Assistant like this. printarr is at http://<printarr-host>:30100.
 
-1. Every day at 04:00 local time, for each recipient (<recipient-a> and <recipient-b>), queue today's morning briefing:
-   POST /api/v1/tickets/compose with "preset": "briefing", "slots": {"time_of_day": "morning", ...},
-   "kind": "morning", "delivery": "on_release", "idempotency_key": "morning:<recipient>:<YYYY-MM-DD>".
-   Write the body and the fun fact for that day. Use entity_id for the three metrics and the graph, so the values are read when the paper prints.
-   Use the full example in the printarr skill.
-2. Every day at 15:00 local time, do the same for the evening briefing: time_of_day "evening", kind "evening", idempotency_key "evening:<recipient>:<YYYY-MM-DD>".
-3. At 06:00 and 17:00, check GET /api/v1/tickets?status=held&recipient=<recipient>. If today's briefing is missing, queue it again with the same key. A repeat is safe.
-4. Do not give any briefing a print time, and do not call POST /api/v1/people/{person}/release yourself. Home Assistant releases on phone unplug (morning) and on arriving home (evening).
-5. Messages for a person use delivery "on_release". They print with the next release (release_on defaults to any).
-6. Ping the owner with POST /api/v1/notify only when he needs to act.
+Home Assistant decides when a person's paper prints. You never set a print time for a briefing or a message, and you never change the Home Assistant automations.
+
+What Home Assistant does (already set up):
+- Morning for yannic: when his Garmin wake time updates, 06:00 to 12:00 local. Releases yannic with trigger morning.
+- Morning for wife: when her phone comes off charge, 06:00 to 11:00 local. Releases wife with trigger morning.
+- Evening for both: when that person goes home, 15:00 to 23:59 local. Releases them with trigger evening.
+- Each of these fires at most once per person per day.
+
+What a release prints, for that person only:
+- morning: held tickets with release_on morning or any.
+- evening: held tickets with release_on evening or any.
+- If none is queued for that release and a default briefing is set, printarr builds the default.
+- One strip, cut once.
+
+Your job:
+1. Every day at 04:00, for yannic and for wife: queue today's morning briefing with preset briefing, time_of_day morning, delivery on_release, release_on morning, and idempotency_key morning:<id>:<YYYY-MM-DD>. Write that day's body and fun fact. Use entity_id for the metrics and the graph.
+2. Every day at 15:00, do the same for the evening briefing: time_of_day evening, release_on evening, idempotency_key evening:<id>:<YYYY-MM-DD>.
+3. Messages and reminders for either person: delivery on_release, release_on any (the default). They print with the next release of either kind.
+4. Do not re-queue a key after its release. A repeat key returns the ticket that was already released, and nothing prints.
+5. At 06:00 and 17:00, check GET /api/v1/tickets?status=held. If today's briefing is missing and was not released, queue it again with the same key.
+6. Never call the release endpoint yourself.
+
+What happens without you doing anything:
+- Nothing queued at a release: the default briefing prints if one is set. Otherwise nothing prints, and Home Assistant gets 200 with empty strips.
+- A second release on the same day: only tickets that arrived since the first one print.
+- Home Assistant unreachable at a release: the ticket still prints, with -- where a value could not be read.
+- A person never comes off charge in the window or never arrives home: no release for them. Their held briefing waits for the next matching release.
+- printarr down at a release: Home Assistant logs the error, and the pile stays held for the next release.
+
+Ping the owner with POST /api/v1/notify only when he needs to act.
 ```
 
 ## 2. Home Assistant YAML
