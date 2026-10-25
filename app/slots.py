@@ -67,7 +67,7 @@ class Metric(BaseModel):
     unit: str | None = Field(default=None, max_length=8, examples=["%"])
     hours: int | None = Field(default=None, ge=1, le=168, description="Hours of history to graph, for entities.")
     scope: Literal["inside", "outside"] | None = Field(default=None, description="Where the reading is taken. Printed as IN or OUT after the label.")
-    as_of: str | None = Field(default=None, max_length=16, description="When the reading was taken, for example 08:15. Printed as AS OF 08:15.")
+    as_of: str | None = Field(default=None, max_length=16, description="Accepted for compatibility and not printed. The print time under the cut covers it.")
 
     @model_validator(mode="after")
     def one_source(self) -> Metric:

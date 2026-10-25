@@ -180,9 +180,9 @@ The printer takes an 80 mm roll. The print width is 512 dots at 180 dpi, about 7
 - Shopping list intake: not built. The list lives in Home Assistant and Hermes sends it as a checklist ticket when it is asked for, or when Hermes schedules it.
 
 
-## Where scope and AS OF work
+## Where scope works
 
-- `metric`: `scope` ("inside" or "outside", printed as IN or OUT after the label) and `as_of` (printed as AS OF 08:15 under the chart).
-- `metric_rows`: `scope` on each row, and one `as_of` for the whole block.
+- `metric`: `scope` ("inside" or "outside", printed as IN or OUT after the label).
+- `metric_rows`: `scope` on each row.
 - Template 101 (briefing): the same two fields on each `metrics[]` entry.
-- A metric or row backed by an `entity_id` is stamped with the time it was read when `as_of` is not sent.
+- No time is printed per reading. The print time under the cut says when the ticket was made.

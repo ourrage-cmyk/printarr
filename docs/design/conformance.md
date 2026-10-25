@@ -31,6 +31,8 @@ The arena and lab results that drove the choices are in the design folder. The c
 | Metric unit | 3 dots from its number, on the number's baseline | `_metric` |
 | Table rows | one label column per table: every row's dot leaders start on it; 4 dots extra between rows | `ROW_GAP`, `Canvas.row_solid` |
 | Chart | scale labels 6 dots under the title, 8 dots above the plot, axis labels 8 dots under it, all inset 4 dots from the card edge | `CHART_INSET`, `_graph`, `_time_axis` |
+| Tile labels | every metric label in one row uses one size, the smallest any of them needs, so a short word never looks smaller than its neighbour | `_label_cap` in `_equalise` |
+| Time | no per-reading time is printed on a tile (no `AS OF`). The print time and code under the cut say when the ticket was made, and the room goes to the chart | `_metric`, `_metric_rows` |
 | Ticket edges | no blank is drawn at the top or bottom of a composed ticket (`TICKET_MARGIN = 0`) | `app/compose.py` |
 | Cut | the feed before the cut is sent with the partial-cut command, never drawn into the picture. A small line with the print time and a 6-character code (`2026-10-24 21:05  a3f9c2`) sits just under the last ticket, inside that space | `CUT_FEED` in `app/escpos.py`; `STAMP_GAP` in `app/scheduler.py` |
 

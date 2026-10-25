@@ -107,3 +107,19 @@ def test_graph_and_table_titles_use_the_solid_label_size(monkeypatch):
     strips._metric_rows(card, {"title": "Energy and house", "rows": [{"label": "ENERGY NOW", "value": "0.079"}]}, 15, 497)
     rows_title = next(args for args in solids if args[2] == "ENERGY AND HOUSE")
     assert rows_title[3] == 21
+
+
+def test_no_per_reading_time_is_printed(monkeypatch):
+    solids = record(monkeypatch, "solid")
+    render_strip([Block("metric", {"label": "Steps", "value": "6,120", "as_of": "08:32", "series": [1, 3, 2, 4]})])
+    assert not any("AS OF" in str(args[2]) for args in solids)
+
+
+def test_row_labels_share_one_size(monkeypatch):
+    solids = record(monkeypatch, "solid")
+    render_strip([
+        Block("metric", {"label": "RHR", "value": "57", "unit": "bpm"}),
+        Block("metric", {"label": "BODYBATT", "value": "60", "unit": "%"}),
+    ])
+    caps = {args[2]: args[3] for args in solids if args[2] in ("RHR", "BODYBATT")}
+    assert len(set(caps.values())) == 1, caps

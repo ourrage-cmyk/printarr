@@ -87,8 +87,8 @@ Top-level fields: `recipient` (required), `blocks` or `preset` (one of them, 1 t
 | Type | Slots | Limits |
 |---|---|---|
 | `greeting` | `greeting`, `summary`, `from` | greeting 40 chars, summary 200, from 20 |
-| `metric` | `label` and `value` or `entity_id`; `unit`, `series`, `range`, `as_of`, `scope` | label 40, unit 12, series 2 to 48 numbers |
-| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`, `scope`); `title`, `as_of` | label 40, title 40 |
+| `metric` | `label` and `value` or `entity_id`; `unit`, `series`, `range`, `scope` | label 40, unit 12, series 2 to 48 numbers |
+| `metric_rows` | `rows` (1 to 6 of `label` plus `value` or `entity_id`, `unit`, `scope`); `title` | label 40, title 40 |
 | `graph` | `title`, `series` (2 to 48 numbers); `unit`, `range` | title 40 |
 | `dog_counts` | `dogs` (1 or 2 of `name`, `pee`, `poop`, `food`, `run`, integer counts) | name 20 |
 | `message` | `paragraph`, `from`; `title`, `tip` | paragraph 800, from 20, title 40, tip 120 |
@@ -135,7 +135,7 @@ curl -sS -X POST http://<printarr-host>:30100/api/v1/tickets/compose \
 ```
 
 - `time_of_day` is `morning`, `afternoon` or `evening`. The headline reads GOOD MORNING, GOOD AFTERNOON or GOOD EVENING, and it appends the recipient's name where one is set (`GOOD MORNING SAM`).
-- `scope` is `inside` or `outside` and prints as IN or OUT after the label. `as_of` prints as AS OF 08:15 under the readings.
+- `scope` is `inside` or `outside` and prints as IN or OUT after the label. The time is not printed on the tile: the line under the cut carries the print time.
 - Queueing works even when Home Assistant is unreachable. Preset values are read at print time, so a value Home Assistant cannot give prints as `--`.
 - `metrics` is exactly three. Each has an `entity_id` (its value and sparkline come from Home Assistant) or a fixed `value`. `hours` (1 to 168, default 24) sets how far back the sparkline reaches.
 - `graph` has a `title` and an `entity_id` (its history) or `series` (fixed values, oldest first). If Home Assistant has no history, the graph is left out and the rest still prints.
