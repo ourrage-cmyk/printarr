@@ -63,61 +63,126 @@ From now on, set up printarr briefings like this. printarr is at http://<printar
 
 ## 2. Home Assistant YAML
 
-Add the `rest_command` under `rest_command:` and the automations under `automation:` in `configuration.yaml`, or in a package. Replace `<printarr-host>`, the person entities and the two recipient ids.
+Four automations, one per trigger per person, are created in Home Assistant. This section holds the same YAML with placeholders, so it can be pasted again if they are lost.
+
+### Entities and why
+
+Checked against history, 21 to 25 October, Europe/London time. Each trigger fires at most once per person per day.
+
+| Person | Morning (waking) | Evening (arriving home) |
+|---|---|---|
+| `<recipient-a>` | `sensor.garmin_connect_wake_time` changes (the daily sleep sync), 06:00 to 12:00 | `person.<person_a>` goes to `home`, 15:00 to 23:59 |
+| `<recipient-b>` | `binary_sensor.<person_b>_phone_is_charging` goes `off` (unplugged), 06:00 to 11:00 | `person.<person_b>` goes to `home`, 15:00 to 23:59 |
+
+Why these:
+- **`<recipient-a>` morning:** the phone's charging sensor is not a wake signal for this person. It came off the charger at 04:15 to 05:10 on three mornings, well before the wake time (08:15 to 09:10). The Garmin wake time updates after the sleep sync, so the morning print lands about an hour after waking, and later on days when the sync is late.
+- **`<recipient-b>` morning:** the charger came off at 06:01 and 08:04 on the two mornings with data, which matches waking. The overnight unplug at 02:35 falls before the window.
+- **Arrival:** `person` flips to `home` several times a day (for example, 08:43 and 08:54 on one morning). The time window and the once-a-day guard stop those flips from printing.
+
+### Guard
+
+Each automation skips when its own `last_triggered` is already today. A repeat trigger on the same day prints nothing new, and `mode: single` stops overlapping runs.
+
+### rest_command
+
+Use `rest_command.printarr_release_person` from `docs/integrations/home-assistant/rest_commands.yaml`. Replace `PRINTARR_URL` with the printarr address before pasting. It takes `person` (`yannic` or `wife`) and `trigger` (`morning` or `evening`).
+
+### automation
+
+Paste under `automation:` in `configuration.yaml` or a package. Replace the placeholders before use.
 
 ```yaml
-rest_command:
-  printarr_release:
-    url: "http://<printarr-host>:30100/api/v1/people/{{ person }}/release"
-    method: POST
-    content_type: "application/json"
-    timeout: 30
-    payload: '{"trigger": "{{ trigger }}"}'
-
 automation:
-  # Morning: the phone is unplugged, so release that person's morning briefing and waiting messages.
-  - alias: "printarr: morning release on phone unplug"
-    id: printarr_morning_unplug
-    mode: queued
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.<person_a>_phone_charging
-        from: "on"
-        to: "off"
-        id: person_a
-      - platform: state
-        entity_id: binary_sensor.<person_b>_phone_charging
-        from: "on"
-        to: "off"
-        id: person_b
-    action:
-      - action: rest_command.printarr_release
+  - alias: printarr morning release <recipient-a>
+    id: printarr_morning_release_<recipient-a>
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.garmin_connect_wake_time   # CONFIRM
+        not_to: [unknown, unavailable]
+    conditions:
+      - condition: time
+        after: "06:00:00"
+        before: "12:00:00"
+      - condition: template
+        value_template: >-
+          {% set lt = state_attr('automation.printarr_morning_release_<recipient-a>', 'last_triggered') %}
+          {{ lt is none or (lt | as_datetime | as_local).date() != now().date() }}
+    actions:
+      - action: rest_command.printarr_release_person
         data:
-          person: "{{ '<recipient-a>' if trigger.id == 'person_a' else '<recipient-b>' }}"
+          person: <recipient-a>
           trigger: morning
         continue_on_error: true
 
-  # Evening: the person arrives home, so release their evening briefing and waiting messages.
-  - alias: "printarr: evening release on arriving home"
-    id: printarr_evening_arrival
-    mode: queued
-    trigger:
-      - platform: state
-        entity_id: "person.<person_a>"
-        to: home
-        id: person_a
-      - platform: state
-        entity_id: "person.<person_b>"
-        to: home
-        id: person_b
-    action:
-      - action: rest_command.printarr_release
+  - alias: printarr morning release <recipient-b>
+    id: printarr_morning_release_<recipient-b>
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.<person_b>_phone_is_charging   # CONFIRM
+        from: "on"
+        to: "off"
+    conditions:
+      - condition: time
+        after: "06:00:00"
+        before: "11:00:00"
+      - condition: template
+        value_template: >-
+          {% set lt = state_attr('automation.printarr_morning_release_<recipient-b>', 'last_triggered') %}
+          {{ lt is none or (lt | as_datetime | as_local).date() != now().date() }}
+    actions:
+      - action: rest_command.printarr_release_person
         data:
-          person: "{{ '<recipient-a>' if trigger.id == 'person_a' else '<recipient-b>' }}"
+          person: <recipient-b>
+          trigger: morning
+        continue_on_error: true
+
+  - alias: printarr evening release <recipient-a>
+    id: printarr_evening_release_<recipient-a>
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: person.<person_a>   # CONFIRM
+        to: home
+    conditions:
+      - condition: time
+        after: "15:00:00"
+        before: "23:59:00"
+      - condition: template
+        value_template: >-
+          {% set lt = state_attr('automation.printarr_evening_release_<recipient-a>', 'last_triggered') %}
+          {{ lt is none or (lt | as_datetime | as_local).date() != now().date() }}
+    actions:
+      - action: rest_command.printarr_release_person
+        data:
+          person: <recipient-a>
+          trigger: evening
+        continue_on_error: true
+
+  - alias: printarr evening release <recipient-b>
+    id: printarr_evening_release_<recipient-b>
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: person.<person_b>   # CONFIRM
+        to: home
+    conditions:
+      - condition: time
+        after: "15:00:00"
+        before: "23:59:00"
+      - condition: template
+        value_template: >-
+          {% set lt = state_attr('automation.printarr_evening_release_<recipient-b>', 'last_triggered') %}
+          {{ lt is none or (lt | as_datetime | as_local).date() != now().date() }}
+    actions:
+      - action: rest_command.printarr_release_person
+        data:
+          person: <recipient-b>
           trigger: evening
         continue_on_error: true
 ```
 
-`trigger` accepts `morning`, `evening`, `arrival` or `request`. It is only written to the log, so `evening` on arrival is fine.
+Use the recipient ids `yannic` and `wife` in place of `<recipient-a>` and `<recipient-b>`, in either order.
 
-Note: `docs/integrations/home-assistant/automations.yaml` predates this flow. It builds the briefing when the phone is unplugged, with the older slot template, so it does not match the briefing preset. Use the YAML above instead.
+Note: `docs/integrations/home-assistant/automations.yaml` predates this flow. It uses the older slot template and fixed times, so it does not match the briefing preset. Use the YAML above instead.
