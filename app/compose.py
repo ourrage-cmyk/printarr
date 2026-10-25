@@ -61,12 +61,12 @@ class MetricRow(_Strict):
 class MetricSlots(MetricRow):
     series: list[float] | None = Field(default=None, min_length=2, max_length=48, description="Sparkline, oldest first.")
     range: str | None = Field(default=None, max_length=8, description="The time the sparkline covers, such as 24H. Default 24H.")
-    as_of: str | None = Field(default=None, max_length=16, description="When the reading was taken, for example 08:15. Printed as AS OF 08:15.")
+    as_of: str | None = Field(default=None, max_length=16, description="Accepted for compatibility and not printed. The print time under the cut covers it.")
 
 
 class MetricRowsSlots(_Strict):
     title: str | None = Field(default=None, min_length=1, max_length=40)
-    as_of: str | None = Field(default=None, max_length=16, description="When the readings were taken, for example 08:15. Printed once under the rows as AS OF 08:15.")
+    as_of: str | None = Field(default=None, max_length=16, description="Accepted for compatibility and not printed. The print time under the cut covers it.")
     rows: list[MetricRow] = Field(min_length=1, max_length=6)
 
 
@@ -270,15 +270,9 @@ def fill_values(blocks: Sequence[Mapping[str, Any]], values: Mapping[str, str | 
     for block in blocks:
         slots = dict(block["slots"])
         if block["type"] == "metric":
-            live = slots.get("value") is None and bool(slots.get("entity_id"))
             slots = _filled_row(slots, values)
-            if live and not slots.get("as_of"):
-                slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")  # a live reading says when it was read
         if block["type"] == "metric_rows":
-            live = any(row.get("value") is None and row.get("entity_id") for row in slots.get("rows", []))
             slots["rows"] = [_filled_row(row, values) for row in slots.get("rows", [])]
-            if live and not slots.get("as_of"):
-                slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")
         filled.append({**block, "slots": slots})
     return filled
 
@@ -357,11 +351,9 @@ def _metric_block(metric: Mapping[str, Any], client: HAClient | None) -> dict[st
         history = _history(metric["entity_id"], metric.get("hours") or 24, client)
         if history:
             slots["series"] = history
-    for key in ("scope", "as_of"):
+    for key in ("scope", "as_of"):  # as_of is carried for compatibility; the tile does not print it
         if metric.get(key):
             slots[key] = metric[key]
-    if "entity_id" in slots and "as_of" not in slots:
-        slots["as_of"] = datetime.now(DISPLAY_TZ).strftime("%H:%M")  # a live reading says when it was read
     return {"type": "metric", "mood": "factual", "span": 1, "slots": slots}
 
 

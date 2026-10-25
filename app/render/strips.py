@@ -649,7 +649,7 @@ def _metric_label(s: Mapping[str, Any], x0: int, x1: int) -> tuple[int, list[str
     """A tile's label: its size and the lines it wraps to inside the tile, so a long label never runs over the border."""
     scope = {"INSIDE": "IN", "OUTSIDE": "OUT"}.get(str(s.get("scope") or "").strip().upper(), "")
     label = _label(s.get("label", "")) + (f" {scope}" if scope else "")
-    label_cap = 21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP  # a word that does not fit the tile steps down, it never splits
+    label_cap = int(s.get("_label_cap") or (21 if all(solid_width(word, 21) <= x1 - x0 for word in label.split()) else AXIS_CAP))  # a word that does not fit steps the row's labels down together, it never splits
     return label_cap, solid_wrap(label, x1 - x0, label_cap) or [""]
 
 
@@ -697,9 +697,6 @@ def _metric(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
         line_graph(c, x0 + CHART_INSET, c.y, x1 - CHART_INSET, c.y + plot, series)
         c.y += plot + 4
         _time_axis(c, x0, x1, _span(s))
-    if s.get("as_of"):
-        c.solid(x0, c.y, f"AS OF {str(s['as_of']).upper()}", AXIS_CAP)
-        c.y += AXIS_CAP + 8
 
 
 def _span(s: Mapping[str, Any]) -> str:
@@ -733,9 +730,6 @@ def _metric_rows(card: Card, s: Mapping[str, Any], x0: int, x1: int) -> None:
     for label, r in zip(labels, rows):
         unit = f" {r['unit']}" if r.get("unit") else ""
         c.y += _row(c, x0, x1, label, f"{r.get('value', '--')}{unit}", label_col=label_col) + ROW_GAP
-    if s.get("as_of"):
-        c.solid(x0, c.y, f"AS OF {str(s['as_of']).upper()}", AXIS_CAP)
-        c.y += AXIS_CAP + 8
 
 
 AXIS_CAP = 14  # chart labels: the smallest full-line size, so they stay quiet under the line
@@ -1192,8 +1186,10 @@ def _equalise(row: list[Placed], left: int = OUTER_L, right: int = OUTER_R) -> l
             for p in metrics
         )
         cap = 42 if fits else 21
-        label_h = max(_metric_label_h(p.slots, p.x0 + PAD_H, p.x1 - PAD_H) for p in metrics)  # the label wraps inside the padding
-        row = [_place(p.block, {**p.slots, "_cap": cap, "_label_h": label_h}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
+        # The labels of one row share one size, the smallest any of them needs, so no tile's label looks smaller than its neighbour's.
+        label_cap = min(_metric_label(p.slots, p.x0 + PAD_H, p.x1 - PAD_H)[0] for p in metrics)
+        label_h = max(_metric_label_h({**p.slots, "_label_cap": label_cap}, p.x0 + PAD_H, p.x1 - PAD_H) for p in metrics)  # the label wraps inside the padding
+        row = [_place(p.block, {**p.slots, "_cap": cap, "_label_h": label_h, "_label_cap": label_cap}, p.x0, p.x1, p.col, p.span) if p in metrics else p for p in row]
         heights = {id(p): _measure(p.block, p.slots, p.x0, p.x1) for p in row if p.block.type == "metric"}
         tallest = max(heights.values())
         row = [
