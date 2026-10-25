@@ -1,6 +1,6 @@
 # Printarr API: how an agent uses it
 
-Printarr prints receipt tickets on an Epson TM-T88V. Everything talks to its REST API under `/api/v1`. The API is LAN-only and has no API key by decision: it is reachable only on Yannic's own network. If the web UI is ever exposed, Yannic puts his own authentication portal in front of it. The full schema is at `/openapi.json`, and `/docs` shows it interactively.
+Printarr prints receipt tickets on an Epson TM-T88V. Everything talks to its REST API under `/api/v1`. The API is LAN-only and has no API key by decision: it is reachable only on the owner's own network. If the web UI is ever exposed, the owner puts their own authentication portal in front of it. The full schema is at `/openapi.json`, and `/docs` shows it interactively.
 
 ## Start here, in this order
 
@@ -65,7 +65,7 @@ Use `hold: true` with `hold_key`. Release it with `POST /api/v1/holds/{hold_key}
 
 Writing tickets, for agents:
 - Say the headline once. Use `title` or the block's heading, and do not repeat it in the body text.
-- Nothing a greeting or title says is dropped: HELLO, GOOD MORNING and the rest all print. A greeting is optional; a briefing sent without one is headed by the addressee (`YANNIC MORNING`), and the preset appends the recipient's name (`GOOD MORNING YANNIC`). Only briefings get an automatic greeting. Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
+- Nothing a greeting or title says is dropped: HELLO, GOOD MORNING and the rest all print. A greeting is optional; a briefing sent without one is headed by the addressee (`SAM MORNING`), and the preset appends the recipient's name (`GOOD MORNING SAM`). Only briefings get an automatic greeting. Greetings ("Good morning, ...") belong to briefings. A greeting block takes an optional `from` sign-off; a lone greeting takes the ticket's `sender` when it is omitted. A single-topic ticket (bins, a reminder, a note) has no greeting block.
 - A fun fact is a `fact` block with mood `playful`. It prints its text alone: no "Did you know" and no "FUN FACT" label is added. Do not use a `fact` block for a reminder, a note or an alert.
 - A shopping list is a `checklist` block with one item per entry. Do not put the items in one paragraph.
 - Keep one message in one box: do not split a single message across two blocks.
@@ -120,7 +120,7 @@ Printarr keeps a PNG of every ticket as it reached the printer: each printed tic
 
 To diagnose a ticket that looks wrong: find its id in the log or the ticket list, fetch the image, and compare it with the template and the blocks in `GET /api/v1/tickets/{id}`.
 
-## Telling Yannic on Telegram
+## Telling the owner on Telegram
 
 `POST /api/v1/notify` sends a short message to his Telegram chat, through the bot already set up on the server. Use it when a thread needs him to act, such as restarting the app onto a new build so the next test run can start.
 
@@ -130,12 +130,12 @@ To diagnose a ticket that looks wrong: find its id in the log or the ticket list
 - 502 means Telegram did not accept the message. The reply never includes the bot token, and the log records only the kind of error.
 
 ```
-curl -sS -X POST http://192.0.2.231:30100/api/v1/notify \
+curl -sS -X POST http://<printarr-host>:30100/api/v1/notify \
   -H 'Content-Type: application/json' \
   -d '{"text": "Please restart printarr onto build 79 so the next test can run."}'
 ```
 
-Send only when someone needs to act. A routine update is not a reason to message him.
+Send only when someone needs to act. A routine update is not a reason to message them.
 
 ## Settings
 

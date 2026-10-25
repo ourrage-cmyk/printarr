@@ -68,7 +68,7 @@ The database holds the secrets too, so keep the data folder private, and do not 
 - **Build:** `http://<nas-ip>:30100/healthz` returns `version` and `git_sha`. The same build is shown in Settings.
   A local build says `dev`. Check it after each upgrade to confirm the new image is running.
 - **Telegram test:** `curl -X POST http://<nas-ip>:30100/api/v1/alerts/test` sends a test message once Telegram is saved.
-  Threads ping Yannic with `POST /api/v1/notify`, which returns 400 until Telegram is set up.
+  Threads ping the owner with `POST /api/v1/notify`, which returns 400 until Telegram is set up.
 
 ## Upgrade
 

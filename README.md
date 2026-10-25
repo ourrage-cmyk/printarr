@@ -30,7 +30,7 @@ waiting items in their own pile, and prints on the right moment.
 - **Simple text too.** Plain messages go through `POST /tickets`, and the layout is picked for you.
 - **Web page** at `/` to write tickets, preview them, watch the inbox and history, and change settings.
 - **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) teaches an agent (Hermes) the whole API.
-- **Telegram pings** for threads that need Yannic to act: `POST /api/v1/notify`, one message a minute per caller.
+- **Telegram pings** for threads that need the owner to act: `POST /api/v1/notify`, one message a minute per caller.
 - **Look at what printed.** Each ticket that reached the printer keeps a PNG, so a bad print can be checked from the API.
 - **Safe for the paper.** A ticket interrupted by a crash is marked `failed` rather than printed twice. The queue
   pauses while the printer reports a fault, and held items wait until you release them.
@@ -129,7 +129,7 @@ The main routes:
 | `POST` | `/api/v1/settings/ha/test`, `/alerts/test`, `/printer/test` | Check Home Assistant, Telegram and the printer |
 | `GET` | `/api/v1/printer`, `/printer/self-check` | Printer status (the self-check prints nothing) |
 | `GET` | `/api/v1/health`, `/api/v1/metrics`, `/healthz` | Health for Uptime Kuma, counters, liveness, and the build (`version`, `git_sha`) |
-| `POST` | `/api/v1/notify` | Send a Telegram message to Yannic (one a minute per caller) |
+| `POST` | `/api/v1/notify` | Send a Telegram message to the owner (one a minute per caller) |
 | `GET` | `/api/v1/ticket-images`, `/api/v1/tickets/{id}/image` | Recent ticket PNGs, and the PNG of one ticket as sent to the printer (a ticket in a piece shows the whole piece) |
 | `GET` | `/api/v1/prints/{code}` | Finds a printed piece and its tickets by the code printed under the cut, next to the print time |
 | `GET` / `POST` | `/api/v1/backup/export`, `/backup/import` | Download or restore the database |

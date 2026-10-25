@@ -34,11 +34,11 @@ Hermes does not need a webhook from Home Assistant. Each day's queue is keyed by
 
 - **Release tag per ticket.** Each held pile ticket has `release_on`: `morning`, `evening` or `any`. A briefing preset sets it from `time_of_day` (morning gives `morning`, afternoon or evening gives `evening`). A morning release prints the `morning` and `any` tickets; an evening or arrival release prints the `evening` and `any` tickets; a `request` prints the whole pile. So an early evening arrival no longer prints the morning briefing.
 - **Default briefing.** printarr builds a standard briefing when a morning or evening release finds no briefing queued for it, if one is set. Set it once with `PUT /api/v1/briefing/default`: three `metrics` and a `graph` (the same shape as the preset, with no body and no fun fact). `GET` shows it and `DELETE` removes it. The values are read from Home Assistant when it prints. It is built at most once a day per person and release.
-- **Home Assistant down at release.** The ticket still prints. A metric whose value cannot be read prints the placeholder `--` in place of its value, the layout stays put, and each failed read is logged. It does not page Yannic; the ticket still prints.
+- **Home Assistant down at release.** The ticket still prints. A metric whose value cannot be read prints the placeholder `--` in place of its value, the layout stays put, and each failed read is logged. It does not page the owner; the ticket still prints.
 
 ### Still open
 
-- **A stale briefing waits.** A morning briefing that was never released at the morning waits for the next morning release, because it is tagged for that release only. Yannic asked for it to print on its own trigger, so it is not printed at an evening arrival.
+- **A stale briefing waits.** A morning briefing that was never released at the morning waits for the next morning release, because it is tagged for that release only. The owner asked for it to print on its own trigger, so it is not printed at an evening arrival.
 - **The default needs its layout set.** Until `PUT /api/v1/briefing/default` is called, no default is built.
 - **Text is fixed at queue time.** The body and fun fact are written when Hermes queues the briefing. Only the metrics, graph and sparklines are read at print time.
 
@@ -58,7 +58,7 @@ From now on, set up printarr briefings like this. printarr is at http://<printar
 3. At 06:00 and 17:00, check GET /api/v1/tickets?status=held&recipient=<recipient>. If today's briefing is missing, queue it again with the same key. A repeat is safe.
 4. Do not give any briefing a print time, and do not call POST /api/v1/people/{person}/release yourself. Home Assistant releases on phone unplug (morning) and on arriving home (evening).
 5. Messages for a person use delivery "on_release". They print with the next release (release_on defaults to any).
-6. Ping Yannic with POST /api/v1/notify only when he needs to act.
+6. Ping the owner with POST /api/v1/notify only when he needs to act.
 ```
 
 ## 2. Home Assistant YAML

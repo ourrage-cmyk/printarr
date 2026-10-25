@@ -51,7 +51,7 @@ These are design or renderer changes. Each needs a decision, so none was changed
 - The printer simulator is not in this repo, and this cloud container cannot reach your
   laptop. The PNGs were drawn by `tools/simulate/escpos_decode.py`. Raster rows are exact. Text
   uses an approximate monospace font, so judge text in the real simulator.
-- The taste review was done by reading the strips against the taste profile. Yannic, please
+- The taste review was done by reading the strips against the taste profile. the owner, please
   check the morning briefing and the dog counts on the real simulator first.
 
 ## What looks right

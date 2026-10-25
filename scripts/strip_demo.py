@@ -26,7 +26,7 @@ MORNING = [
     Block("metric", {"label": "Body battery", "value": 72, "unit": "%"}, "factual"),
     Block("metric", {"label": "Steps", "value": "6,120"}, "factual"),
     Block("metric_rows", {"title": "Energy and house", "rows": [{"label": "Energy now", "value": "0.079", "unit": "GBP/kWh"}, {"label": "Energy 16:00", "value": "0.245", "unit": "GBP/kWh"}, {"label": "Inside / out", "value": "19.5 / 12", "unit": "C"}]}, "factual"),
-    Block("graph", {"title": "Outside, 24 h", "series": OUTSIDE, "unit": "C"}, "factual"),
+    Block("graph", {"title": "Outside 24 h", "series": OUTSIDE, "unit": "C"}, "factual"),
     Block("dog_counts", {"dogs": [{"name": "Milo", "pee": 3, "poop": 1, "food": 2, "run": 1}, {"name": "Nala", "pee": 2, "poop": 2, "food": 2, "run": 2}]}),
 ]
 EVENING = [

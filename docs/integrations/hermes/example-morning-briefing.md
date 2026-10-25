@@ -1,11 +1,11 @@
-# Example: Hermes composes a morning briefing for Yannic
+# Example: Hermes composes a morning briefing for the owner
 
 Values are illustrative. The flow matches the live API on main.
 
 ## Prompt given to Hermes
 
 ```
-Compose Yannic's morning briefing for 26 October 2026. It should print at 07:00.
+Compose the owner's morning briefing for 26 October 2026. It should print at 07:00.
 
 1. GET /api/v1/insights/entities?person=yannic&limit=12.
 2. Pick three entities for the metrics. Prefer |z_score| above 2, a clear trend, or relevance 3.
@@ -14,7 +14,7 @@ Compose Yannic's morning briefing for 26 October 2026. It should print at 07:00.
 4. POST /api/v1/tickets/compose with preset briefing, recipient yannic, sender hermes,
    kind morning, delivery on_release, idempotency_key morning:yannic:2026-10-26.
 5. Reply with the ticket id, and one line per metric on why it was chosen.
-   Home Assistant prints it on Yannic's strip when his phone is unplugged.
+   Home Assistant prints it on the owner's strip when his phone is unplugged.
 ```
 
 ## Insights returned (trimmed)
@@ -68,7 +68,7 @@ The headline is GOOD MORNING, from `time_of_day`. Every briefing has this same l
 
 ## What happens next
 
-The briefing waits in Yannic's pile. When his phone is unplugged, Home Assistant creates the morning
+The briefing waits in the owner's pile. When his phone is unplugged, Home Assistant creates the morning
 briefing (same idempotency key, so it is not duplicated) and calls
 `POST /api/v1/people/yannic/release` with `{"trigger": "morning"}`. His strip prints with the briefing
 and any messages waiting for him, cut after each strip. the second person's strip is separate, and only prints
