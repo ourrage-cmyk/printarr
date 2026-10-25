@@ -372,6 +372,20 @@ def solid_wrap(text: str, max_w: int, cap: int = 21) -> list[str]:
     return lines
 
 
+def _no_orphan(lines: list[str], per_line: int) -> list[str]:
+    """A line that is one short word (a unit such as H or C, or a stray "to") moves down with the word before it,
+    so "24 H" never splits across two title lines. Only done when the pair still fits on the line."""
+    out = list(lines)
+    for i in range(len(out) - 1, 0, -1):
+        prev = out[i - 1].split()
+        if len(out[i].split()) == 1 and len(out[i]) <= 2 and len(prev) > 1:
+            pair = f"{prev[-1]} {out[i]}"
+            if len(pair) <= per_line:
+                out[i - 1] = " ".join(prev[:-1])
+                out[i] = pair
+    return out
+
+
 def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
     if scale == BODY:
         return solid_wrap(text, max_w)
@@ -386,7 +400,7 @@ def wrap_lines(text: str, scale: int, max_w: int) -> list[str]:
             cur = f"{cur} {word}" if cur else word
     if cur:
         lines.append(cur)
-    return lines
+    return _no_orphan(lines, per_line)
 
 
 PARA_GAP = 10  # the blank between two paragraphs of authored text, in dots
@@ -563,7 +577,7 @@ def _fit_title(text: str, max_w: int) -> tuple[int, list[str], bool]:
             break
     if cur and len(lines) < MAX_TITLE_LINES:
         lines.append(cur)
-    lines = lines[:MAX_TITLE_LINES]
+    lines = _no_orphan(lines, per_line)[:MAX_TITLE_LINES]
     last = lines[-1]
     kept = last.split()
     while len(kept) > 1 and len(" ".join(kept)) + 3 > per_line:

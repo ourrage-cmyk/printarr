@@ -11,7 +11,7 @@ info:
   title: printarr for Hermes
   version: 0.3.0
   description: >
-    Send receipts to Yannic (yannic) or the second person (wife), fill slot templates for briefings and notes,
+    Send receipts to the owner (yannic) or the second person (wife), fill slot templates for briefings and notes,
     list and cancel tickets, read history, and pick briefing entities. No authentication; LAN only.
 servers:
   - url: http://PRINTARR_URL/api/v1
@@ -207,7 +207,7 @@ components:
     Recipient:
       type: string
       enum: [yannic, wife]
-      description: Yannic is yannic. the second person is wife.
+      description: the owner is yannic. the second person is wife.
     Status:
       type: string
       enum: [held, pending, printing, sent, failed, cancelled]

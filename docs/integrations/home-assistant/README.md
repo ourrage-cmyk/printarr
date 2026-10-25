@@ -16,13 +16,13 @@ Replace `PRINTARR_URL` with the printarr address from the setup wizard. Never ha
 ## Before you start
 
 1. Open printarr's web UI, then Settings, then Home Assistant. Enter the HA URL and a long-lived access
-   token. Yannic enters the token himself, and it is never written into these files.
+   token. the owner enters the token himself, and it is never written into these files.
 2. Check `GET /api/v1/settings/ha/test` returns `{"reachable": true}`.
 3. Fill in the placeholder entity IDs (marked `# CONFIRM`) before enabling an automation.
 
 ## Strips, not shared paper
 
-Each person gets their own strip. Nothing is shared between Yannic and the second person on one strip.
+Each person gets their own strip. Nothing is shared between the owner and the second person on one strip.
 
 - **Phone unplugged** (morning, 04:00 to 11:00): that person's morning briefing is created and released.
   Their strip holds the briefing plus any messages waiting for them, cut after each strip.
@@ -41,7 +41,7 @@ their next strip.
 
 | Person | printarr id | Notes |
 |---|---|---|
-| Yannic | `yannic` | Phone: `binary_sensor.yannic_pixel_is_charging` |
+| the owner | `yannic` | Phone: `binary_sensor.yannic_pixel_is_charging` |
 | the second person | `wife` | Phone: `binary_sensor.allyson_pixel_is_charging` |
 
 Always use `wife` for the second person in the API. The display name is "the second person" on the ticket.
