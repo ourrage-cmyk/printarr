@@ -24,6 +24,7 @@ waiting items in their own pile, and prints on the right moment.
   a three-column grid, and the tiles fall together into rows. Each block has a mood that changes how it looks.
 - **Briefing preset.** `POST /api/v1/tickets/compose` with `preset: "briefing"` lays out the fixed morning
   or evening briefing: greeting, three metrics with sparklines, one graph, a body and a fun fact.
+  A briefing that sends no greeting is headed by the recipient's name, so every strip says who it is for.
 - **Three deliveries.** `on_release` waits in the pile, `at` prints at a time, and `now` prints straight away.
 - **Live data.** Entity values and sparklines are read from Home Assistant when the ticket prints,
   not when it is queued.
@@ -32,6 +33,7 @@ waiting items in their own pile, and prints on the right moment.
 - **Built for agents.** Every request is validated against a schema, and a 422 says what is wrong with it. [`docs/agents/hermes-skill/SKILL.md`](docs/agents/hermes-skill/SKILL.md) teaches an agent (Hermes) the whole API.
 - **Telegram pings** for threads that need the owner to act: `POST /api/v1/notify`, one message a minute per caller.
 - **Look at what printed.** Each ticket that reached the printer keeps a PNG, so a bad print can be checked from the API.
+  The time and a short code print under each cut. `GET /api/v1/prints/{code}` finds that piece again, and a ticket in a piece shows the whole piece.
 - **Safe for the paper.** A ticket interrupted by a crash is marked `failed` rather than printed twice. The queue
   pauses while the printer reports a fault, and held items wait until you release them.
 
