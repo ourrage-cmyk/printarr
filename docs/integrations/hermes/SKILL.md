@@ -150,14 +150,23 @@ printarr never creates schedules. It holds a ticket until it is due. You decide 
 
 | `delivery` | When it prints | Use it for |
 |---|---|---|
-| `on_release` | On the recipient's next release (morning when the phone is unplugged, evening or arrival when home) | Briefings, messages between Yannic and the second person |
+| `on_release` | On the recipient's next release: `morning` (phone unplugged) or `evening` (arrival home), per the ticket's `release_on` | Briefings, messages between Yannic and the second person |
 | `at` | At `send_at` (local time, no offset, for example `2026-10-25T18:00:00`) as its own strip | "Remind me at 18:00", a shopping list for when Yannic gets home |
 | `now` | Straight away, as its own strip | Shopping lists on request, alerts |
 
 - `at` needs `send_at`. `now` must not have `send_at`.
 - No recurring tickets exist. A repeating reminder is one ticket per occurrence, each with its own `send_at`.
+- `release_on` (on `on_release` tickets) says which release prints the ticket: `morning`, `evening` or `any`. A briefing
+  preset sets it from `time_of_day` (morning gives `morning`, afternoon or evening gives `evening`), so you rarely send it.
+  A message defaults to `any`, which prints on every release. A morning release prints the `morning` and `any` tickets only,
+  so a briefing queued for the morning stays waiting at an evening arrival.
 - Scheduled releases belong to Home Assistant. Release a pile yourself only when someone asks for paper now:
-  `POST /api/v1/people/{person}/release` with `{"trigger": "request"}`. Triggers: `morning`, `evening`, `arrival`, `request`.
+  `POST /api/v1/people/{person}/release` with `{"trigger": "request"}`. Triggers: `morning` and `evening` (or `arrival`,
+  the same as evening) print only their tagged tickets. `request` prints the whole pile.
+- Default briefing: printarr builds one itself when a `morning` or `evening` release finds no briefing queued for it.
+  Set its layout once with `PUT /api/v1/briefing/default` (three `metrics` and one `graph`, the same shape as the preset,
+  with no body and no fun fact). Its values are read from Home Assistant when it prints. `GET` shows it, `DELETE` removes it.
+  It is built at most once a day per person and release, so a second release that day prints nothing new.
 - Hold and release: set `"hold": true` with a `hold_key` such as `user-home`. Release one ticket with
   `POST /api/v1/tickets/{id}/release`, or every ticket with that key with `POST /api/v1/holds/{hold_key}/release`.
   Do not hold strip content for a person. Use `on_release`.

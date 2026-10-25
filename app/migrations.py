@@ -148,6 +148,13 @@ def _add_render_report_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE tickets ADD COLUMN {name} {definition}")
 
 
+def _add_release_on_column(conn: sqlite3.Connection) -> None:
+    """Version 10: which release prints a held pile ticket. morning, evening, or any (the default: every release)."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(tickets)")}
+    if "release_on" not in have:
+        conn.execute("ALTER TABLE tickets ADD COLUMN release_on TEXT NOT NULL DEFAULT 'any'")
+
+
 MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _create_base,  # version 1
     _add_logging_columns,  # version 2
@@ -158,6 +165,7 @@ MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = (
     _raise_model_timeout,  # version 7
     _model_timeout_45,  # version 8
     _add_render_report_columns,  # version 9
+    _add_release_on_column,  # version 10
 )
 
 LATEST_VERSION = len(MIGRATIONS)

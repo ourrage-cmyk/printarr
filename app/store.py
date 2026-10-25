@@ -60,6 +60,21 @@ class TicketStateError(ValueError):
     pass
 
 
+RELEASE_ON_DOC = (
+    "Which release prints this held ticket: morning (phone unplugged) or evening (arriving home). "
+    "any prints on every release. Left out, a briefing takes its release from its time of day, and "
+    "everything else is any. Only tickets with delivery on_release wait for a release."
+)
+# A release's trigger prints the tickets tagged for it, and tickets tagged any. A request prints the whole pile.
+RELEASE_TAG_FOR_TRIGGER = {"morning": "morning", "evening": "evening", "arrival": "evening"}
+
+
+def release_for_briefing(slots: Any) -> str:
+    """The release a briefing waits for: a morning briefing for the morning release, any other time of day for the evening one."""
+    time_of_day = slots.get("time_of_day") if isinstance(slots, dict) else None
+    return "morning" if time_of_day == "morning" else "evening"
+
+
 def now_ms() -> int:
     return time.time_ns() // 1_000_000
 
@@ -136,6 +151,7 @@ class TicketStore:
         moods: str = "",
         notes: Sequence[str] = (),
         strip_count: int = 1,
+        release_on: str = "any",
     ) -> dict[str, Any]:
         """Queue a ticket. A held ticket waits until released, then prints at once.
 
@@ -159,15 +175,15 @@ class TicketStore:
                                      blocks_json, decorations, selection, created_at_ms, updated_at_ms,
                                      kind, tone, from_user, to_user, inbox_state, render_ms,
                                      choice_source, model_scores, idempotency_key, slots_json, delivery, moods,
-                                     truncated, strip_count, render_notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     truncated, strip_count, render_notes, release_on)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id, recipient, sender, title, message, status, hold_key,
                     send_at_ms, send_at_ms, template_id, text_state, blocks_json, ",".join(decorations),
                     selection, now, now, kind, tone, from_user, to_user, inbox_state, render_ms,
                     choice_source or selection, model_scores, idempotency_key, slots_json, delivery, moods,
-                    1 if notes else 0, strip_count, "\n".join(notes),
+                    1 if notes else 0, strip_count, "\n".join(notes), release_on,
                 ),
             )
             except sqlite3.IntegrityError:
@@ -403,14 +419,19 @@ class TicketStore:
                 (now, now, print_ms, strip_id, strip_trigger, ticket_id),
             )
 
-    def pile(self, recipient: str) -> list[dict[str, Any]]:
-        """A person's pile: held tickets that print on their next release, oldest first."""
+    def pile(self, recipient: str, release_on: str | None = None) -> list[dict[str, Any]]:
+        """A person's pile: held tickets that print on their next release, oldest first.
+
+        With release_on (morning or evening), only the tickets tagged for that release and the tickets tagged any.
+        Without it, the whole pile.
+        """
+        sql = "SELECT * FROM tickets WHERE recipient = ? AND status = 'held' AND delivery = 'on_release'"
+        args: list[str] = [recipient]
+        if release_on is not None:
+            sql += " AND release_on IN (?, 'any')"
+            args.append(release_on)
         with closing(self._connect()) as conn:
-            rows = conn.execute(
-                "SELECT * FROM tickets WHERE recipient = ? AND status = 'held' AND delivery = 'on_release' "
-                "ORDER BY created_at_ms ASC",
-                (recipient,),
-            ).fetchall()
+            rows = conn.execute(sql + " ORDER BY created_at_ms ASC", args).fetchall()
         return [_to_dict(row) for row in rows]
 
     def claim(self, ticket_ids: list[str]) -> list[str]:

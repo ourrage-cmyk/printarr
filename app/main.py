@@ -51,14 +51,17 @@ from app.receipt import Line, Receipt, line_to_dict, render_ticket_lines, ticket
 from app.render.registry import design_line, placeholder_line
 from app.blocks import Block, resolve_blocks, unavailable_lines
 from app.ha import HAClient, HAError
-from app.scheduler import ReleaseIncomplete, Scheduler, SchedulerThread
-from app.store import TicketNotFound, TicketStateError, TicketStore, now_ms
+from app.scheduler import DEFAULT_BRIEFING_SETTING, ReleaseIncomplete, Scheduler, SchedulerThread
+from app.store import RELEASE_ON_DOC, TicketNotFound, TicketStateError, TicketStore, now_ms, release_for_briefing
 from app.text import printed_as_question
 from app.compose import (
     sign_blocks,
     note_card_lines,
     note_card_render,
     ticket_lines,
+    PRESET_METRICS,
+    PresetGraph,
+    PresetMetric,
     plain_message,
     BLOCKS as compose_blocks,
     BlockProblem,
@@ -210,6 +213,7 @@ class ComposeCreate(BaseModel):
     sender: str | None = Field(default=None, max_length=40)
     send_at: datetime | None = None
     delivery: Literal["now", "at", "on_release"] | None = None
+    release_on: Literal["morning", "evening", "any"] | None = Field(default=None, description=RELEASE_ON_DOC)
     hold: bool = False
     hold_key: str | None = Field(default=None, max_length=40)
     idempotency_key: str | None = Field(default=None, max_length=120)
@@ -221,6 +225,19 @@ class ComposeCreate(BaseModel):
         if self.preset is None and self.slots is not None:
             raise ValueError("slots go with a preset; blocks carry their own slots")
         return self
+
+
+class DefaultBriefingIn(BaseModel):
+    """The default briefing: three metrics and one graph, read from Home Assistant when it prints. No body, no fun fact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: list[PresetMetric] = Field(
+        min_length=PRESET_METRICS,
+        max_length=PRESET_METRICS,
+        description="Exactly three entities, each with a sparkline. Read at print time, like the briefing preset.",
+    )
+    graph: PresetGraph = Field(description="The one larger graph under the metrics.")
 
 
 class PersonRelease(BaseModel):
@@ -246,6 +263,7 @@ class SlotTicketCreate(BaseModel):
     delivery: Literal["now", "at", "on_release"] | None = Field(
         default=None, description="As for /tickets: now, at, or on_release (the recipient's pile)."
     )
+    release_on: Literal["morning", "evening", "any"] | None = Field(default=None, description=RELEASE_ON_DOC)
     hold: bool = Field(default=False, description="Keep the ticket until released, as for /tickets.")
     hold_key: str | None = Field(default=None, max_length=40, examples=["user-home"])
     idempotency_key: str | None = Field(
@@ -302,6 +320,7 @@ class TicketCreate(BaseModel):
     to_user: Recipient | None = Field(
         default=None, description="The person it is for. With from_user, it is an inbox item."
     )
+    release_on: Literal["morning", "evening", "any"] | None = Field(default=None, description=RELEASE_ON_DOC)
     delivery: Literal["now", "at", "on_release"] | None = Field(
         default=None,
         description=(
@@ -394,6 +413,7 @@ class TicketOut(BaseModel):
     render_ms: int | None = None
     print_ms: int | None = None
     delivery: str = "now"
+    release_on: str = "any"
     strip_id: str | None = None
     strip_trigger: str | None = None
     print_code: str = Field(default="", description="The short code printed under the cut, with the print time. GET /api/v1/prints/{code} finds the piece.")
@@ -922,6 +942,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         kind = body.kind or ("morning" if body.template == BRIEFING else "note")
         summary = str(filled.get("paragraph") or filled.get("title") or filled.get("greeting") or "")
         return store.create(
+            release_on=body.release_on or "any",
             kind=kind,
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
@@ -981,6 +1002,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
         render_ms = round((time.perf_counter() - render_started) * 1000)
         kind = body.kind or (choice.template.kind if choice.template.kind in KINDS else DEFAULT_KIND)
         ticket = store.create(
+            release_on=body.release_on or "any",
             kind=kind,
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
@@ -1053,6 +1075,7 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raise HTTPException(status_code=500, detail=f"rendering failed, ticket not queued: {exc}") from None
         render_ms = round((time.perf_counter() - render_started) * 1000)
         ticket = store.create(
+            release_on=body.release_on or (release_for_briefing(body.slots) if body.preset else "any"),
             kind=body.kind or ("morning" if body.preset else "note"),
             tone=body.tone or DEFAULT_TONE,
             from_user=body.from_user,
@@ -1470,6 +1493,27 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
             raster_mode=settings.raster_mode,
         )
         return Response(content=data, media_type="application/octet-stream")
+
+    @api.get("/briefing/default", tags=["briefing"])
+    def get_default_briefing() -> dict[str, Any]:
+        """The default briefing printarr builds for a morning or evening release that has no briefing queued."""
+        raw = store.get_setting(DEFAULT_BRIEFING_SETTING)
+        if not raw:
+            raise ApiProblem(404, "no default briefing set", hint="PUT /api/v1/briefing/default with three metrics and a graph.")
+        return json.loads(raw)
+
+    @api.put("/briefing/default", tags=["briefing"])
+    def set_default_briefing(body: DefaultBriefingIn) -> dict[str, Any]:
+        """Set the default briefing. It prints on a morning or evening release only when nothing was queued for it."""
+        stored = body.model_dump(exclude_none=True)
+        store.set_setting(DEFAULT_BRIEFING_SETTING, json.dumps(stored, default=str))
+        return stored
+
+    @api.delete("/briefing/default", tags=["briefing"])
+    def delete_default_briefing() -> dict[str, Any]:
+        """Remove the default briefing: a release with nothing queued then prints only the messages waiting."""
+        store.delete_setting(DEFAULT_BRIEFING_SETTING)
+        return {"deleted": True}
 
     @api.get("/ticket-images", tags=["tickets"])
     def list_ticket_images(limit: int = Query(50, ge=1, le=250)) -> list[dict[str, Any]]:

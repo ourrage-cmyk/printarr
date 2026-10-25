@@ -1809,6 +1809,94 @@
         }
       }
     },
+    "/api/v1/briefing/default": {
+      "get": {
+        "tags": [
+          "briefing"
+        ],
+        "summary": "Get Default Briefing",
+        "description": "The default briefing printarr builds for a morning or evening release that has no briefing queued.",
+        "operationId": "get_default_briefing_api_v1_briefing_default_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Default Briefing Api V1 Briefing Default Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "briefing"
+        ],
+        "summary": "Set Default Briefing",
+        "description": "Set the default briefing. It prints on a morning or evening release only when nothing was queued for it.",
+        "operationId": "set_default_briefing_api_v1_briefing_default_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefaultBriefingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Set Default Briefing Api V1 Briefing Default Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "briefing"
+        ],
+        "summary": "Delete Default Briefing",
+        "description": "Remove the default briefing: a release with nothing queued then prints only the messages waiting.",
+        "operationId": "delete_default_briefing_api_v1_briefing_default_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Delete Default Briefing Api V1 Briefing Default Delete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ticket-images": {
       "get": {
         "tags": [
@@ -2258,6 +2346,23 @@
             ],
             "title": "Delivery"
           },
+          "release_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release On",
+            "description": "Which release prints this held ticket: morning (phone unplugged) or evening (arriving home). any prints on every release. Left out, a briefing takes its release from its time of day, and everything else is any. Only tickets with delivery on_release wait for a release."
+          },
           "hold": {
             "type": "boolean",
             "title": "Hold",
@@ -2294,6 +2399,32 @@
           "recipient"
         ],
         "title": "ComposeCreate"
+      },
+      "DefaultBriefingIn": {
+        "properties": {
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/PresetMetric"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Metrics",
+            "description": "Exactly three entities, each with a sparkline. Read at print time, like the briefing preset."
+          },
+          "graph": {
+            "$ref": "#/components/schemas/PresetGraph",
+            "description": "The one larger graph under the metrics."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "metrics",
+          "graph"
+        ],
+        "title": "DefaultBriefingIn",
+        "description": "The default briefing: three metrics and one graph, read from Home Assistant when it prints. No body, no fun fact."
       },
       "DiscoverRequest": {
         "properties": {
@@ -2537,6 +2668,138 @@
         "additionalProperties": false,
         "type": "object",
         "title": "PersonRelease"
+      },
+      "PresetGraph": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id",
+            "description": "Home Assistant entity whose history draws the graph. Left out when there is no history."
+          },
+          "series": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 48,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series",
+            "description": "Fixed values, oldest first, when there is no entity."
+          },
+          "hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "default": 24
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "PresetGraph"
+      },
+      "PresetMetric": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id",
+            "description": "Home Assistant entity: its value is read at print time and its history draws the sparkline."
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "A fixed value, when there is no entity."
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Hours",
+            "description": "How far back the sparkline reaches.",
+            "default": 24
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "PresetMetric"
       },
       "PreviewOut": {
         "properties": {
@@ -2869,6 +3132,23 @@
             "title": "Delivery",
             "description": "As for /tickets: now, at, or on_release (the recipient's pile)."
           },
+          "release_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release On",
+            "description": "Which release prints this held ticket: morning (phone unplugged) or evening (arriving home). any prints on every release. Left out, a briefing takes its release from its time of day, and everything else is any. Only tickets with delivery on_release wait for a release."
+          },
           "hold": {
             "type": "boolean",
             "title": "Hold",
@@ -3177,6 +3457,23 @@
             ],
             "title": "To User",
             "description": "The person it is for. With from_user, it is an inbox item."
+          },
+          "release_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "evening",
+                  "any"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release On",
+            "description": "Which release prints this held ticket: morning (phone unplugged) or evening (arriving home). any prints on every release. Left out, a briefing takes its release from its time of day, and everything else is any. Only tickets with delivery on_release wait for a release."
           },
           "delivery": {
             "anyOf": [
@@ -3493,6 +3790,11 @@
             "type": "string",
             "title": "Delivery",
             "default": "now"
+          },
+          "release_on": {
+            "type": "string",
+            "title": "Release On",
+            "default": "any"
           },
           "strip_id": {
             "anyOf": [
